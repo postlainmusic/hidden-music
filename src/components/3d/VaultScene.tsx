@@ -25,10 +25,10 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
       const normX = (e.clientX / innerWidth - 0.5) * 2; // -1 to 1
       const normY = (e.clientY / innerHeight - 0.5) * 2; // -1 to 1
 
-      // 3D Tilt for Card (-8deg to +8deg)
+      // 3D Tilt for Card (-7deg to +7deg)
       setTilt({
-        x: -normY * 8,
-        y: normX * 8,
+        x: -normY * 7,
+        y: normX * 7,
       });
 
       // 3D Parallax Offset for Background Space Layers
@@ -148,11 +148,11 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
 
       {/* Main 3D Interactive Container */}
       <div className="relative z-10 flex flex-col items-center justify-center">
-        {/* Crystal Clear Transparent Glass Card */}
+        {/* Crystal Clear Transparent Glass Card (Compact, Harmonious Proportions) */}
         <div
-          className="glass-card group cursor-pointer p-5 sm:p-6 md:p-7 w-[320px] sm:w-[380px] md:w-[420px]"
+          className="glass-card group cursor-pointer p-4 sm:p-5 md:p-6 w-[280px] sm:w-[320px] md:w-[350px]"
           style={{
-            perspective: '1200px',
+            perspective: '1000px',
             transform: `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.025 : 1.0})`,
             transformStyle: 'preserve-3d',
             transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -162,16 +162,16 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
           onClick={() => onSelectAlbum(activeAlbum)}
         >
           {/* 1. Harmonious Symmetrical Composition: Cover Sleeve & Sliding Vinyl Disc */}
-          <div className="relative mx-auto flex items-center justify-center h-48 sm:h-56 md:h-60 overflow-visible">
+          <div className="relative mx-auto flex items-center justify-center w-[210px] h-[210px] sm:w-[240px] sm:h-[240px] overflow-visible">
             {/* Realistic Grooved Vinyl Record (Slides Smoothly to the Right on Hover) */}
             <div
-              className="absolute w-44 h-44 sm:w-52 sm:h-52 md:w-56 md:h-56 rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/25 shadow-2xl flex items-center justify-center transition-all duration-500 ease-out pointer-events-none z-0"
+              className="absolute w-[180px] h-[180px] sm:w-[210px] sm:h-[210px] rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/25 shadow-2xl flex items-center justify-center transition-all duration-500 ease-out pointer-events-none z-0"
               style={{
                 transform: isHovered
-                  ? 'translateX(34px) rotate(180deg)'
+                  ? 'translateX(26px) rotate(180deg)'
                   : 'translateX(0px) rotate(0deg)',
                 boxShadow: isHovered
-                  ? '0 20px 40px rgba(0,0,0,0.95), inset 0 0 25px rgba(255,255,255,0.1)'
+                  ? '0 15px 35px rgba(0,0,0,0.95), inset 0 0 20px rgba(255,255,255,0.1)'
                   : 'none',
               }}
             >
@@ -179,7 +179,7 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
               <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
                 <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
                   <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner">
                       <div className="w-3.5 h-3.5 rounded-full bg-black border border-white/60" />
                     </div>
                   </div>
@@ -189,9 +189,9 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
 
             {/* Original Full-Color Cover Artwork Sleeve (Slides Gracefully to the Left on Hover) */}
             <div
-              className="relative z-10 w-46 h-46 sm:w-54 sm:h-54 md:w-58 md:h-58 rounded-2xl overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.9)] border border-white/20 bg-zinc-950 flex-shrink-0 transition-transform duration-500 ease-out"
+              className="relative z-10 w-[190px] h-[190px] sm:w-[220px] sm:h-[220px] rounded-2xl overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.9)] border border-white/20 bg-zinc-950 flex-shrink-0 transition-transform duration-500 ease-out"
               style={{
-                transform: isHovered ? 'translateX(-22px)' : 'translateX(0px)',
+                transform: isHovered ? 'translateX(-18px)' : 'translateX(0px)',
               }}
             >
               <img
@@ -204,8 +204,8 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
           </div>
 
           {/* 2. Album Title & Artist Name Only */}
-          <div className="flex flex-col items-center text-center mt-5">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
+          <div className="flex flex-col items-center text-center mt-4">
+            <h2 className="text-xl sm:text-2xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
               {activeAlbum.title}
             </h2>
             <p className="text-xs sm:text-sm font-mono text-zinc-300 font-bold tracking-widest uppercase mt-1">
