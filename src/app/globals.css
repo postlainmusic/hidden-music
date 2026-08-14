@@ -249,10 +249,67 @@ input[type="range"]::-moz-range-thumb:hover {
   transition: opacity 0.05s ease-out;
 }
 
-@keyframes fireGradientMove {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+/* ========================================================================= */
+/* Uiverse Luxury Glassmorphism Monolith Album Card System */
+/* ========================================================================= */
+.uiverse-glass-container {
+  color: white;
+  position: relative;
+  font-family: var(--font-gotham), sans-serif;
+  isolation: isolate;
 }
+
+.uiverse-glass-container::before,
+.uiverse-glass-container::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.uiverse-glass-container::before {
+  border-radius: 50%;
+  width: 10rem;
+  height: 10rem;
+  top: 25%;
+  right: -1rem;
+  background: radial-gradient(circle, rgba(250, 181, 112, 0.45) 0%, rgba(255, 255, 255, 0.12) 60%, transparent 100%);
+  filter: blur(28px);
+  z-index: 0;
+}
+
+.uiverse-glass-container::after {
+  height: 5rem;
+  top: 6%;
+  right: 0%;
+  border-right: 1.5px solid rgba(255, 255, 255, 0.45);
+  z-index: 0;
+}
+
+.uiverse-glass-box {
+  position: relative;
+  z-index: 10;
+  background-color: rgba(255, 255, 255, 0.074);
+  border: 1px solid rgba(255, 255, 255, 0.222);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-radius: 1.5rem;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.uiverse-glass-container:hover .uiverse-glass-box {
+  box-shadow: 0px 0px 35px 2px rgba(250, 181, 112, 0.32), 0 25px 60px rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  transform: translateY(-4px);
+}
+
+.uiverse-glass-container:hover::before {
+  transform: scale(1.3) translate(10px, -8px);
+  background: radial-gradient(circle, rgba(250, 181, 112, 0.65) 0%, rgba(255, 255, 255, 0.2) 70%, transparent 100%);
+}
+
 
 

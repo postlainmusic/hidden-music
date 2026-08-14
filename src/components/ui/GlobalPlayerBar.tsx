@@ -531,7 +531,7 @@ export default function GlobalPlayerBar() {
   const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
   return (
-    <div className="fixed bottom-2 sm:bottom-3 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
+    <div className="fixed bottom-12 sm:bottom-14 md:bottom-16 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
       {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD (OVERFLOW VISIBLE FOR VOLUME POPOVER) */}
       <div
         ref={barContainerRef}
