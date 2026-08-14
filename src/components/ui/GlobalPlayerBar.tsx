@@ -187,97 +187,57 @@ export default function GlobalPlayerBar() {
   const syncWindowStart = videoOffset;
   const syncWindowEnd = videoOffset + songDuration;
 
-  // Master Play/Pause toggler that reliably controls both Video and Audio
+  // Master Play/Pause toggler (Controls master Audio)
   const handleTogglePlay = () => {
-    if (showVideo && videoRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch(() => {});
-        setIsPlaying(true);
-      } else {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-    } else {
-      togglePlay();
-    }
+    togglePlay();
   };
 
-  // Seamless Audio <-> Video playback handoff with accurate sync window
+  // Video is purely visual; Audio is 100% master audio source and master clock
   useEffect(() => {
-    const audio = audioRef?.current;
     const vid = videoRef.current;
+    const audio = audioRef?.current;
+    if (!vid) return;
+
+    // Always mute video completely
+    vid.muted = true;
+    vid.volume = 0;
 
     if (showVideo) {
-      // Switching to Video Mode: calculate target video position with offset
-      if (audio) {
-        audio.pause();
-        audio.muted = true;
+      const targetVidTime = Math.max(0, currentTime + videoOffset);
+      if (Math.abs(vid.currentTime - targetVidTime) > 0.3) {
+        vid.currentTime = targetVidTime;
       }
-      if (vid) {
-        vid.volume = volume;
-        const targetVidTime = Math.max(0, currentTime + videoOffset);
-        if (Math.abs(vid.currentTime - targetVidTime) > 0.5) {
-          vid.currentTime = targetVidTime;
-        }
-        if (vid.duration > 0 && isFinite(vid.duration)) {
-          setDuration(vid.duration);
-        }
-        if (isPlaying) {
-          vid.play().catch(() => {});
-        } else {
-          vid.pause();
-        }
+      if (isPlaying) {
+        vid.play().catch(() => {});
+      } else {
+        vid.pause();
       }
     } else {
-      // Switching back to Audio Mode: verify sync window
-      if (vid) {
-        const vidTime = vid.currentTime;
-        vid.pause();
-        if (audio) {
-          audio.muted = false;
-          if (vidTime < syncWindowStart) {
-            // Before music starts (Intro): Audio starts at beginning
-            audio.currentTime = 0;
-            setCurrentTime(0);
-          } else if (vidTime >= syncWindowStart && vidTime <= syncWindowEnd) {
-            // Inside Sync Window: jump to mapped song time
-            const mappedSongTime = vidTime - videoOffset;
-            audio.currentTime = mappedSongTime;
-            setCurrentTime(mappedSongTime);
-          } else {
-            // After music finished (Outro): Advance to next track
-            nextTrack();
-            return;
-          }
-          if (audio.duration > 0 && isFinite(audio.duration)) {
-            setDuration(audio.duration);
-          }
-          if (isPlaying) {
-            audio.play().catch(() => {});
-          }
-        }
-      } else if (audio) {
-        audio.muted = false;
-        if (isPlaying) {
-          audio.play().catch(() => {});
+      vid.pause();
+    }
+  }, [showVideo, isPlaying, videoOffset, currentTrack?.id, audioRef]);
+
+  // Periodic accurate sub-frame sync from Audio Clock to Video
+  useEffect(() => {
+    if (!showVideo || !isPlaying) return;
+    const syncInterval = setInterval(() => {
+      const vid = videoRef.current;
+      const audio = audioRef?.current;
+      if (vid && audio && !vid.seeking) {
+        const targetVidTime = Math.max(0, audio.currentTime + videoOffset);
+        if (Math.abs(vid.currentTime - targetVidTime) > 0.25) {
+          vid.currentTime = targetVidTime;
         }
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo, videoOffset, songDuration, volume, audioRef]);
-
-  // Keep video volume in sync
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.volume = volume;
-  }, [volume]);
+    }, 400);
+    return () => clearInterval(syncInterval);
+  }, [showVideo, isPlaying, videoOffset, audioRef]);
 
   // Handle seek for both audio and video
   const handleSeek = (newTime: number) => {
-    if (showVideo && videoRef.current) {
-      videoRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
-    } else {
-      seekTo(newTime);
+    seekTo(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(0, newTime + videoOffset);
     }
   };
 
@@ -701,11 +661,12 @@ export default function GlobalPlayerBar() {
               </div>
             )}
 
-            {/* Direct HTML5 Video Player */}
+            {/* Direct HTML5 Video Player (100% Muted, Audio Master Driven) */}
             <video
               ref={videoRef}
               src={currentTrack.video_url}
               playsInline
+              muted
               preload="auto"
               onClick={handleTogglePlay}
               onDoubleClick={(e) => {
@@ -714,28 +675,14 @@ export default function GlobalPlayerBar() {
                 toggleFullscreen();
               }}
               onLoadedMetadata={(e) => {
+                e.currentTarget.muted = true;
+                e.currentTarget.volume = 0;
                 const targetVidTime = Math.max(0, currentTime + videoOffset);
-                if (targetVidTime > 0) {
-                  e.currentTarget.currentTime = targetVidTime;
-                }
+                e.currentTarget.currentTime = targetVidTime;
                 if (isPlaying) {
                   e.currentTarget.play().catch(() => {});
                 }
               }}
-              onTimeUpdate={(e) => {
-                if (showVideo) {
-                  const rawVidTime = e.currentTarget.currentTime;
-                  const effectiveSongTime = Math.max(0, rawVidTime - videoOffset);
-                  setCurrentTime(effectiveSongTime);
-                }
-              }}
-              onPlay={() => {
-                if (showVideo) setIsPlaying(true);
-              }}
-              onPause={() => {
-                if (showVideo) setIsPlaying(false);
-              }}
-              onEnded={nextTrack}
               className="w-full h-full object-contain select-none cursor-pointer relative z-10"
             />
           </div>
