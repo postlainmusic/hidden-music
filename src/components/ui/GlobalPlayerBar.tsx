@@ -252,11 +252,20 @@ export default function GlobalPlayerBar() {
     }
   };
 
-  // Multi-frequency transient tracking refs
-  const prevTotalEnergyRef = useRef<number>(0);
-  const smoothedEnergyRef = useRef<number>(0);
+  // Separate Audio Tracking Refs for strict non-overlapping engines
+  const barKickIntensityRef = useRef<number>(0);
+  const barScaleRef = useRef<number>(1);
+  const prevKickPunchRef = useRef<number>(0);
+  const smoothedKickPunchRef = useRef<number>(0);
 
-  // Real-Time Full Spectrum Multi-Instrument Bounce & Organic Cyber Flame Driving Engine
+  const albumSnareScaleRef = useRef<number>(1);
+  const albumSnareYRef = useRef<number>(0);
+  const prevSnarePunchRef = useRef<number>(0);
+  const smoothedSnarePunchRef = useRef<number>(0);
+
+  // Real-Time Separated Audio Engines:
+  // [1] Player Bar & Flame Canvas = KICK-ONLY
+  // [2] Album Cover & Vinyl Disc = SNARE-ONLY (100% borderless)
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -276,13 +285,12 @@ export default function GlobalPlayerBar() {
         albumCoverEl.style.borderColor = '';
       }
       if (vinylEl) {
-        vinylEl.style.transform = '';
+        vinylEl.style.transform = 'scale(1) translateY(0px)';
         vinylEl.style.boxShadow = '';
         vinylEl.style.borderColor = '';
       }
       if (cyberFlameEl) {
-        cyberFlameEl.style.transform = 'translateX(-50%) scale(0.9)';
-        cyberFlameEl.style.opacity = '0';
+        cyberFlameEl.setAttribute('data-kick', '0');
       }
       return;
     }
@@ -290,13 +298,15 @@ export default function GlobalPlayerBar() {
     const analyzeFrame = () => {
       let isKickBeat = false;
       let isSnareBeat = false;
-
       const now = performance.now();
       const liveCurrentTime = showVideo && videoRef.current
         ? Math.max(0, videoRef.current.currentTime - videoOffset)
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
-      // 1. ONE-SHOT PCM KICK MATCHING
+      // =========================================================================
+      // [ENGINE 1]: PURE KICK-ONLY (CONTROLS PLAYER BAR & REALISTIC FLAME CANVAS)
+      // =========================================================================
+      // 1. One-Shot PCM Kick Matching
       const kickStamps = kickTimestampsRef?.current || [];
       for (let i = 0; i < kickStamps.length; i++) {
         const diff = liveCurrentTime - kickStamps[i];
@@ -308,115 +318,146 @@ export default function GlobalPlayerBar() {
         }
       }
 
-      // 2. FULL SPECTRUM MULTI-INSTRUMENT AUDIO ENERGY ANALYSIS
-      let bassEnergy = 0;
-      let midEnergy = 0;
-      let highEnergy = 0;
-      let totalEnergy = 0;
-
-      if (analyserRef?.current) {
+      // 2. Real-Time Low-Sub Bass Filter Detection (45Hz - 85Hz Peak)
+      let kickSubEnergy = 0;
+      if (kickAnalyserRef?.current) {
         try {
-          const arr = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(arr);
-          const len = arr.length;
-
-          // Bass range (bins 0 to 5, sub-bass, 808, kick, bassline: 20-220Hz)
-          let bSum = 0;
-          for (let i = 0; i < 5 && i < len; i++) bSum += arr[i];
-          bassEnergy = bSum / (5 * 255);
-
-          // Mid range (bins 5 to 28, vocals, synths, guitars, keys: 220-2500Hz)
-          let mSum = 0;
-          for (let i = 5; i < 28 && i < len; i++) mSum += arr[i];
-          midEnergy = mSum / (23 * 255);
-
-          // High range (bins 28 to 64, cymbals, snares, hats, transients)
-          let hSum = 0;
-          const hEnd = Math.min(64, len);
-          for (let i = 28; i < hEnd; i++) hSum += arr[i];
-          highEnergy = hSum / ((hEnd - 28) * 255);
-
-          // Balanced multi-instrument energy index
-          totalEnergy = bassEnergy * 0.45 + midEnergy * 0.40 + highEnergy * 0.15;
+          const arr = new Uint8Array(kickAnalyserRef.current.frequencyBinCount);
+          kickAnalyserRef.current.getByteFrequencyData(arr);
+          let sum = 0;
+          for (let i = 0; i < arr.length; i++) sum += arr[i];
+          kickSubEnergy = sum / arr.length;
         } catch {}
       }
 
-      // Detect sudden multi-instrument musical transients (guitar attacks, vocal drops, drum punches)
-      const deltaTotal = Math.max(0, totalEnergy - prevTotalEnergyRef.current);
-      prevTotalEnergyRef.current = totalEnergy;
-      smoothedEnergyRef.current = smoothedEnergyRef.current * 0.65 + totalEnergy * 0.35;
+      if (kickSubEnergy === 0 && analyserRef?.current) {
+        try {
+          const arr = new Uint8Array(analyserRef.current.frequencyBinCount);
+          analyserRef.current.getByteFrequencyData(arr);
+          kickSubEnergy = (arr[0] + arr[1] + arr[2] + arr[3]) / 4;
+        } catch {}
+      }
 
-      // Real-time heavy kick punch detection for Cyber Flame flare
-      if (!isKickBeat && bassEnergy > 0.22 && deltaTotal > 0.03 && (now - lastKickTimeRef.current > 120)) {
+      const deltaKick = Math.max(0, kickSubEnergy - prevKickPunchRef.current);
+      prevKickPunchRef.current = kickSubEnergy;
+      smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.76 + deltaKick * 0.24;
+      const kickThresh = Math.max(4.5, smoothedKickPunchRef.current * 1.2);
+
+      if (!isKickBeat && deltaKick > kickThresh && deltaKick > 6 && kickSubEnergy > 16 && (now - lastKickTimeRef.current > 125)) {
         isKickBeat = true;
         lastKickTimeRef.current = now;
       }
 
-      if (highEnergy > 0.35 && (now - lastSnareTimeRef.current > 160)) {
+      // Bar Kick Reaction
+      if (isKickBeat) {
+        barKickIntensityRef.current = 1.0;
+        barScaleRef.current = 1.045;
+      } else {
+        barKickIntensityRef.current *= 0.70; // Fast 60ms decay
+        barScaleRef.current = barScaleRef.current + (1.0 - barScaleRef.current) * 0.35;
+      }
+
+      if (barKickIntensityRef.current < 0.01) barKickIntensityRef.current = 0;
+      if (Math.abs(barScaleRef.current - 1.0) < 0.001) barScaleRef.current = 1.0;
+
+      // Apply KICK-ONLY to Player Bar
+      if (barContainerRef.current) {
+        const scaleVal = showLyrics ? 1.0 : barScaleRef.current;
+        barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
+
+        if (barKickIntensityRef.current > 0.10) {
+          const kAlpha = barKickIntensityRef.current.toFixed(2);
+          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(255, 60, 0, ${kAlpha}), inset 0 0 25px rgba(255, 100, 0, ${(barKickIntensityRef.current * 0.5).toFixed(2)})`;
+          barContainerRef.current.style.borderColor = `rgba(255, 120, 0, ${kAlpha})`;
+        } else {
+          barContainerRef.current.style.boxShadow = '';
+          barContainerRef.current.style.borderColor = '';
+        }
+
+        if (fireOverlayRef.current) {
+          fireOverlayRef.current.style.opacity = barKickIntensityRef.current.toFixed(3);
+        }
+      }
+
+      // Drive Realistic Flame Canvas (KICK-ONLY)
+      const cyberFlameEl = document.getElementById('cyber-album-flame');
+      if (cyberFlameEl) {
+        cyberFlameEl.setAttribute('data-kick', barKickIntensityRef.current.toFixed(2));
+      }
+
+      // =========================================================================
+      // [ENGINE 2]: PURE SNARE-ONLY (CONTROLS ALBUM COVER & VINYL DISC BOUNCE)
+      // =========================================================================
+      // 1. One-Shot PCM Snare Matching
+      const snareStamps = snareTimestampsRef?.current || [];
+      for (let i = 0; i < snareStamps.length; i++) {
+        const diff = liveCurrentTime - snareStamps[i];
+        if (diff >= -0.03 && diff <= 0.04 && i !== lastFiredSnareIndexRef.current) {
+          lastFiredSnareIndexRef.current = i;
+          isSnareBeat = true;
+          lastSnareTimeRef.current = now;
+          break;
+        }
+      }
+
+      // 2. Real-Time Snare Audio Filter Analysis (350Hz - 2500Hz)
+      let snareEnergy = 0;
+      if (snareAnalyserRef?.current) {
+        try {
+          const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
+          snareAnalyserRef.current.getByteFrequencyData(arr);
+          let sum = 0;
+          for (let i = 0; i < arr.length; i++) sum += arr[i];
+          snareEnergy = sum / arr.length;
+        } catch {}
+      }
+
+      if (snareEnergy === 0 && analyserRef?.current) {
+        try {
+          const arr = new Uint8Array(analyserRef.current.frequencyBinCount);
+          analyserRef.current.getByteFrequencyData(arr);
+          let sSum = 0;
+          for (let i = 10; i < 28 && i < arr.length; i++) sSum += arr[i];
+          snareEnergy = sSum / 18;
+        } catch {}
+      }
+
+      const deltaSnare = Math.max(0, snareEnergy - prevSnarePunchRef.current);
+      prevSnarePunchRef.current = snareEnergy;
+      smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.76 + deltaSnare * 0.24;
+      const snareThresh = Math.max(5.0, smoothedSnarePunchRef.current * 1.25);
+
+      if (!isSnareBeat && deltaSnare > snareThresh && deltaSnare > 7 && snareEnergy > 18 && (now - lastSnareTimeRef.current > 140)) {
         isSnareBeat = true;
         lastSnareTimeRef.current = now;
       }
 
-      // 3. FLAME INTENSITY DRIVE (Rapid surging & roaring on continuous kicks)
-      if (isKickBeat) {
-        fireIntensityRef.current = 1.0;
-      } else {
-        fireIntensityRef.current *= 0.74; // Fast 70ms decay for sharp, continuous roaring kick bursts
-      }
-
+      // Snare Physical Bounce State
       if (isSnareBeat) {
-        snareIntensityRef.current = 1.0;
+        albumSnareScaleRef.current = 1.052;
+        albumSnareYRef.current = -9;
       } else {
-        snareIntensityRef.current *= 0.70;
+        albumSnareScaleRef.current = albumSnareScaleRef.current + (1.0 - albumSnareScaleRef.current) * 0.35;
+        albumSnareYRef.current = albumSnareYRef.current * 0.65;
       }
 
-      if (fireIntensityRef.current < 0.01) fireIntensityRef.current = 0;
-      if (snareIntensityRef.current < 0.01) snareIntensityRef.current = 0;
+      if (Math.abs(albumSnareScaleRef.current - 1.0) < 0.001) albumSnareScaleRef.current = 1.0;
+      if (Math.abs(albumSnareYRef.current) < 0.1) albumSnareYRef.current = 0;
 
-      // 4. MULTI-INSTRUMENT PHYSICAL BOUNCE & JERK (NO BORDERS, PURE PHYSICAL SHAKE)
+      // Apply SNARE-ONLY physical bounce to Album Cover and Vinyl Disc (100% borderless)
       const albumCoverEl = document.getElementById('album-cover-box');
       const vinylEl = document.getElementById('album-vinyl-disc');
-      const cyberFlameEl = document.getElementById('cyber-album-flame');
-
-      // Pronounced physical bounce that follows all instruments in real-time
-      const bounceScale = 1.0 + (totalEnergy * 0.055) + (deltaTotal * 0.20);
-      const bounceY = -1 * (totalEnergy * 11 + deltaTotal * 22);
 
       if (albumCoverEl) {
-        albumCoverEl.style.transform = `scale(${bounceScale.toFixed(4)}) translateY(${bounceY.toFixed(2)}px)`;
+        albumCoverEl.style.transform = `scale(${albumSnareScaleRef.current.toFixed(4)}) translateY(${albumSnareYRef.current.toFixed(2)}px)`;
         albumCoverEl.style.boxShadow = '';
         albumCoverEl.style.borderColor = '';
       }
 
       if (vinylEl) {
-        vinylEl.style.transform = `scale(${bounceScale.toFixed(4)}) translateY(${bounceY.toFixed(2)}px)`;
+        vinylEl.style.transform = `scale(${albumSnareScaleRef.current.toFixed(4)}) translateY(${albumSnareYRef.current.toFixed(2)}px)`;
         vinylEl.style.boxShadow = '';
         vinylEl.style.borderColor = '';
-      }
-
-      // 5. RAGING VOLUMETRIC FLAME ROAR (Rực cháy phía sau album từ dưới lên với mỗi nhịp kick)
-      if (cyberFlameEl) {
-        cyberFlameEl.setAttribute('data-kick', fireIntensityRef.current.toFixed(2));
-        const flameScale = 1.0 + (fireIntensityRef.current * 0.35) + (bassEnergy * 0.18);
-        const flameOpacity = isPlaying ? (0.80 + fireIntensityRef.current * 0.20) : 0;
-        const flameBright = 1.0 + (fireIntensityRef.current * 0.85);
-
-        cyberFlameEl.style.transform = `translateX(-50%) scale(${flameScale.toFixed(3)})`;
-        cyberFlameEl.style.opacity = flameOpacity.toFixed(2);
-        cyberFlameEl.style.filter = `drop-shadow(0 -15px 45px rgba(255, 60, 0, ${(0.65 + fireIntensityRef.current * 0.35).toFixed(2)})) drop-shadow(0 -35px 90px rgba(255, 20, 0, ${(0.45 + fireIntensityRef.current * 0.45).toFixed(2)})) brightness(${flameBright.toFixed(2)})`;
-      }
-
-      // 6. PLAYER BAR SYNCHRONIZATION
-      if (barContainerRef.current) {
-        const barScale = showLyrics ? 1.0 : (1.0 + totalEnergy * 0.025 + deltaTotal * 0.06);
-        barContainerRef.current.style.transform = `scale(${barScale.toFixed(4)})`;
-
-        if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.opacity = fireIntensityRef.current.toFixed(3);
-        }
-        if (snareOverlayRef.current) {
-          snareOverlayRef.current.style.opacity = snareIntensityRef.current.toFixed(3);
-        }
       }
 
       animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
@@ -427,7 +468,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, analyserRef, kickTimestampsRef, currentTime, audioRef, videoOffset]);
+  }, [isPlaying, showVideo, showLyrics, analyserRef, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
