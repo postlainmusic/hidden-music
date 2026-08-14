@@ -295,6 +295,7 @@ export default function Home() {
           tracks={tracks}
           selectedTrack={selectedTrack}
           setSelectedTrack={setSelectedTrack}
+          currentTrack={currentTrack}
           isCurrentPlayingThisAlbum={Boolean(isCurrentPlayingThisAlbum)}
           isPlaying={isPlaying}
           togglePlay={togglePlay}

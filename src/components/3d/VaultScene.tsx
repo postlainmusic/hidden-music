@@ -13,6 +13,7 @@ interface VaultSceneProps {
   tracks?: TrackItem[];
   selectedTrack?: TrackItem | null;
   setSelectedTrack?: (track: TrackItem) => void;
+  currentTrack?: TrackItem | null;
   isCurrentPlayingThisAlbum?: boolean;
   isPlaying?: boolean;
   togglePlay?: () => void;
@@ -32,6 +33,7 @@ export default function VaultScene({
   tracks = [],
   selectedTrack,
   setSelectedTrack,
+  currentTrack,
   isCurrentPlayingThisAlbum = false,
   isPlaying = false,
   togglePlay,
