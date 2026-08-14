@@ -198,7 +198,7 @@ export default function GlobalPlayerBar() {
       // 60FPS Video Millisecond Accurate Time Sync
       if (showVideo && videoRef.current && !videoRef.current.paused) {
         const vTime = videoRef.current.currentTime;
-        if (Math.abs(vTime - currentTime) > 0.05) {
+        if (Math.abs(vTime - currentTime) > 0.04) {
           setCurrentTime(vTime);
         }
       }
@@ -418,7 +418,7 @@ export default function GlobalPlayerBar() {
   const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
   return (
-    <div className="fixed bottom-2 sm:bottom-3 left-0 right-0 z-50 px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
+    <div className="fixed bottom-2 sm:bottom-3 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
       {/* UNIFIED MONOLITHIC CARD CONTAINER */}
       <div
         ref={barContainerRef}
@@ -426,11 +426,11 @@ export default function GlobalPlayerBar() {
           hasDrawerOpen ? 'rounded-[28px]' : 'rounded-full sm:rounded-[32px]'
         }`}
         style={{
-          background: 'linear-gradient(180deg, rgba(20, 20, 26, 0.95) 0%, rgba(8, 8, 12, 0.98) 100%)',
+          background: 'linear-gradient(180deg, rgba(16, 16, 22, 0.96) 0%, rgba(8, 8, 12, 0.98) 100%)',
         }}
       >
-        {/* Dynamic Multi-Color Beat Reactive Flashes & Ambient Aura */}
-        {isPlaying && <div className="fluid-ambient-gradient opacity-35" />}
+        {/* Dark Gothic Ambient Aura & Dynamic Beat Reactions */}
+        {isPlaying && <div className="fluid-ambient-gradient opacity-30" />}
         <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-inherit" />
         <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0 rounded-inherit" />
 
@@ -439,19 +439,19 @@ export default function GlobalPlayerBar() {
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
           <div
-            className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 border-b border-white/20 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-40 select-none rounded-t-[28px] overflow-hidden"
+            className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 border-b border-white/20 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none rounded-t-[28px] overflow-hidden"
             style={{
-              background: 'linear-gradient(180deg, rgba(22, 22, 30, 0.96) 0%, rgba(8, 8, 12, 0.99) 100%)',
+              background: 'linear-gradient(180deg, rgba(18, 18, 26, 0.97) 0%, rgba(6, 6, 10, 0.99) 100%)',
             }}
           >
-            {/* Ambient & Beat Lighting inside MV Stage */}
-            {isPlaying && <div className="fluid-ambient-gradient opacity-40 pointer-events-none" />}
+            {/* Dark Gothic Ambient & Beat Lighting inside MV Stage */}
+            {isPlaying && <div className="fluid-ambient-gradient opacity-35 pointer-events-none" />}
             <div ref={videoFireOverlayRef} className="fire-flash-overlay opacity-0 pointer-events-none" />
             <div ref={videoSnareOverlayRef} className="snare-flash-overlay opacity-0 pointer-events-none" />
 
             {/* CRT TV Grain & Scanlines Overlay */}
             <div className="crt-scanlines pointer-events-none" />
-            <div className="tv-grain-overlay pointer-events-none opacity-40" />
+            <div className="tv-grain-overlay pointer-events-none opacity-30" />
 
             {/* Header Bar inside Video Drawer */}
             <div className="flex items-center justify-between border-b border-white/15 pb-2 px-1 relative z-20">
@@ -501,10 +501,10 @@ export default function GlobalPlayerBar() {
                 <span>DRM PROTECTED</span>
               </div>
 
-              {/* YouTube Style Clean Subtitle Overlay with Live 60FPS Beat Sync */}
+              {/* YouTube Style Clean Subtitle Overlay with Live 60FPS Beat Sync (Hidden during Intro) */}
               {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
                 <div className="absolute bottom-6 left-4 right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-150">
-                  <div className="bg-black/80 backdrop-blur-md px-5 py-2 rounded-xl border border-white/15 shadow-[0_4px_25px_rgba(0,0,0,0.9)] max-w-xl text-center">
+                  <div className="bg-black/85 backdrop-blur-md px-5 py-2 rounded-xl border border-white/15 shadow-[0_4px_25px_rgba(0,0,0,0.9)] max-w-xl text-center">
                     <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg leading-relaxed tracking-wide">
                       {parsedLyrics[activeLyricIdx].text}
                     </p>
@@ -591,16 +591,16 @@ export default function GlobalPlayerBar() {
         )}
 
         {/* ============================================================= */}
-        {/* INTEGRATED DRAWER 2: GOTHIC LYRICS (DARK GRADIENT & BEAT PULSE) */}
+        {/* INTEGRATED DRAWER 2: GOTHIC LYRICS (DARK OBSIDIAN GRADIENT) */}
         {/* ============================================================= */}
         {showLyrics && (
           <div
-            className="w-full h-[360px] sm:h-[430px] p-4 sm:p-6 border-b border-white/15 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-50 rounded-t-[28px] overflow-hidden select-none"
+            className="w-full h-[360px] sm:h-[430px] p-4 sm:p-6 border-b border-white/15 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 rounded-t-[28px] overflow-hidden select-none"
             style={{
-              background: 'linear-gradient(180deg, rgba(18, 18, 24, 0.96) 0%, rgba(6, 6, 10, 0.99) 100%)',
+              background: 'linear-gradient(180deg, rgba(16, 16, 22, 0.97) 0%, rgba(6, 6, 10, 0.99) 100%)',
             }}
           >
-            {/* Flowing Ambient Aura & Dynamic Beat Reaction inside Lyrics */}
+            {/* Flowing Dark Ambient Aura & Dynamic Beat Reaction inside Lyrics */}
             {isPlaying && <div className="fluid-ambient-gradient opacity-30 pointer-events-none" />}
             <div ref={lyricsFireOverlayRef} className="fire-flash-overlay opacity-0 pointer-events-none" />
             <div ref={lyricsSnareOverlayRef} className="snare-flash-overlay opacity-0 pointer-events-none" />
@@ -673,9 +673,9 @@ export default function GlobalPlayerBar() {
         {/* ============================================================= */}
         {showQueue && (
           <div
-            className="w-full h-[280px] sm:h-[340px] p-4 border-b border-white/15 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-10 rounded-t-[28px]"
+            className="w-full h-[280px] sm:h-[340px] p-4 border-b border-white/15 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-20 rounded-t-[28px]"
             style={{
-              background: 'linear-gradient(180deg, rgba(20, 20, 26, 0.97) 0%, rgba(8, 8, 12, 0.99) 100%)',
+              background: 'linear-gradient(180deg, rgba(16, 16, 22, 0.97) 0%, rgba(6, 6, 10, 0.99) 100%)',
             }}
           >
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2">
@@ -719,10 +719,10 @@ export default function GlobalPlayerBar() {
         )}
 
         {/* ============================================================= */}
-        {/* MAIN GLOBAL PLAYER DYNAMIC CONTROL BAR */}
+        {/* MAIN GLOBAL PLAYER DYNAMIC CONTROL BAR (HIGH STACKING Z-50) */}
         {/* ============================================================= */}
         <div
-          className={`w-full p-2.5 sm:p-3.5 backdrop-blur-2xl transition-all duration-300 flex items-center justify-between gap-2 sm:gap-4 relative z-30 select-none overflow-visible ${
+          className={`w-full p-2.5 sm:p-3.5 backdrop-blur-2xl transition-all duration-300 flex items-center justify-between gap-2 sm:gap-4 relative z-50 select-none overflow-visible ${
             hasDrawerOpen ? 'rounded-b-[28px]' : 'rounded-full sm:rounded-[32px]'
           }`}
         >
@@ -881,10 +881,10 @@ export default function GlobalPlayerBar() {
               </button>
             )}
 
-            {/* SPEAKER WITH ZERO-GAP HOVER & HIGHEST Z-INDEX POPUP SLIDER */}
+            {/* SPEAKER WITH ZERO-GAP HOVER & ABSOLUTE TOP Z-INDEX POPUP */}
             <div
               ref={volumeContainerRef}
-              className="relative flex items-center justify-center ml-1 z-[9999]"
+              className="relative flex items-center justify-center ml-1 z-[100]"
               onMouseEnter={handleVolumeMouseEnter}
               onMouseLeave={handleVolumeMouseLeave}
             >
@@ -896,10 +896,10 @@ export default function GlobalPlayerBar() {
                 {volume === 0 ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
               </button>
 
-              {/* Vertical Popover with continuous zero-gap bridge at absolute top z-index */}
+              {/* Popover Volume Slider */}
               {showVolumeSlider && (
                 <div
-                  className="absolute bottom-full pb-3 left-1/2 -translate-x-1/2 z-[99999] pointer-events-auto"
+                  className="absolute bottom-full pb-3 left-1/2 -translate-x-1/2 z-[999999] pointer-events-auto"
                   onMouseEnter={handleVolumeMouseEnter}
                   onMouseLeave={handleVolumeMouseLeave}
                 >

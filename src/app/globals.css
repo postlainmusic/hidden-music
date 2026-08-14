@@ -192,16 +192,16 @@ input[type="range"]::-moz-range-thumb:hover {
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(
-    125deg,
-    rgba(147, 51, 234, 0.5),
-    rgba(59, 130, 246, 0.45),
-    rgba(236, 72, 153, 0.5),
-    rgba(16, 185, 129, 0.45),
-    rgba(139, 92, 246, 0.5)
+    135deg,
+    rgba(28, 20, 36, 0.75),
+    rgba(14, 18, 28, 0.7),
+    rgba(32, 14, 24, 0.75),
+    rgba(18, 22, 32, 0.7),
+    rgba(24, 18, 30, 0.75)
   );
-  background-size: 300% 300%;
-  animation: fluidGradientMove 10s ease infinite;
-  opacity: 0.95;
+  background-size: 250% 250%;
+  animation: fluidGradientMove 12s ease infinite;
+  opacity: 0.85;
   z-index: 1;
 }
 

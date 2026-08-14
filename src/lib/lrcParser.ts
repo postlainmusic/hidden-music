@@ -39,12 +39,12 @@ export function parseLrc(lrcText: string): LyricLine[] {
   return result.sort((a, b) => a.time - b.time);
 }
 
-/**
- * Get active line index for given currentTime in seconds
- */
 export function getActiveLyricIndex(lyrics: LyricLine[], currentTime: number): number {
   if (!lyrics || lyrics.length === 0) return -1;
-  let activeIdx = 0;
+  // If we are still in the song intro before the first line is sung, return -1 (no active line)
+  if (currentTime < lyrics[0].time) return -1;
+
+  let activeIdx = -1;
   for (let i = 0; i < lyrics.length; i++) {
     if (currentTime >= lyrics[i].time) {
       activeIdx = i;
