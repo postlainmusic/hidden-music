@@ -110,7 +110,7 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Sync Audio <-> Video playback
+  // Seamless Audio <-> Video playback handoff (Never reset time, continue exactly from current second)
   useEffect(() => {
     const audio = audioRef?.current;
     const vid = videoRef.current;
@@ -122,6 +122,9 @@ export default function GlobalPlayerBar() {
       }
       if (vid) {
         vid.volume = volume;
+        if (currentTime > 0 && Math.abs(vid.currentTime - currentTime) > 0.6) {
+          vid.currentTime = currentTime;
+        }
         if (isPlaying) {
           vid.play().catch(() => {});
         } else {
@@ -134,11 +137,15 @@ export default function GlobalPlayerBar() {
       }
       if (audio) {
         audio.muted = false;
+        if (currentTime > 0 && Math.abs(audio.currentTime - currentTime) > 0.6) {
+          audio.currentTime = currentTime;
+        }
         if (isPlaying) {
           audio.play().catch(() => {});
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVideo, isPlaying, volume, audioRef]);
 
   // Keep video volume in sync
@@ -501,17 +508,23 @@ export default function GlobalPlayerBar() {
                     }
                   }
                 }}
+                onLoadedMetadata={(e) => {
+                  if (e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                    setDuration(e.currentTarget.duration);
+                  }
+                  if (currentTime > 0) {
+                    e.currentTarget.currentTime = currentTime;
+                  }
+                  if (isPlaying) {
+                    e.currentTarget.play().catch(() => {});
+                  }
+                }}
                 onTimeUpdate={(e) => {
                   if (showVideo) {
                     setCurrentTime(e.currentTarget.currentTime);
                   }
                 }}
                 onDurationChange={(e) => {
-                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                    setDuration(e.currentTarget.duration);
-                  }
-                }}
-                onLoadedMetadata={(e) => {
                   if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
                     setDuration(e.currentTarget.duration);
                   }
