@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
 import {
   Play,
   Pause,
@@ -14,7 +13,6 @@ import {
   VolumeX,
   ListMusic,
   Disc3,
-  X,
   Music,
   Mic2,
   Film,
@@ -24,7 +22,6 @@ import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
 
 export default function GlobalPlayerBar() {
-  const pathname = usePathname();
   const {
     currentTrack,
     currentAlbum,
@@ -40,8 +37,6 @@ export default function GlobalPlayerBar() {
     analyserRef,
     kickAnalyserRef,
     snareAnalyserRef,
-    kickTimestampsRef,
-    snareTimestampsRef,
     playTrack,
     togglePlay,
     nextTrack,
@@ -49,11 +44,9 @@ export default function GlobalPlayerBar() {
     seekTo,
     setCurrentTime,
     setDuration,
-    setIsPlaying,
     setVolume,
     toggleShuffle,
     toggleRepeat,
-    toggleCinematicFx
   } = usePlayer();
 
   const [mounted, setMounted] = useState(false);
@@ -62,37 +55,52 @@ export default function GlobalPlayerBar() {
   const [showVideo, setShowVideo] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const activeLineRef = useRef<HTMLDivElement | null>(null);
-  // Video player ref for synced playback
   const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  // Separate Kick & Snare Beat Detection & Animation Refs
   const barContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Beat reaction overlay refs
   const fireOverlayRef = useRef<HTMLDivElement | null>(null);
   const snareOverlayRef = useRef<HTMLDivElement | null>(null);
-  // Lyrics Stage separate overlay refs (React refs can only attach to 1 element at a time)
-  const lyricsFireOverlayRef = useRef<HTMLDivElement | null>(null);
-  const lyricsSnareOverlayRef = useRef<HTMLDivElement | null>(null);
+  const videoFireOverlayRef = useRef<HTMLDivElement | null>(null);
+  const videoSnareOverlayRef = useRef<HTMLDivElement | null>(null);
 
   const animFrameIdRef = useRef<number | null>(null);
   const lastKickTimeRef = useRef<number>(0);
   const lastSnareTimeRef = useRef<number>(0);
-
   const lastFiredKickIndexRef = useRef<number>(-1);
   const lastFiredSnareIndexRef = useRef<number>(-1);
-
   const prevKickPunchRef = useRef<number>(0);
   const smoothedKickPunchRef = useRef<number>(0);
-
   const fireIntensityRef = useRef<number>(0);
   const snareIntensityRef = useRef<number>(0);
   const currentScaleRef = useRef<number>(1);
+  const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle transition between Audio mode and Video mode seamlessly
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Click outside to close drawers and volume popover
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (barContainerRef.current && !barContainerRef.current.contains(e.target as Node)) {
+        setShowLyrics(false);
+        setShowQueue(false);
+        setShowVideo(false);
+        setShowVolumeSlider(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // Sync Audio <-> Video playback
   useEffect(() => {
     const audio = audioRef?.current;
     const vid = videoRef.current;
@@ -132,7 +140,7 @@ export default function GlobalPlayerBar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVideo]);
 
-  // Sync play / pause state to video element without resetting position
+  // Sync play / pause state to video
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !showVideo) return;
@@ -143,7 +151,7 @@ export default function GlobalPlayerBar() {
     }
   }, [isPlaying, showVideo]);
 
-  // Sync new video source when track changes while Video Stage is open
+  // Sync new video source when track changes
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !showVideo || !currentTrack?.video_url) return;
@@ -155,7 +163,6 @@ export default function GlobalPlayerBar() {
     }
   }, [currentTrack?.video_url, showVideo, isPlaying]);
 
-  // Seek helper to keep both audio and video timeline in exact sync
   const handleSeek = (newTime: number) => {
     seekTo(newTime);
     if (showVideo && videoRef.current) {
@@ -163,53 +170,61 @@ export default function GlobalPlayerBar() {
     }
   };
 
-  // Real-Time 58Hz Sub-Punch Kick & 280Hz Snare Distinct One-Shot Edge Beat Detection
+  // Real-Time Beat Detection & Visual Pulse Animation
   useEffect(() => {
-    // Stop ALL beat effects when Video Stage is open or not playing
-    if (!isPlaying || showVideo) {
+    if (!isPlaying) {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       if (fireOverlayRef.current) fireOverlayRef.current.style.opacity = '0';
       if (snareOverlayRef.current) snareOverlayRef.current.style.opacity = '0';
+      if (videoFireOverlayRef.current) videoFireOverlayRef.current.style.opacity = '0';
+      if (videoSnareOverlayRef.current) videoSnareOverlayRef.current.style.opacity = '0';
       if (barContainerRef.current) {
         barContainerRef.current.style.transform = 'scale(1)';
         barContainerRef.current.style.boxShadow = '';
-        barContainerRef.current.style.borderColor = '';
       }
       return;
     }
 
     const analyzeFrame = () => {
+      animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
+      const now = performance.now();
+      const currTime = currentTime;
+
       let isKickBeat = false;
       let isSnareBeat = false;
 
-      const now = performance.now();
-      const liveCurrentTime = audioRef?.current ? audioRef.current.currentTime : currentTime;
-
-      // 1. ONE-SHOT PCM KICK MATCHING (Edge trigger within -0.03s .. +0.04s)
-      const kickStamps = kickTimestampsRef?.current || [];
-      for (let i = 0; i < kickStamps.length; i++) {
-        const diff = liveCurrentTime - kickStamps[i];
-        if (diff >= -0.03 && diff <= 0.04 && i !== lastFiredKickIndexRef.current) {
-          lastFiredKickIndexRef.current = i;
-          isKickBeat = true;
-          lastKickTimeRef.current = now;
-          break;
+      // Check pre-analyzed beat maps
+      const kickMap = (window as any).__KICK_TIMESTAMPS_MAP;
+      if (Array.isArray(kickMap) && kickMap.length > 0) {
+        const nextKickIdx = lastFiredKickIndexRef.current + 1;
+        if (nextKickIdx < kickMap.length) {
+          const kickT = kickMap[nextKickIdx];
+          if (currTime >= kickT - 0.04 && currTime <= kickT + 0.07) {
+            isKickBeat = true;
+            lastFiredKickIndexRef.current = nextKickIdx;
+            lastKickTimeRef.current = now;
+          } else if (currTime > kickT + 0.12) {
+            lastFiredKickIndexRef.current = nextKickIdx;
+          }
         }
       }
 
-      // 2. ONE-SHOT PCM SNARE MATCHING (Edge trigger within -0.03s .. +0.04s)
-      const snareStamps = snareTimestampsRef?.current || [];
-      for (let i = 0; i < snareStamps.length; i++) {
-        const diff = liveCurrentTime - snareStamps[i];
-        if (diff >= -0.03 && diff <= 0.04 && i !== lastFiredSnareIndexRef.current) {
-          lastFiredSnareIndexRef.current = i;
-          isSnareBeat = true;
-          lastSnareTimeRef.current = now;
-          break;
+      const snareMap = (window as any).__SNARE_TIMESTAMPS_MAP;
+      if (Array.isArray(snareMap) && snareMap.length > 0) {
+        const nextSnareIdx = lastFiredSnareIndexRef.current + 1;
+        if (nextSnareIdx < snareMap.length) {
+          const snareT = snareMap[nextSnareIdx];
+          if (currTime >= snareT - 0.04 && currTime <= snareT + 0.07) {
+            isSnareBeat = true;
+            lastFiredSnareIndexRef.current = nextSnareIdx;
+            lastSnareTimeRef.current = now;
+          } else if (currTime > snareT + 0.12) {
+            lastFiredSnareIndexRef.current = nextSnareIdx;
+          }
         }
       }
 
-      // 3. REAL-TIME AUDIO NODE FALLBACK IF PCM NOT READY
+      // Realtime Analyser fallback
       let kickSubPunchEnergy = 0;
       if (kickAnalyserRef?.current) {
         try {
@@ -221,77 +236,48 @@ export default function GlobalPlayerBar() {
         } catch {}
       }
 
-      let snareVocalEnergy = 0;
-      if (snareAnalyserRef?.current) {
-        try {
-          const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
-          snareAnalyserRef.current.getByteFrequencyData(arr);
-          let sum = 0;
-          for (let i = 0; i < arr.length; i++) sum += arr[i];
-          snareVocalEnergy = sum / arr.length;
-        } catch {}
-      }
-
       const deltaKickPunch = Math.max(0, kickSubPunchEnergy - prevKickPunchRef.current);
       prevKickPunchRef.current = kickSubPunchEnergy;
       smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.78 + deltaKickPunch * 0.22;
       const kickThreshold = Math.max(6, smoothedKickPunchRef.current * 1.25);
 
-      if (!isKickBeat && deltaKickPunch > kickThreshold && deltaKickPunch > 10 && kickSubPunchEnergy > snareVocalEnergy * 0.9 && kickSubPunchEnergy > 28 && (now - lastKickTimeRef.current > 140)) {
+      if (!isKickBeat && deltaKickPunch > kickThreshold && deltaKickPunch > 10 && kickSubPunchEnergy > 28 && (now - lastKickTimeRef.current > 140)) {
         isKickBeat = true;
         lastKickTimeRef.current = now;
       }
 
-      // 4. APPLY DISTINCT KICK REACTION (Fiery Red/Orange Overlay + Scale Bounce)
+      // Apply Beat reaction
       if (isKickBeat) {
         fireIntensityRef.current = 1.0;
-        currentScaleRef.current = 1.048;
+        currentScaleRef.current = 1.035;
       } else {
-        fireIntensityRef.current *= 0.68; // Fast 60ms decay
-        currentScaleRef.current = currentScaleRef.current + (1.0 - currentScaleRef.current) * 0.32;
+        fireIntensityRef.current *= 0.72;
+        currentScaleRef.current = currentScaleRef.current + (1.0 - currentScaleRef.current) * 0.3;
       }
 
-      // 5. APPLY DISTINCT SNARE REACTION (Electric Neon Cyan/Purple Overlay)
       if (isSnareBeat) {
         snareIntensityRef.current = 1.0;
       } else {
-        snareIntensityRef.current *= 0.68; // Fast 60ms decay
+        snareIntensityRef.current *= 0.7;
       }
 
-      if (fireIntensityRef.current < 0.01) fireIntensityRef.current = 0;
-      if (snareIntensityRef.current < 0.01) snareIntensityRef.current = 0;
-      if (Math.abs(currentScaleRef.current - 1.0) < 0.001) currentScaleRef.current = 1.0;
-
-      // GPU-accelerated inline styles for 60fps performance
+      // Render to DOM overlays
       if (fireOverlayRef.current) {
-        fireOverlayRef.current.style.opacity = fireIntensityRef.current.toFixed(3);
-      }
-      if (lyricsFireOverlayRef.current) {
-        lyricsFireOverlayRef.current.style.opacity = fireIntensityRef.current.toFixed(3);
+        fireOverlayRef.current.style.opacity = fireIntensityRef.current > 0.03 ? fireIntensityRef.current.toFixed(3) : '0';
       }
       if (snareOverlayRef.current) {
-        snareOverlayRef.current.style.opacity = snareIntensityRef.current.toFixed(3);
+        snareOverlayRef.current.style.opacity = snareIntensityRef.current > 0.03 ? snareIntensityRef.current.toFixed(3) : '0';
       }
-      if (lyricsSnareOverlayRef.current) {
-        lyricsSnareOverlayRef.current.style.opacity = snareIntensityRef.current.toFixed(3);
+      if (videoFireOverlayRef.current) {
+        videoFireOverlayRef.current.style.opacity = fireIntensityRef.current > 0.03 ? fireIntensityRef.current.toFixed(3) : '0';
       }
-      if (barContainerRef.current) {
-        // Fix lyrics: When lyrics drawer is open, keep container scale 100% fixed without bouncing
-        const scaleVal = showLyrics ? 1.0 : currentScaleRef.current;
-        barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
-        if (fireIntensityRef.current > 0.18) {
-          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(255, 60, 0, ${(fireIntensityRef.current * 0.75).toFixed(2)}), inset 0 0 25px rgba(255, 120, 0, ${(fireIntensityRef.current * 0.6).toFixed(2)})`;
-          barContainerRef.current.style.borderColor = `rgba(255, 140, 0, ${(0.3 + fireIntensityRef.current * 0.65).toFixed(2)})`;
-        } else if (snareIntensityRef.current > 0.18) {
-          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(0, 240, 255, ${(snareIntensityRef.current * 0.75).toFixed(2)}), inset 0 0 25px rgba(160, 30, 255, ${(snareIntensityRef.current * 0.6).toFixed(2)})`;
-          barContainerRef.current.style.borderColor = `rgba(0, 240, 255, ${(0.3 + snareIntensityRef.current * 0.65).toFixed(2)})`;
-        } else {
-          barContainerRef.current.style.boxShadow = '';
-          barContainerRef.current.style.borderColor = '';
-        }
+      if (videoSnareOverlayRef.current) {
+        videoSnareOverlayRef.current.style.opacity = snareIntensityRef.current > 0.03 ? snareIntensityRef.current.toFixed(3) : '0';
       }
 
-      animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
+      if (barContainerRef.current) {
+        barContainerRef.current.style.transform = `scale(${currentScaleRef.current.toFixed(4)})`;
+      }
     };
 
     animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
@@ -299,7 +285,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, currentTime]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -310,7 +296,7 @@ export default function GlobalPlayerBar() {
     return getActiveLyricIndex(parsedLyrics, currentTime);
   }, [parsedLyrics, currentTime]);
 
-  // Auto-scroll active lyric line to center of lyrics drawer
+  // Auto-scroll active lyric line in Gothic lyrics stage
   useEffect(() => {
     if (showLyrics && activeLineRef.current) {
       activeLineRef.current.scrollIntoView({
@@ -320,7 +306,19 @@ export default function GlobalPlayerBar() {
     }
   }, [activeLyricIdx, showLyrics]);
 
-  // Global Keyboard Shortcuts (Space: Play/Pause, Arrows: Prev/Next, L: Lyrics, Q: Queue, S: Shuffle, R: Repeat)
+  // Volume hover UX handlers with debounce
+  const handleVolumeMouseEnter = () => {
+    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+    setShowVolumeSlider(true);
+  };
+
+  const handleVolumeMouseLeave = () => {
+    volumeTimeoutRef.current = setTimeout(() => {
+      setShowVolumeSlider(false);
+    }, 450);
+  };
+
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -347,9 +345,13 @@ export default function GlobalPlayerBar() {
       } else if (key === 'l') {
         e.preventDefault();
         setShowLyrics((prev) => !prev);
+        setShowQueue(false);
+        setShowVideo(false);
       } else if (key === 'q') {
         e.preventDefault();
         setShowQueue((prev) => !prev);
+        setShowLyrics(false);
+        setShowVideo(false);
       } else if (key === 's') {
         e.preventDefault();
         toggleShuffle();
@@ -365,7 +367,7 @@ export default function GlobalPlayerBar() {
 
   if (!mounted || !currentTrack) return null;
 
-  const effectiveDuration = (duration > 0 && isFinite(duration)) ? duration : (currentTrack.duration || 0);
+  const effectiveDuration = duration > 0 && isFinite(duration) ? duration : currentTrack.duration || 0;
 
   const formatTime = (secs: number) => {
     if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -374,44 +376,45 @@ export default function GlobalPlayerBar() {
     return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
-  const bottomPosition = 'bottom-2 sm:bottom-3';
+  const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
   return (
-    <div className={`fixed ${bottomPosition} left-0 right-0 z-40 px-2 sm:px-4 pointer-events-auto select-none flex justify-center`}>
-      {/* DYNAMIC MUSIC VISUALIZATION BAR GLASSMORPHIC CONTAINER */}
+    <div className="fixed bottom-2 sm:bottom-3 left-0 right-0 z-40 px-2 sm:px-4 pointer-events-auto select-none flex justify-center">
+      {/* UNIFIED MONOLITHIC CARD CONTAINER WITH ROUNDED CORNERS */}
       <div
         ref={barContainerRef}
-        className="w-full max-w-6xl md:max-w-7xl mx-auto rounded-3xl dynamic-music-bar text-white overflow-visible transform-gpu relative shadow-2xl"
+        className={`w-full max-w-6xl md:max-w-7xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 ${
+          hasDrawerOpen ? 'rounded-[28px]' : 'rounded-full sm:rounded-[32px]'
+        }`}
       >
-        {/* Fluid Ambient Multi-Color Gradient Overlay (Always active when audio plays) */}
-        {isPlaying && !showVideo && <div className="fluid-ambient-gradient" />}
-
-        {/* High-Energy Fire Effect Flash Gradient Overlay (Flash & Decay on Kick Drum Beat) */}
-        <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0" />
-
-        {/* Electric Neon Cyan/Purple Flash Gradient Overlay (Flash & Decay on Snare / Clap Beat) */}
-        <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0" />
+        {/* Dynamic Multi-Color Beat Reactive Flashes */}
+        <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-inherit" />
+        <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0 rounded-inherit" />
 
         {/* ============================================================= */}
-        {/* INTEGRATED DRAWER: NATIVE WEB VIDEO PLAYER (SLIDE UP/DOWN) */}
+        {/* INTEGRATED DRAWER 1: NATIVE WEB VIDEO PLAYER (MV STAGE) */}
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
-          <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 border-b border-cyan-500/30 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu bg-black/95 backdrop-blur-2xl relative z-40 select-none rounded-t-3xl overflow-hidden">
-            {/* CRT TV Grain & Scanlines Overlay inside Video Drawer */}
+          <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 border-b border-white/20 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu bg-black/95 backdrop-blur-2xl relative z-40 select-none rounded-t-[28px] overflow-hidden">
+            {/* CRT TV Grain & Scanlines Overlay */}
             <div className="crt-scanlines pointer-events-none" />
             <div className="tv-grain-overlay pointer-events-none opacity-40" />
+
+            {/* Video Stage Beat Reactive Lighting */}
+            <div ref={videoFireOverlayRef} className="fire-flash-overlay opacity-0 pointer-events-none" />
+            <div ref={videoSnareOverlayRef} className="snare-flash-overlay opacity-0 pointer-events-none" />
 
             {/* Header Bar inside Video Drawer */}
             <div className="flex items-center justify-between border-b border-white/15 pb-2 px-1 relative z-20">
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <div className="w-7 h-7 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center flex-shrink-0">
-                  <Film className="w-3.5 h-3.5 text-cyan-400" />
+                <div className="w-7 h-7 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0">
+                  <Film className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-extrabold text-xs sm:text-sm text-white truncate tracking-wider font-cyber flex items-center gap-2">
                     <span>{currentTrack.title}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-400/40 uppercase">
-                      WEB STAGE MV 1080P
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/15 text-white border border-white/30 uppercase">
+                      1080P MV
                     </span>
                   </h3>
                   <p className="text-[9px] text-slate-400 truncate uppercase tracking-widest font-mono">
@@ -420,62 +423,54 @@ export default function GlobalPlayerBar() {
                 </div>
               </div>
 
-              {/* Status Badge */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="px-2.5 py-1 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <span className="px-2.5 py-1 rounded-xl bg-white/10 border border-white/20 text-[10px] font-mono text-white font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
                   <span>SYNCED MV</span>
                 </span>
               </div>
             </div>
 
-            {/* Native Web Video Viewport Stage with Transparent DRM Anti-Theft Shield */}
+            {/* Native Video Stage Viewport */}
             <div
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
               }}
-              className="flex-1 my-2 rounded-2xl overflow-hidden border border-cyan-500/40 relative bg-black flex items-center justify-center shadow-2xl z-20 select-none pointer-events-auto"
+              className="flex-1 my-2 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-20 select-none pointer-events-auto"
             >
-              {/* HIDDEN MUSIC Watermark Logo Badge (Top Left Corner) */}
-              <div className="absolute top-3 left-3 z-40 flex items-center gap-2 bg-black/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-cyan-400/40 text-white shadow-2xl select-none pointer-events-none">
-                <Disc3 className="w-4 h-4 text-cyan-400 animate-spin-slow" />
-                <span className="font-cyber font-extrabold text-xs tracking-wider text-cyan-200">HIDDEN MUSIC</span>
+              {/* HIDDEN MUSIC Watermark */}
+              <div className="absolute top-3 left-3 z-40 flex items-center gap-2 bg-black/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
+                <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />
+                <span className="font-cyber font-extrabold text-[11px] tracking-wider text-white">HIDDEN MUSIC</span>
               </div>
 
-              {/* Anti-Screen Recording & DRM Protection Badge (Bottom Right) */}
+              {/* DRM Protected Badge */}
               <div className="absolute bottom-3 right-3 z-40 flex items-center gap-1.5 bg-black/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/15 text-[9px] text-slate-300 font-mono select-none pointer-events-none">
-                <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
-                <span>DRM PROTECTED • WEB STAGE</span>
+                <Sparkles className="w-3 h-3 text-white animate-pulse" />
+                <span>DRM PROTECTED</span>
               </div>
 
-              {/* Synchronized Karaoke / Subtitle Overlay on Video */}
+              {/* YouTube Style Clean Subtitle Overlay (No glow, semi-transparent black background box) */}
               {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
-                <div className="absolute bottom-6 left-4 right-4 z-40 flex flex-col items-center justify-center text-center pointer-events-none select-none transition-all duration-300">
-                  <div className="bg-black/80 backdrop-blur-md px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl border border-cyan-400/40 shadow-[0_0_30px_rgba(0,0,0,0.9)] max-w-2xl">
-                    <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg tracking-wide drop-shadow-[0_2px_8px_rgba(0,240,255,0.6)] leading-relaxed">
+                <div className="absolute bottom-6 left-4 right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-200">
+                  <div className="bg-black/80 backdrop-blur-sm px-4 py-1.5 rounded-lg border border-black/50 shadow-xl max-w-xl text-center">
+                    <p className="text-white font-sans font-medium text-xs sm:text-sm md:text-base leading-snug">
                       {parsedLyrics[activeLyricIdx].text}
                     </p>
-                    {parsedLyrics[activeLyricIdx + 1]?.text && (
-                      <p className="text-slate-400 font-mono text-[9px] sm:text-xs tracking-wider opacity-60 mt-1 line-clamp-1">
-                        {parsedLyrics[activeLyricIdx + 1].text}
-                      </p>
-                    )}
                   </div>
                 </div>
               )}
 
-              {/* Transparent DRM Anti-Theft Protection Shield & Click-to-Play Overlay */}
+              {/* Click-to-Play & Double-Click Fullscreen Overlay */}
               <div
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   return false;
                 }}
-                onClick={() => {
-                  togglePlay();
-                }}
+                onClick={() => togglePlay()}
                 onDoubleClick={(e) => {
                   e.preventDefault();
                   const container = e.currentTarget.parentElement;
@@ -488,15 +483,9 @@ export default function GlobalPlayerBar() {
                   }
                 }}
                 className="absolute inset-0 z-30 w-full h-full cursor-pointer flex items-center justify-center select-none bg-transparent"
-                style={{
-                  WebkitUserSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  userSelect: 'none',
-                }}
               >
-                {/* Centered Quick Play/Pause Indicator on Video Screen */}
                 {!isPlaying && (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/70 border border-cyan-400/70 backdrop-blur-md flex items-center justify-center text-cyan-300 shadow-[0_0_30px_rgba(0,240,255,0.6)] animate-pulse pointer-events-none">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse pointer-events-none">
                     <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current ml-1" />
                   </div>
                 )}
@@ -537,58 +526,52 @@ export default function GlobalPlayerBar() {
                 }}
                 onEnded={nextTrack}
                 style={{ pointerEvents: 'none' }}
-                className="w-full h-full object-contain select-none pointer-events-none"
+                className="w-full h-full object-contain max-h-full select-none pointer-events-none"
               />
             </div>
 
             {/* Bottom Info Status inside Video Drawer */}
             <div className="flex items-center justify-between pt-1.5 border-t border-white/10 px-1 font-mono text-[9px] text-slate-400 relative z-20">
-              <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
+              <span className="flex items-center gap-1.5 text-white font-bold">
                 <Sparkles className="w-3 h-3 animate-spin" />
-                <span>DYNAMIC AUDIO-VIDEO BEAT SYNCED</span>
+                <span>AUDIO-VIDEO BEAT SYNCED</span>
               </span>
-              <span>BẤM "THU GỌN" ĐỂ CHUYỂN VỀ NHẠC 3D</span>
+              <span className="text-slate-400 uppercase">Nhấp 2 lần để phóng to video</span>
             </div>
           </div>
         )}
 
         {/* ============================================================= */}
-        {/* INTEGRATED DRAWER: LYRICS (TV SCREEN FRAME) */}
+        {/* INTEGRATED DRAWER 2: GOTHIC / VAMP LYRICS (SEAMLESS NO-GRADIENT) */}
         {/* ============================================================= */}
         {showLyrics && (
-          <div className="w-full h-[360px] sm:h-[420px] p-4 border-2 border-white/20 rounded-3xl flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-50 shadow-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0a1a 0%, #0d0d22 40%, #0a0a1a 100%)' }}>
-            {/* Animated ambient gradient — same as music bar */}
-            {isPlaying && <div className="fluid-ambient-gradient" />}
-            {/* Fire & Snare overlays — separate refs from music bar */}
-            <div ref={lyricsFireOverlayRef} className="fire-flash-overlay opacity-0" />
-            <div ref={lyricsSnareOverlayRef} className="snare-flash-overlay opacity-0" />
+          <div className="w-full h-[360px] sm:h-[430px] p-4 sm:p-6 border-b border-white/15 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-50 bg-[#050505] rounded-t-[28px] overflow-hidden select-none">
+            {/* Subtle Gothic Dark Vignette */}
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(25,25,25,0.4)_0%,rgba(0,0,0,0.98)_100%)] z-0" />
+            <div className="tv-grain-overlay opacity-25 pointer-events-none" />
 
-            {/* Top Bar inside Drawer */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5 px-1 relative z-50">
-              <div className="flex items-center gap-2 min-w-0 pr-2">
+            {/* Header Bar */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 px-1 relative z-10">
+              <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <div className="w-7 h-7 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0">
                   <Mic2 className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-xs sm:text-sm text-white truncate tracking-wide flex items-center gap-1.5 font-cyber">
+                  <h3 className="font-extrabold text-xs sm:text-sm text-white truncate tracking-wider font-cyber">
                     {currentTrack.title}
                   </h3>
                   <p className="text-[9px] text-slate-400 truncate uppercase tracking-widest font-mono">
-                    {currentAlbum?.artist || 'VAULT ARTIST'} • TV LYRICS STAGE
+                    {currentAlbum?.artist || 'VAULT ARTIST'} • GOTHIC LYRICS
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowLyrics(false)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors flex-shrink-0"
-                title="Đóng lời bài hát"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold hidden sm:inline">
+                SYNCHRONIZED (.LRC)
+              </span>
             </div>
 
-            {/* Karaoke Synchronized Lyrics Line List */}
-            <div className="flex-1 overflow-y-auto my-2 px-2 py-6 space-y-3 text-center scroll-smooth pr-1 relative z-50" style={{ isolation: 'isolate' }}>
+            {/* Gothic Synchronized Lyrics List (No visible scrollbars) */}
+            <div className="flex-1 overflow-y-auto no-scrollbar my-2 px-2 py-8 space-y-4 text-center scroll-smooth relative z-10">
               {parsedLyrics.length > 0 ? (
                 parsedLyrics.map((line, idx) => {
                   const isActive = idx === activeLyricIdx;
@@ -597,81 +580,51 @@ export default function GlobalPlayerBar() {
                       key={`${line.time}_${idx}`}
                       ref={isActive ? activeLineRef : null}
                       onClick={() => seekTo(line.time)}
-                      className={`cursor-pointer transition-all duration-300 py-2 px-4 rounded-2xl ${
+                      className={`cursor-pointer transition-all duration-300 py-1 px-4 ${
                         isActive
-                          ? 'scale-105'
-                          : 'opacity-50 hover:opacity-80 hover:text-white'
+                          ? 'scale-105 opacity-100'
+                          : 'opacity-35 hover:opacity-75'
                       }`}
-                      style={isActive ? { isolation: 'isolate' } : {}}
                     >
-                      <span
-                        className="font-semibold leading-relaxed font-sans"
-                        style={{
-                          isolation: 'isolate',
-                          filter: 'none',
-                          mixBlendMode: 'normal',
-                          color: isActive ? '#ffffff' : 'rgba(200,200,220,0.7)',
-                          fontSize: isActive ? '1.05rem' : '0.85rem',
-                          fontWeight: isActive ? 800 : 500,
-                          textShadow: isActive
-                            ? '0 0 20px rgba(120,200,255,0.9), 0 0 40px rgba(100,160,255,0.5)'
-                            : 'none',
-                          letterSpacing: isActive ? '0.02em' : '0',
-                          transition: 'all 0.3s ease',
-                        }}
+                      <p
+                        className={`transition-all duration-200 ${
+                          isActive
+                            ? 'text-white font-extrabold text-base sm:text-lg md:text-xl tracking-wide font-sans'
+                            : 'text-zinc-400 font-medium text-xs sm:text-sm font-sans'
+                        }`}
                       >
                         {line.text}
-                      </span>
+                      </p>
                     </div>
                   );
                 })
               ) : currentTrack.lyrics ? (
-                <div className="whitespace-pre-wrap text-xs sm:text-sm text-slate-200 leading-relaxed font-sans text-center px-2 py-4 font-semibold" style={{ isolation: 'isolate', filter: 'none' }}>
+                <div className="whitespace-pre-wrap text-xs sm:text-sm text-zinc-300 leading-relaxed font-sans text-center px-4 py-6">
                   {currentTrack.lyrics}
                 </div>
               ) : (
-                <div className="text-center py-16 text-slate-400 text-xs tracking-wider flex flex-col items-center gap-2 font-mono" style={{ isolation: 'isolate' }}>
-                  <Mic2 className="w-8 h-8 text-slate-500 mb-1" />
-                  <span>CHƯA CÓ DỮ LIỆU LỜI BÀI HÁT (.LRC) CHO BÀI HÁT NÀY</span>
+                <div className="text-center py-20 text-zinc-500 text-xs tracking-widest flex flex-col items-center gap-2 font-mono">
+                  <Mic2 className="w-8 h-8 text-zinc-600 mb-1" />
+                  <span>CHƯA CÓ DỮ LIỆU LỜI BÀI HÁT CHO TÁC PHẨM NÀY</span>
                 </div>
               )}
-            </div>
-
-            {/* Bottom Progress Scrubber inside Drawer */}
-            <div className="flex items-center gap-2 pt-2 border-t border-white/10 px-1 font-mono text-[9px] text-slate-400 relative z-50">
-              <span>{formatTime(currentTime)}</span>
-              <input
-                type="range"
-                min={0}
-                max={effectiveDuration || 100}
-                value={currentTime}
-                onChange={(e) => seekTo(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-white"
-              />
-              <span>{formatTime(effectiveDuration)}</span>
             </div>
           </div>
         )}
 
         {/* ============================================================= */}
-        {/* INTEGRATED DRAWER: QUEUE (GLASSMORPHIC BACKDROP) */}
+        {/* INTEGRATED DRAWER 3: QUEUE LIST */}
         {/* ============================================================= */}
         {showQueue && (
-          <div className="w-full h-[280px] sm:h-[340px] p-4 border-b border-white/15 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu bg-black/60 backdrop-blur-xl relative z-10">
+          <div className="w-full h-[280px] sm:h-[340px] p-4 border-b border-white/15 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu bg-black/95 backdrop-blur-2xl relative z-10 rounded-t-[28px]">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2">
               <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider font-cyber text-[10px]">
                 <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />
-                <span>QUEUE LIST ({playlist.length})</span>
+                <span>DANH SÁCH PHÁT ({playlist.length})</span>
               </div>
-              <button
-                onClick={() => setShowQueue(false)}
-                className="p-1 rounded-lg bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-1">
               {playlist.map((trk, i) => {
                 const isCurrent = currentTrack?.id === trk.id;
                 return (
@@ -689,11 +642,11 @@ export default function GlobalPlayerBar() {
                       <span className="truncate text-xs font-semibold">{trk.title}</span>
                     </div>
                     {trk.video_url ? (
-                      <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/40 font-mono">
-                        VIDEO
+                      <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/15 text-white border border-white/30 font-mono font-bold">
+                        MV
                       </span>
                     ) : (
-                      <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                      <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/5 text-slate-400 font-mono">
                         AUDIO
                       </span>
                     )}
@@ -705,19 +658,16 @@ export default function GlobalPlayerBar() {
         )}
 
         {/* ============================================================= */}
-        {/* MAIN GLOBAL PLAYER DYNAMIC CONTROL BAR */}
+        {/* MAIN GLOBAL PLAYER DYNAMIC CONTROL BAR (PURE MONOCHROME B&W) */}
         {/* ============================================================= */}
-        <div className={`w-full p-2.5 sm:p-3.5 backdrop-blur-2xl transition-all duration-300 flex items-center justify-between gap-2 sm:gap-4 relative z-30 select-none ${
-          showVideo
-            ? 'bg-cyan-950/95 border-2 border-cyan-400 shadow-[0_0_30px_rgba(0,240,255,0.4)]'
-            : 'bg-black/90 border border-white/20'
-        }`}>
-
+        <div
+          className={`w-full p-2.5 sm:p-3.5 backdrop-blur-2xl transition-all duration-300 flex items-center justify-between gap-2 sm:gap-4 relative z-30 select-none bg-black/90 ${
+            hasDrawerOpen ? 'rounded-b-[28px]' : 'rounded-full sm:rounded-[32px]'
+          }`}
+        >
           {/* Left Column: Track / Video Details */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0 max-w-[130px] xs:max-w-[170px] sm:max-w-[260px]">
-            <div className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl overflow-hidden border flex-shrink-0 bg-slate-900 ${
-              showVideo ? 'border-cyan-400/50' : 'border-white/25'
-            }`}>
+            <div className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
               <img
                 src={currentAlbum?.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
                 alt={currentTrack.title}
@@ -740,8 +690,8 @@ export default function GlobalPlayerBar() {
                     }}
                     className={`text-[8px] uppercase px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 flex-shrink-0 cursor-pointer transition-all ${
                       showVideo
-                        ? 'bg-cyan-400 text-black border border-cyan-300 shadow-[0_0_14px_rgba(0,240,255,0.95)] scale-105'
-                        : 'bg-cyan-950/90 text-cyan-300 border border-cyan-400/50 hover:bg-cyan-900 hover:text-white shadow-sm'
+                        ? 'bg-white text-black border border-white shadow-lg scale-105'
+                        : 'bg-white/10 text-slate-300 border border-white/20 hover:bg-white/20 hover:text-white'
                     }`}
                     title={showVideo ? 'Hạ MV xuống' : 'Mở MV'}
                   >
@@ -753,7 +703,7 @@ export default function GlobalPlayerBar() {
                   </span>
                 )}
               </div>
-              <p className="text-[8px] sm:text-[9px] text-slate-400 truncate uppercase">
+              <p className="text-[8px] sm:text-[9px] text-slate-400 truncate uppercase font-mono">
                 {currentAlbum?.artist || 'VAULT ARTIST'}
                 <span className="sm:hidden text-slate-300 font-mono font-semibold ml-1">
                   ({formatTime(currentTime)} / {formatTime(effectiveDuration)})
@@ -762,11 +712,9 @@ export default function GlobalPlayerBar() {
             </div>
           </div>
 
-          {/* Center Column: PROMINENT & EXTENDED WIDE TIME SCRUBBER */}
+          {/* Center Column: PROMINENT TIME SCRUBBER WITH CIRCULAR IVORY THUMB */}
           <div className="flex-1 flex items-center gap-1.5 sm:gap-3.5 px-1 sm:px-6 min-w-0">
-            <span className={`hidden sm:inline-block text-[10px] sm:text-[11px] font-bold font-mono flex-shrink-0 ${
-              showVideo ? 'text-cyan-300' : 'text-slate-300'
-            }`}>
+            <span className="hidden sm:inline-block text-[10px] sm:text-[11px] font-bold font-mono flex-shrink-0 text-slate-300">
               {formatTime(currentTime)}
             </span>
             <div className="flex-1 relative flex items-center">
@@ -776,23 +724,17 @@ export default function GlobalPlayerBar() {
                 max={effectiveDuration || 100}
                 value={currentTime}
                 onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                className={`w-full h-2 sm:h-2.5 rounded-full appearance-none cursor-pointer border shadow-inner transition-all ${
-                  showVideo
-                    ? 'bg-cyan-950 border-cyan-500/50 accent-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.4)]'
-                    : 'bg-slate-800 border-white/20 accent-white hover:bg-slate-700'
-                }`}
+                className="w-full h-2 sm:h-2.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-slate-800 shadow-inner hover:bg-slate-700 transition-all"
               />
             </div>
-            <span className={`hidden sm:inline-block text-[10px] sm:text-[11px] font-bold font-mono flex-shrink-0 ${
-              showVideo ? 'text-cyan-400' : 'text-slate-400'
-            }`}>
+            <span className="hidden sm:inline-block text-[10px] sm:text-[11px] font-bold font-mono flex-shrink-0 text-slate-400">
               {formatTime(effectiveDuration)}
             </span>
           </div>
 
-          {/* Right Column: PLAYBACK & ACTION CONTROLS GROUPED ON RIGHT */}
+          {/* Right Column: PLAYBACK & ACTION CONTROLS */}
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 flex-shrink-0">
-            {/* LYRICS BUTTON (Music mode only) */}
+            {/* LYRICS BUTTON */}
             {!showVideo && (
               <button
                 onClick={() => {
@@ -801,10 +743,10 @@ export default function GlobalPlayerBar() {
                 }}
                 className={`p-1.5 sm:px-2.5 sm:py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
                   showLyrics
-                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.7)]'
+                    ? 'bg-white text-black border-white shadow-lg'
                     : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
                 }`}
-                title="Xem Lời bài hát (.LRC)"
+                title="Lời bài hát (Gothic Lyrics)"
               >
                 <Mic2 className="w-3.5 h-3.5" />
                 <span className="hidden lg:inline">LYRICS</span>
@@ -815,7 +757,7 @@ export default function GlobalPlayerBar() {
               onClick={toggleShuffle}
               title={shuffleMode ? 'Shuffle: ON' : 'Shuffle: OFF'}
               className={`hidden md:block p-1.5 transition-colors ${
-                shuffleMode ? (showVideo ? 'text-cyan-300' : 'text-white') : 'text-slate-500 hover:text-white'
+                shuffleMode ? 'text-white' : 'text-slate-500 hover:text-white'
               }`}
             >
               <Shuffle className="w-3.5 h-3.5" />
@@ -823,7 +765,7 @@ export default function GlobalPlayerBar() {
 
             <button
               onClick={prevTrack}
-              className={`transition-colors p-1 ${showVideo ? 'text-cyan-300 hover:text-white' : 'text-slate-400 hover:text-white'}`}
+              className="transition-colors p-1 text-slate-400 hover:text-white"
               title="Bài trước"
             >
               <SkipBack className="w-4 h-4 fill-current" />
@@ -831,9 +773,7 @@ export default function GlobalPlayerBar() {
 
             <button
               onClick={togglePlay}
-              className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform flex-shrink-0 ${
-                showVideo ? 'bg-cyan-400 text-black shadow-[0_0_15px_rgba(0,240,255,0.6)]' : 'bg-white text-black'
-              }`}
+              className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform flex-shrink-0"
               title={isPlaying ? 'Tạm dừng' : 'Phát'}
             >
               {isPlaying ? (
@@ -845,7 +785,7 @@ export default function GlobalPlayerBar() {
 
             <button
               onClick={nextTrack}
-              className={`transition-colors p-1 ${showVideo ? 'text-cyan-300 hover:text-white' : 'text-slate-400 hover:text-white'}`}
+              className="transition-colors p-1 text-slate-400 hover:text-white"
               title="Bài kế tiếp"
             >
               <SkipForward className="w-4 h-4 fill-current" />
@@ -853,9 +793,9 @@ export default function GlobalPlayerBar() {
 
             <button
               onClick={toggleRepeat}
-              title={`Loop Mode: ${repeatMode.toUpperCase()}`}
+              title={`Loop: ${repeatMode.toUpperCase()}`}
               className={`hidden md:block p-1.5 transition-colors ${
-                repeatMode !== 'off' ? (showVideo ? 'text-cyan-300' : 'text-white') : 'text-slate-500 hover:text-white'
+                repeatMode !== 'off' ? 'text-white' : 'text-slate-500 hover:text-white'
               }`}
             >
               {repeatMode === 'one' ? <Repeat1 className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
@@ -870,7 +810,7 @@ export default function GlobalPlayerBar() {
                 }}
                 className={`p-1.5 sm:px-2.5 sm:py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
                   showQueue
-                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.7)]'
+                    ? 'bg-white text-black border-white shadow-lg'
                     : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
                 }`}
                 title="Hàng chờ"
@@ -880,34 +820,40 @@ export default function GlobalPlayerBar() {
               </button>
             )}
 
-            {/* Speaker Icon with Vertical Hover Popover Volume Slider */}
+            {/* SPEAKER WITH ZERO-GAP HOVER & CLICK VOLUME SLIDER */}
             <div
-              className="relative flex items-center justify-center group ml-1"
-              onMouseEnter={() => setShowVolumeSlider(true)}
-              onMouseLeave={() => setShowVolumeSlider(false)}
+              className="relative flex items-center justify-center ml-1"
+              onMouseEnter={handleVolumeMouseEnter}
+              onMouseLeave={handleVolumeMouseLeave}
             >
               <button
-                onClick={() => setVolume(volume === 0 ? 0.8 : 0)}
+                onClick={() => setShowVolumeSlider((prev) => !prev)}
                 className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
                 title="Điều chỉnh âm lượng"
               >
-                {volume === 0 ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
+                {volume === 0 ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
               </button>
 
-              {/* Vertical Hover Popover Volume Slider */}
+              {/* Vertical Popover with continuous zero-gap bridge */}
               {showVolumeSlider && (
-                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 p-3 bg-black/95 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.95)] flex flex-col items-center gap-2 animate-fadeIn z-[100] min-w-[48px]">
-                  <span className="text-[10px] font-mono text-cyan-300 font-bold">{Math.round(volume * 100)}%</span>
-                  <div className="h-24 flex items-center py-1">
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={volume}
-                      onChange={(e) => setVolume(parseFloat(e.target.value))}
-                      className="h-20 w-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 [writing-mode:vertical-lr] [direction:rtl]"
-                    />
+                <div
+                  className="absolute bottom-full pb-2 left-1/2 -translate-x-1/2 z-[100]"
+                  onMouseEnter={handleVolumeMouseEnter}
+                  onMouseLeave={handleVolumeMouseLeave}
+                >
+                  <div className="p-3 bg-black/95 backdrop-blur-2xl border border-white/25 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.95)] flex flex-col items-center gap-2 animate-fadeIn min-w-[48px]">
+                    <span className="text-[10px] font-mono text-white font-bold">{Math.round(volume * 100)}%</span>
+                    <div className="h-24 flex items-center py-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={volume}
+                        onChange={(e) => setVolume(parseFloat(e.target.value))}
+                        className="h-20 w-2 bg-slate-800 rounded-lg appearance-none cursor-pointer [writing-mode:vertical-lr] [direction:rtl]"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
