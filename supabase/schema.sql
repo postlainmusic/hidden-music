@@ -22,8 +22,7 @@ CREATE TABLE IF NOT EXISTS public.albums (
   title TEXT NOT NULL,
   artist TEXT NOT NULL,
   original_year INTEGER,
-  ban_reason TEXT NOT NULL,
-  security_level TEXT DEFAULT 'CONFIDENTIAL' CHECK (security_level IN ('TOP SECRET', 'CONFIDENTIAL', 'DELETED_OFFICIAL', 'UNRELEASED_VAULT')),
+  ban_reason TEXT DEFAULT '',
   cover_url TEXT,
   is_published BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

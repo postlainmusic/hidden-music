@@ -1,7 +1,5 @@
 export type UserRole = 'user' | 'admin';
 
-export type SecurityLevel = 'TOP SECRET' | 'CONFIDENTIAL' | 'DELETED_OFFICIAL' | 'UNRELEASED_VAULT';
-
 export type Theme3D = 'monochrome_disc' | 'cyber_crystal' | 'vinyl_gold' | 'hologram_sphere';
 
 export type MediaType = 'audio' | 'video';
@@ -21,7 +19,6 @@ export interface Album {
   title: string;
   artist: string;
   original_year: number;
-  security_level: SecurityLevel;
   cover_url: string;
   is_published: boolean;
   created_at: string;
@@ -39,9 +36,9 @@ export interface TrackItem {
   audio_url: string;
   video_url?: string;
   cover_url?: string;
-  security_level?: SecurityLevel;
   original_year?: number;
   lyrics?: string;
   duration: number;
   created_at: string;
 }
+

@@ -29,7 +29,7 @@ import {
   GripVertical
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { SecurityLevel, MediaType, Album, TrackItem } from '@/types/database';
+import { MediaType, Album, TrackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
 
 export interface BatchTrackItem {
@@ -81,7 +81,6 @@ export default function AdminPage() {
   const [albumTitle, setAlbumTitle] = useState('');
   const [albumArtist, setAlbumArtist] = useState('');
   const [albumYear, setAlbumYear] = useState<number>(new Date().getFullYear());
-  const [albumSecurityLevel, setAlbumSecurityLevel] = useState<SecurityLevel>('CONFIDENTIAL');
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverUrlInput, setCoverUrlInput] = useState('');
 
@@ -180,7 +179,6 @@ export default function AdminPage() {
     setAlbumTitle(alb.title);
     setAlbumArtist(alb.artist);
     setAlbumYear(alb.original_year || new Date().getFullYear());
-    setAlbumSecurityLevel(alb.security_level);
     setCoverUrlInput(alb.cover_url || '');
     setIsAlbumModalOpen(true);
   };
@@ -229,7 +227,6 @@ export default function AdminPage() {
         title: albumTitle,
         artist: albumArtist,
         original_year: Number(albumYear),
-        security_level: albumSecurityLevel,
         cover_url: finalCoverUrl,
         is_published: true,
       };
@@ -1646,19 +1643,7 @@ export default function AdminPage() {
 
 
 
-              <div>
-                <label className="block text-slate-400 uppercase mb-1">Cấp độ bảo mật</label>
-                <select
-                  value={albumSecurityLevel}
-                  onChange={(e) => setAlbumSecurityLevel(e.target.value as SecurityLevel)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-white"
-                >
-                  <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-                  <option value="TOP SECRET">TOP SECRET</option>
-                  <option value="DELETED_OFFICIAL">DELETED OFFICIAL</option>
-                  <option value="UNRELEASED_VAULT">UNRELEASED VAULT</option>
-                </select>
-              </div>
+
 
               <div className="p-4 rounded-2xl bg-black border border-white/20 space-y-3">
                 <label className="block text-white font-bold flex items-center gap-1.5 uppercase">
