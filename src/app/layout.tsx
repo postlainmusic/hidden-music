@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Outfit } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { PlayerProvider } from '@/context/PlayerContext';
 import GlobalPlayerBar from '@/components/ui/GlobalPlayerBar';
@@ -9,6 +10,12 @@ import ShortcutsDrawer from '@/components/ui/ShortcutsDrawer';
 const outfit = Outfit({
   subsets: ['latin', 'latin-ext'],
   variable: '--font-outfit',
+});
+
+const dfvnGrafika = localFont({
+  src: '../../public/fonts/DFVN-Grafika.otf',
+  variable: '--font-dfvn-grafika',
+  display: 'swap',
 });
 
 export const viewport: Viewport = {
@@ -36,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className={`${outfit.variable} dark`}>
+    <html lang="vi" className={`${outfit.variable} ${dfvnGrafika.variable} dark`}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
