@@ -37,19 +37,126 @@ interface PlayerContextType {
   toggleCinematicFx: () => void;
 }
 
+const PLAYER_STATE_KEY = 'hidden_vault_player_state';
+
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [currentTrack, setCurrentTrack] = useState<TrackItem | null>(null);
-  const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
-  const [playlist, setPlaylist] = useState<TrackItem[]>([]);
+  const [currentTrack, setCurrentTrack] = useState<TrackItem | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.currentTrack) return parsed.currentTrack;
+        }
+      } catch {}
+    }
+    return null;
+  });
+
+  const [currentAlbum, setCurrentAlbum] = useState<Album | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.currentAlbum) return parsed.currentAlbum;
+        }
+      } catch {}
+    }
+    return null;
+  });
+
+  const [playlist, setPlaylist] = useState<TrackItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed?.playlist)) return parsed.playlist;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (typeof parsed?.currentTime === 'number') return parsed.currentTime;
+        }
+      } catch {}
+    }
+    return 0;
+  });
+
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(0.8);
-  const [shuffleMode, setShuffleMode] = useState(false);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
+  const [volume, setVolumeState] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (typeof parsed?.volume === 'number') return parsed.volume;
+        }
+      } catch {}
+    }
+    return 0.8;
+  });
+
+  const [shuffleMode, setShuffleMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (typeof parsed?.shuffleMode === 'boolean') return parsed.shuffleMode;
+        }
+      } catch {}
+    }
+    return false;
+  });
+
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.repeatMode) return parsed.repeatMode;
+        }
+      } catch {}
+    }
+    return 'all';
+  });
+
   const [isCinematicFxEnabled, setIsCinematicFxEnabled] = useState(true);
+
+  // Auto save player state to localStorage across F5
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (currentTrack) {
+        localStorage.setItem(
+          PLAYER_STATE_KEY,
+          JSON.stringify({
+            currentTrack,
+            currentAlbum,
+            playlist,
+            currentTime: Math.floor(currentTime),
+            volume,
+            shuffleMode,
+            repeatMode,
+          })
+        );
+      }
+    } catch {}
+  }, [currentTrack, currentAlbum, playlist, volume, shuffleMode, repeatMode]);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);

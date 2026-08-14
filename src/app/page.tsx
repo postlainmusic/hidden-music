@@ -13,7 +13,8 @@ import {
   getStoredUserSession,
   setStoredUserSession,
   getStoredAdminSession,
-  clearAllStoredSessions
+  clearAllStoredSessions,
+  performLogout
 } from '@/lib/authSession';
 
 export default function Home() {
@@ -117,16 +118,7 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
-    try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Logout error:', err);
-    } finally {
-      clearAllStoredSessions();
-      setUserSession(null);
-      window.location.href = '/';
-    }
+    await performLogout();
   };
 
   // 1. Mandatory Login Screen before accessing 3D Vault

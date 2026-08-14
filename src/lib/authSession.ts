@@ -1,4 +1,5 @@
-// Centralized persistent auth session manager across F5, tabs, and browser reloads
+// Centralized persistent auth session & state manager across F5, tabs, and browser reloads
+import { createClient } from '@/lib/supabase/client';
 
 export interface VaultUserSession {
   id: string;
@@ -27,7 +28,6 @@ export function getStoredUserSession(): VaultUserSession | null {
     if (session) {
       const parsed = JSON.parse(session);
       if (parsed && (parsed.id || parsed.email)) {
-        // Sync to localStorage
         localStorage.setItem(USER_SESSION_KEY, session);
         return parsed;
       }
@@ -43,7 +43,7 @@ export function getStoredUserSession(): VaultUserSession | null {
       };
     }
 
-    // 4. Try Supabase auth token in localStorage
+    // 4. Try Supabase auth token in localStorage or cookie
     const hasSbToken = Object.keys(localStorage).some(
       (k) => (k.startsWith('sb-') || k.includes('auth-token')) && localStorage.getItem(k)
     );
@@ -76,7 +76,7 @@ export function setStoredUserSession(user: any) {
         user.email?.split('@')[0] ||
         'VAULT MEMBER',
       user_metadata: user.user_metadata,
-      role: user.role || 'user',
+      role: user.role || (user.email === 'admin@hiddenvault.com' ? 'admin' : 'user'),
     };
 
     const str = JSON.stringify(sessionData);
@@ -134,11 +134,48 @@ export function clearAllStoredSessions() {
   try {
     localStorage.removeItem(USER_SESSION_KEY);
     localStorage.removeItem(ADMIN_SESSION_KEY);
-    sessionStorage.removeItem(USER_SESSION_KEY);
-    sessionStorage.removeItem(ADMIN_SESSION_KEY);
-    document.cookie = 'hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    document.cookie = 'hidden_vault_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    localStorage.removeItem('hidden_vault_player_state');
+    localStorage.removeItem('hidden_vault_cached_albums');
+    sessionStorage.clear();
+
+    // Clear all cookies
+    document.cookie.split(';').forEach((c) => {
+      document.cookie = c.trim().split('=')[0] + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    });
   } catch (err) {
     console.warn('Error clearing sessions:', err);
   }
+}
+
+// Global Clean Unified Logout
+export async function performLogout() {
+  try {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn('Supabase signOut notice:', err);
+  } finally {
+    clearAllStoredSessions();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  }
+}
+
+// Global Hotkey Listener: Ctrl + Shift + F5 or Ctrl + Shift + R -> Hard Session Purge
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    const isHardReload =
+      (e.ctrlKey && e.shiftKey && (e.key === 'F5' || e.code === 'F5' || e.key === 'r' || e.key === 'R')) ||
+      (e.ctrlKey && (e.key === 'F5' || e.code === 'F5'));
+
+    if (isHardReload) {
+      console.warn('🔒 HARD RESET TRIGGERED: Purging all sessions and state...');
+      e.preventDefault();
+      clearAllStoredSessions();
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/';
+    }
+  });
 }

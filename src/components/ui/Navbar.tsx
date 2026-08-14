@@ -20,7 +20,8 @@ import {
   getStoredUserSession,
   setStoredUserSession,
   getStoredAdminSession,
-  clearAllStoredSessions
+  clearAllStoredSessions,
+  performLogout
 } from '@/lib/authSession';
 
 export default function Navbar({
@@ -113,15 +114,7 @@ export default function Navbar({
       propOnLogout();
       return;
     }
-    try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Logout error:', err);
-    } finally {
-      clearAllStoredSessions();
-      window.location.href = '/';
-    }
+    await performLogout();
   };
 
   const handleOpenAuth = (tab?: 'login' | 'register') => {

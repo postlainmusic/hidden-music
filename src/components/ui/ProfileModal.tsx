@@ -17,7 +17,8 @@ import {
   getStoredUserSession,
   setStoredUserSession,
   getStoredAdminSession,
-  clearAllStoredSessions
+  clearAllStoredSessions,
+  performLogout
 } from '@/lib/authSession';
 
 interface ProfileModalProps {
@@ -138,18 +139,9 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
   const handleSignOut = async () => {
     if (onLogout) {
       onLogout();
-    } else {
-      try {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.error('Sign out error:', err);
-      } finally {
-        sessionStorage.clear();
-        document.cookie = "hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        window.location.href = '/';
-      }
+      return;
     }
+    await performLogout();
   };
 
   const isUserAdmin = profile?.role === 'admin' || user?.email === 'admin@hiddenvault.com';
