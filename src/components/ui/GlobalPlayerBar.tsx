@@ -435,16 +435,8 @@ export default function GlobalPlayerBar() {
 
   const activeLyricIdx = useMemo(() => {
     if (!parsedLyrics || parsedLyrics.length === 0) return -1;
-    if (showVideo) {
-      // Sync Window Gating: If video is in intro or outro outside the song, do not display out-of-sync lyrics
-      if (currentTime < syncWindowStart || currentTime > syncWindowEnd) {
-        return -1;
-      }
-      const effectiveSongTime = currentTime - videoOffset;
-      return getActiveLyricIndex(parsedLyrics, effectiveSongTime);
-    }
     return getActiveLyricIndex(parsedLyrics, currentTime);
-  }, [parsedLyrics, currentTime, showVideo, videoOffset, syncWindowStart, syncWindowEnd]);
+  }, [parsedLyrics, currentTime]);
 
   // Auto-scroll active lyric line in lyrics stage
   useEffect(() => {
@@ -581,11 +573,11 @@ export default function GlobalPlayerBar() {
               <span className="hidden sm:inline">{isFullscreen ? 'EXIT FULL' : 'FULLSCREEN'}</span>
             </button>
 
-            {/* Subtitle Overlay with Live Beat Sync */}
+            {/* Subtitle Overlay with Live Beat Sync (20% Black Glass & Cinema Font) */}
             {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
-              <div className={`absolute ${isFullscreen ? 'bottom-16 sm:bottom-20' : 'bottom-3 sm:bottom-6'} left-2 right-2 sm:left-4 sm:right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-150`}>
-                <div className="bg-black/90 backdrop-blur-md px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.95)] max-w-2xl text-center">
-                  <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg leading-relaxed tracking-wide">
+              <div className={`absolute ${isFullscreen ? 'bottom-16 sm:bottom-20' : 'bottom-3 sm:bottom-6'} left-2 right-2 sm:left-4 sm:right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-200`}>
+                <div className="bg-black/20 backdrop-blur-md px-4 py-2 sm:px-6 sm:py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] max-w-2xl text-center">
+                  <p className="text-white font-medium text-sm sm:text-base md:text-lg lg:text-xl leading-relaxed tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
                     {parsedLyrics[activeLyricIdx].text}
                   </p>
                 </div>
