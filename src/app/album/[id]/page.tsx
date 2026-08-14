@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Album, TrackItem } from '@/types/database';
 import { usePlayer } from '@/context/PlayerContext';
 import Navbar from '@/components/ui/Navbar';
+import CyberFlame from '@/components/ui/CyberFlame';
 import { hasActiveSession, getStoredUserSession, setStoredUserSession } from '@/lib/authSession';
 
 export default function AlbumDetailPage() {
@@ -212,21 +213,18 @@ export default function AlbumDetailPage() {
           >
             {/* 3D Vinyl Sleeve Deck with Realistic Peek & Slide Out */}
             <div
-              className="relative group cursor-pointer flex items-center justify-center"
+              className="relative group cursor-pointer flex items-center justify-center overflow-visible"
               onMouseEnter={() => setIsCoverHovered(true)}
               onMouseLeave={() => setIsCoverHovered(false)}
               onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
             >
-              {/* Dynamic Beat Glowing Rim behind the sleeve */}
-              <div
-                id="album-cover-glow"
-                className="absolute inset-0 rounded-3xl transition-all duration-150 pointer-events-none opacity-0 blur-2xl scale-110 z-0"
-              />
+              {/* Raging Organic Liquid Cyber Flame rising from the bottom up */}
+              <CyberFlame isPlaying={Boolean(isCurrentPlayingThisAlbum && isPlaying)} />
 
-              {/* Realistic Grooved 3D Vinyl Disc that slides out with live beat reactivity */}
+              {/* Realistic Grooved 3D Vinyl Disc that slides out with live multi-instrument music bounce */}
               <div
                 id="album-vinyl-disc"
-                className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 rounded-full bg-[#0a0a0a] border border-white/20 shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center transition-all duration-700 ease-out z-0 ${
+                className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 rounded-full bg-[#0a0a0a] shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center transition-all duration-700 ease-out z-0 ${
                   (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
                     ? 'translate-x-20 sm:translate-x-24 md:translate-x-32 rotate-90 scale-95 opacity-100'
                     : 'translate-x-0 scale-90 opacity-0'
@@ -236,24 +234,24 @@ export default function AlbumDetailPage() {
                 }}
               >
                 {/* Vinyl Grooves Texture */}
-                <div className="absolute inset-2 rounded-full border border-white/[0.06]" />
-                <div className="absolute inset-6 rounded-full border border-white/[0.08]" />
-                <div className="absolute inset-12 rounded-full border border-white/[0.1]" />
-                <div className="absolute inset-16 rounded-full border border-white/[0.07]" />
+                <div className="absolute inset-2 rounded-full border border-white/[0.04]" />
+                <div className="absolute inset-6 rounded-full border border-white/[0.06]" />
+                <div className="absolute inset-12 rounded-full border border-white/[0.08]" />
+                <div className="absolute inset-16 rounded-full border border-white/[0.05]" />
 
                 {/* Central Center Label with Mini Album Artwork */}
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-white/30 overflow-hidden shadow-inner flex items-center justify-center ${
+                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
                   isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
                 }`}>
                   <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
-                  <div className="absolute w-3 h-3 rounded-full bg-black border border-white/40" />
+                  <div className="absolute w-3 h-3 rounded-full bg-black" />
                 </div>
               </div>
 
-              {/* Front Double-Beveled Glass Album Sleeve with Synchronized Beat Rim Lighting */}
+              {/* Front Borderless Album Sleeve with Dynamic Multi-Instrument Music Bounce */}
               <div
                 id="album-cover-box"
-                className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-3xl overflow-hidden border-2 border-white/20 shadow-[0_25px_60px_rgba(0,0,0,0.95)] group-hover:border-white/50 transition-all duration-150 bg-zinc-950 flex-shrink-0 z-10"
+                className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] bg-zinc-950 flex-shrink-0 z-10 will-change-transform"
               >
                 {/* Full-Color Cover Artwork */}
                 <img
