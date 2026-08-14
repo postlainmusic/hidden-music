@@ -832,8 +832,8 @@ export default function GlobalPlayerBar() {
         <div
           className={`hidden md:flex flex-col w-full overflow-hidden transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[height,opacity] ${
             hasDrawerOpen
-              ? 'h-[380px] lg:h-[430px] max-h-[55vh] opacity-100 p-4 pb-2 border-b border-white/10 pointer-events-auto'
-              : 'h-0 opacity-0 p-0 border-b-0 pointer-events-none'
+              ? 'h-[380px] lg:h-[430px] max-h-[55vh] opacity-100 p-4 pb-1 border-0 pointer-events-auto'
+              : 'h-0 opacity-0 p-0 border-0 pointer-events-none'
           }`}
         >
           {/* Desktop Header */}

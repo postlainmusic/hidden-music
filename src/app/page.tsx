@@ -17,7 +17,7 @@ import {
   performLogout
 } from '@/lib/authSession';
 
-export default function Home() {
+export default function Home({ initialAlbumId }: { initialAlbumId?: string } = {}) {
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
@@ -26,7 +26,7 @@ export default function Home() {
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(true);
 
   // Seamless Master-Detail View Orchestration States
-  const [viewMode, setViewMode] = useState<'vault' | 'album'>('vault');
+  const [viewMode, setViewMode] = useState<'vault' | 'album'>(initialAlbumId ? 'album' : 'vault');
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<TrackItem | null>(null);
   const [isCoverHovered, setIsCoverHovered] = useState(false);
@@ -51,6 +51,23 @@ export default function Home() {
       setUserSession(session);
     }
 
+    const effectiveAlbumId = initialAlbumId || (typeof window !== 'undefined' && window.location.pathname.startsWith('/album/') ? window.location.pathname.replace('/album/', '') : '');
+    if (effectiveAlbumId) {
+      setViewMode('album');
+      try {
+        const singleCached = localStorage.getItem(`hidden_vault_album_cache_${effectiveAlbumId}`);
+        if (singleCached) {
+          const parsed = JSON.parse(singleCached);
+          if (parsed && parsed.id) {
+            setSelectedAlbum(parsed);
+            if (parsed.tracks && parsed.tracks.length > 0) {
+              setSelectedTrack(parsed.tracks[0]);
+            }
+          }
+        }
+      } catch {}
+    }
+
     try {
       const cached = localStorage.getItem('hidden_vault_cached_albums');
       if (cached) {
@@ -58,6 +75,15 @@ export default function Home() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           setAlbums(parsed);
           setIsLoadingAlbums(false);
+          if (effectiveAlbumId && !selectedAlbum) {
+            const match = parsed.find((a: Album) => a.id === effectiveAlbumId);
+            if (match) {
+              setSelectedAlbum(match);
+              if (match.tracks && match.tracks.length > 0) {
+                setSelectedTrack(match.tracks[0]);
+              }
+            }
+          }
         }
       }
     } catch {}
