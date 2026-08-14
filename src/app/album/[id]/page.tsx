@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Album, TrackItem } from '@/types/database';
 import { usePlayer } from '@/context/PlayerContext';
 import Navbar from '@/components/ui/Navbar';
-import CyberFlame from '@/components/ui/CyberFlame';
+import RealisticFireCanvas from '@/components/ui/RealisticFireCanvas';
 import { hasActiveSession, getStoredUserSession, setStoredUserSession } from '@/lib/authSession';
 
 export default function AlbumDetailPage() {
@@ -218,33 +218,39 @@ export default function AlbumDetailPage() {
               onMouseLeave={() => setIsCoverHovered(false)}
               onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
             >
-              {/* Raging Organic Liquid Cyber Flame rising from the bottom up */}
-              <CyberFlame isPlaying={Boolean(isCurrentPlayingThisAlbum && isPlaying)} />
+              {/* Hyper-Realistic Volumetric 60FPS Fire Particle Canvas */}
+              <RealisticFireCanvas isPlaying={Boolean(isCurrentPlayingThisAlbum && isPlaying)} />
 
-              {/* Realistic Grooved 3D Vinyl Disc that slides out with live multi-instrument music bounce */}
+              {/* Outer Wrapper that handles the physical slide-out to the right */}
               <div
-                id="album-vinyl-disc"
-                className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 rounded-full bg-[#0a0a0a] shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center transition-all duration-700 ease-out z-0 ${
+                id="album-vinyl-wrapper"
+                className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 transition-all duration-700 ease-out z-0 pointer-events-none ${
                   (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? 'translate-x-20 sm:translate-x-24 md:translate-x-32 rotate-90 scale-95 opacity-100'
-                    : 'translate-x-0 scale-90 opacity-0'
+                    ? 'translate-x-24 sm:translate-x-28 md:translate-x-36 opacity-100'
+                    : 'translate-x-0 opacity-0'
                 }`}
-                style={{
-                  background: 'radial-gradient(circle, #222 2%, #0d0d0d 15%, #181818 30%, #080808 45%, #151515 60%, #050505 85%, #000 100%)',
-                }}
               >
-                {/* Vinyl Grooves Texture */}
-                <div className="absolute inset-2 rounded-full border border-white/[0.04]" />
-                <div className="absolute inset-6 rounded-full border border-white/[0.06]" />
-                <div className="absolute inset-12 rounded-full border border-white/[0.08]" />
-                <div className="absolute inset-16 rounded-full border border-white/[0.05]" />
+                {/* Inner Disc that handles the physical music bounce & rotating vinyl grooves */}
+                <div
+                  id="album-vinyl-disc"
+                  className="w-full h-full rounded-full bg-[#0a0a0a] shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center will-change-transform"
+                  style={{
+                    background: 'radial-gradient(circle, #222 2%, #0d0d0d 15%, #181818 30%, #080808 45%, #151515 60%, #050505 85%, #000 100%)',
+                  }}
+                >
+                  {/* Vinyl Grooves Texture */}
+                  <div className="absolute inset-2 rounded-full border border-white/[0.04]" />
+                  <div className="absolute inset-6 rounded-full border border-white/[0.06]" />
+                  <div className="absolute inset-12 rounded-full border border-white/[0.08]" />
+                  <div className="absolute inset-16 rounded-full border border-white/[0.05]" />
 
-                {/* Central Center Label with Mini Album Artwork */}
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
-                  isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
-                }`}>
-                  <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
-                  <div className="absolute w-3 h-3 rounded-full bg-black" />
+                  {/* Central Center Label with Mini Album Artwork */}
+                  <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
+                    isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
+                  }`}>
+                    <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
+                    <div className="absolute w-3 h-3 rounded-full bg-black" />
+                  </div>
                 </div>
               </div>
 

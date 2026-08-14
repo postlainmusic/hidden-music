@@ -379,8 +379,8 @@ export default function GlobalPlayerBar() {
       const cyberFlameEl = document.getElementById('cyber-album-flame');
 
       // Pronounced physical bounce that follows all instruments in real-time
-      const bounceScale = 1.0 + (totalEnergy * 0.045) + (deltaTotal * 0.16);
-      const bounceY = -1 * (totalEnergy * 9 + deltaTotal * 18);
+      const bounceScale = 1.0 + (totalEnergy * 0.055) + (deltaTotal * 0.20);
+      const bounceY = -1 * (totalEnergy * 11 + deltaTotal * 22);
 
       if (albumCoverEl) {
         albumCoverEl.style.transform = `scale(${bounceScale.toFixed(4)}) translateY(${bounceY.toFixed(2)}px)`;
@@ -394,15 +394,16 @@ export default function GlobalPlayerBar() {
         vinylEl.style.borderColor = '';
       }
 
-      // 5. RAGING CYBER FLAME ROAR (Rực cháy phía sau album từ dưới lên với mỗi nhịp kick)
+      // 5. RAGING VOLUMETRIC FLAME ROAR (Rực cháy phía sau album từ dưới lên với mỗi nhịp kick)
       if (cyberFlameEl) {
-        const flameScale = 1.0 + (fireIntensityRef.current * 0.42) + (bassEnergy * 0.22);
-        const flameOpacity = 0.50 + (fireIntensityRef.current * 0.50);
-        const flameBright = 1.0 + (fireIntensityRef.current * 0.95);
+        cyberFlameEl.setAttribute('data-kick', fireIntensityRef.current.toFixed(2));
+        const flameScale = 1.0 + (fireIntensityRef.current * 0.35) + (bassEnergy * 0.18);
+        const flameOpacity = isPlaying ? (0.80 + fireIntensityRef.current * 0.20) : 0;
+        const flameBright = 1.0 + (fireIntensityRef.current * 0.85);
 
         cyberFlameEl.style.transform = `translateX(-50%) scale(${flameScale.toFixed(3)})`;
         cyberFlameEl.style.opacity = flameOpacity.toFixed(2);
-        cyberFlameEl.style.filter = `drop-shadow(0 -20px 55px rgba(255, 60, 0, ${(0.6 + fireIntensityRef.current * 0.4).toFixed(2)})) drop-shadow(0 -45px 110px rgba(255, 10, 0, ${(0.4 + fireIntensityRef.current * 0.5).toFixed(2)})) brightness(${flameBright.toFixed(2)})`;
+        cyberFlameEl.style.filter = `drop-shadow(0 -15px 45px rgba(255, 60, 0, ${(0.65 + fireIntensityRef.current * 0.35).toFixed(2)})) drop-shadow(0 -35px 90px rgba(255, 20, 0, ${(0.45 + fireIntensityRef.current * 0.45).toFixed(2)})) brightness(${flameBright.toFixed(2)})`;
       }
 
       // 6. PLAYER BAR SYNCHRONIZATION
