@@ -349,7 +349,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } else {
       audioRef.current.pause();
     }
-  }, [isPlaying, trackUrl]);
+
+    // MediaSession lockscreen and system notification integration
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
+        album: currentAlbum?.title || 'Hidden Music Vault',
+        artwork: currentAlbum?.cover_url ? [
+          { src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' },
+        ] : [],
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        setIsPlaying(true);
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        setIsPlaying(false);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        prevTrack();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        nextTrack();
+      });
+    }
+  }, [isPlaying, trackUrl, currentTrack, currentAlbum]);
 
   const playTrack = (track: TrackItem, album?: Album | null, newPlaylist?: TrackItem[]) => {
     setCurrentTrack(track);

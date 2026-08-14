@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Outfit } from 'next/font/google';
 import './globals.css';
 import { PlayerProvider } from '@/context/PlayerContext';
@@ -9,6 +9,13 @@ const outfit = Outfit({
   subsets: ['latin', 'latin-ext'],
   variable: '--font-outfit',
 });
+
+export const viewport: Viewport = {
+  themeColor: '#000000',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: 'Hidden Music Vault | Kho Âm Nhạc Bị Ẩn & Thu Hồi 3D',
@@ -37,7 +44,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-[#030509] text-slate-100 antialiased selection:bg-cyan-500 selection:text-black overflow-x-hidden">
+      <body className="bg-black text-white antialiased selection:bg-white selection:text-black overflow-x-hidden">
         <PlayerProvider>
           <div id="cinematic-viewport-wrapper" className="min-h-screen w-full transition-transform duration-75 ease-out">
             {children}
