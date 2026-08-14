@@ -15,7 +15,6 @@ import { createClient } from '@/lib/supabase/client';
 import { Album, TrackItem } from '@/types/database';
 import { usePlayer } from '@/context/PlayerContext';
 import Navbar from '@/components/ui/Navbar';
-import RealisticFireCanvas from '@/components/ui/RealisticFireCanvas';
 import { hasActiveSession, getStoredUserSession, setStoredUserSession } from '@/lib/authSession';
 
 export default function AlbumDetailPage() {
@@ -199,13 +198,13 @@ export default function AlbumDetailPage() {
       <div className="flex-1 w-full max-w-[1520px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 flex items-center justify-center relative z-10 pt-16 md:pt-20 pb-28 md:pb-32 overflow-hidden">
         
         {/* Main Grid: Left Vinyl Deck & Right Clean Unified Playlist */}
-        <div className="w-full flex flex-col lg:flex-row items-center lg:items-center justify-center gap-6 sm:gap-8 lg:gap-12 xl:gap-16 max-h-full">
+        <div className="w-full flex flex-col lg:flex-row items-center lg:items-center justify-center gap-8 sm:gap-12 lg:gap-16 xl:gap-24 max-h-full">
           
           {/* ========================================================================= */}
           {/* LEFT COLUMN: Ultra-Premium 3D Vinyl Sleeve Showcase                       */}
           {/* ========================================================================= */}
           <div
-            className={`w-full lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col items-center text-center space-y-3 sm:space-y-4 transition-all duration-700 ease-out ${
+            className={`w-full lg:w-[400px] xl:w-[440px] shrink-0 flex flex-col items-center text-center space-y-3 sm:space-y-4 relative z-20 transition-all duration-700 ease-out ${
               animateSlide
                 ? 'lg:translate-x-0 lg:opacity-100'
                 : 'lg:translate-x-[180px] lg:scale-105 opacity-90'
@@ -218,19 +217,16 @@ export default function AlbumDetailPage() {
               onMouseLeave={() => setIsCoverHovered(false)}
               onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
             >
-              {/* Hyper-Realistic Volumetric 60FPS Fire Particle Canvas */}
-              <RealisticFireCanvas isPlaying={Boolean(isCurrentPlayingThisAlbum && isPlaying)} />
-
               {/* Outer Wrapper that handles the physical slide-out to the right */}
               <div
                 id="album-vinyl-wrapper"
                 className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 transition-all duration-700 ease-out z-0 pointer-events-none ${
                   (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? 'translate-x-24 sm:translate-x-28 md:translate-x-36 opacity-100'
+                    ? 'translate-x-16 sm:translate-x-20 md:translate-x-24 opacity-100'
                     : 'translate-x-0 opacity-0'
                 }`}
               >
-                {/* Inner Disc that handles the physical music bounce & rotating vinyl grooves */}
+                {/* Inner Disc that handles the physical vocal bounce & rotating vinyl grooves */}
                 <div
                   id="album-vinyl-disc"
                   className="w-full h-full rounded-full bg-[#0a0a0a] shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center will-change-transform"
@@ -254,7 +250,7 @@ export default function AlbumDetailPage() {
                 </div>
               </div>
 
-              {/* Front Borderless Album Sleeve with Dynamic Multi-Instrument Music Bounce */}
+              {/* Front Borderless Album Sleeve with Dynamic Vocal Reactivity */}
               <div
                 id="album-cover-box"
                 className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] bg-zinc-950 flex-shrink-0 z-10 will-change-transform"
@@ -333,7 +329,7 @@ export default function AlbumDetailPage() {
           </div>
 
           {/* ========================================================================= */}
-          {/* RIGHT COLUMN: Ultra-Sleek Modern Minimalist Playlist                       */}
+          {/* RIGHT COLUMN: Dark Neumorphic Soft-Emboss Playlist Panel                  */}
           {/* ========================================================================= */}
           <div
             className={`w-full flex-1 min-w-0 font-mono transition-all duration-700 delay-100 ease-out ${
@@ -342,8 +338,8 @@ export default function AlbumDetailPage() {
                 : 'lg:translate-x-20 lg:opacity-0 pointer-events-none'
             }`}
           >
-            {/* Unified Glass Panel with Luxury Finish */}
-            <div className="rounded-3xl p-2.5 sm:p-3.5 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.85)] bg-[#0b0b0d]/75 backdrop-blur-2xl h-[420px] sm:h-[460px] md:h-[490px] lg:h-[510px] xl:h-[530px] flex flex-col w-full overflow-hidden">
+            {/* Unified Dark Neumorphic Panel */}
+            <div className="dark-neumorph-card p-3 sm:p-4 md:p-5 h-[420px] sm:h-[460px] md:h-[490px] lg:h-[510px] xl:h-[530px] flex flex-col w-full overflow-hidden">
               
               {/* Scrollable Tracklist with Perfect Padding and Clean Alignment */}
               <div className="flex-1 overflow-y-auto space-y-1 select-none no-scrollbar px-1 py-1">

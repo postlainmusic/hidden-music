@@ -66,13 +66,10 @@ export default function GlobalPlayerBar() {
   const barContainerRef = useRef<HTMLDivElement | null>(null);
   const volumeContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Separate Kick & Snare Beat Detection & Animation Refs
+  // Dedicated Kick Detection Refs for Player Bar
   const fireOverlayRef = useRef<HTMLDivElement | null>(null);
-  const snareOverlayRef = useRef<HTMLDivElement | null>(null);
-
   const animFrameIdRef = useRef<number | null>(null);
   const lastKickTimeRef = useRef<number>(0);
-  const lastSnareTimeRef = useRef<number>(0);
   const lastFiredKickIndexRef = useRef<number>(-1);
   const lastFiredSnareIndexRef = useRef<number>(-1);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -251,19 +248,17 @@ export default function GlobalPlayerBar() {
   const prevKickPunchRef = useRef<number>(0);
   const smoothedKickPunchRef = useRef<number>(0);
 
-  const albumSnareScaleRef = useRef<number>(1);
-  const albumSnareYRef = useRef<number>(0);
-  const prevSnarePunchRef = useRef<number>(0);
-  const smoothedSnarePunchRef = useRef<number>(0);
+  // Dominant Lead Vocal Tracking Refs (Exclusively for Album Cover & Vinyl Disc)
+  const albumVocalScaleRef = useRef<number>(1);
+  const albumVocalYRef = useRef<number>(0);
 
   // Real-Time Separated Audio Engines:
-  // [1] Player Bar & Flame Canvas = KICK-ONLY
-  // [2] Album Cover & Vinyl Disc = SNARE-ONLY (100% borderless)
+  // [1] Player Bar = PURE KICK-ONLY (No gradients)
+  // [2] Album Cover & Vinyl Disc = DOMINANT LEAD VOCAL ONLY (100% borderless, ignores ad-libs/bè)
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       if (fireOverlayRef.current) fireOverlayRef.current.style.opacity = '0';
-      if (snareOverlayRef.current) snareOverlayRef.current.style.opacity = '0';
       if (barContainerRef.current) {
         barContainerRef.current.style.transform = 'scale(1)';
         barContainerRef.current.style.boxShadow = '';
@@ -271,7 +266,6 @@ export default function GlobalPlayerBar() {
       }
       const albumCoverEl = document.getElementById('album-cover-box');
       const vinylEl = document.getElementById('album-vinyl-disc');
-      const cyberFlameEl = document.getElementById('cyber-album-flame');
       if (albumCoverEl) {
         albumCoverEl.style.transform = 'scale(1) translateY(0px)';
         albumCoverEl.style.boxShadow = '';
@@ -282,22 +276,18 @@ export default function GlobalPlayerBar() {
         vinylEl.style.boxShadow = '';
         vinylEl.style.borderColor = '';
       }
-      if (cyberFlameEl) {
-        cyberFlameEl.setAttribute('data-kick', '0');
-      }
       return;
     }
 
     const analyzeFrame = () => {
       let isKickBeat = false;
-      let isSnareBeat = false;
       const now = performance.now();
       const liveCurrentTime = showVideo && videoRef.current
         ? Math.max(0, videoRef.current.currentTime - videoOffset)
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
       // =========================================================================
-      // [ENGINE 1]: PURE KICK-ONLY (CONTROLS PLAYER BAR & REALISTIC FLAME CANVAS)
+      // [ENGINE 1]: PURE KICK-ONLY (CONTROLS PLAYER BAR)
       // =========================================================================
       // 1. One-Shot PCM Kick Matching
       const kickStamps = kickTimestampsRef?.current || [];
@@ -372,83 +362,72 @@ export default function GlobalPlayerBar() {
         }
       }
 
-      // Drive Realistic Flame Canvas (KICK-ONLY)
-      const cyberFlameEl = document.getElementById('cyber-album-flame');
-      if (cyberFlameEl) {
-        cyberFlameEl.setAttribute('data-kick', barKickIntensityRef.current.toFixed(2));
-      }
-
       // =========================================================================
-      // [ENGINE 2]: PURE SNARE-ONLY (CONTROLS ALBUM COVER & VINYL DISC BOUNCE)
+      // [ENGINE 2]: DOMINANT LEAD VOCAL ISOLATION (FOR ALBUM COVER & VINYL DISC)
       // =========================================================================
-      // 1. One-Shot PCM Snare Matching
-      const snareStamps = snareTimestampsRef?.current || [];
-      for (let i = 0; i < snareStamps.length; i++) {
-        const diff = liveCurrentTime - snareStamps[i];
-        if (diff >= -0.03 && diff <= 0.04 && i !== lastFiredSnareIndexRef.current) {
-          lastFiredSnareIndexRef.current = i;
-          isSnareBeat = true;
-          lastSnareTimeRef.current = now;
-          break;
-        }
-      }
+      // Extracts fundamental lead vocal formants (~450Hz - 1750Hz)
+      // Rejects sub-bass beats, snares, and wide high-frequency adlib/reverbs
+      let leadVocalEnergy = 0;
+      let backgroundMask = 0;
 
-      // 2. Real-Time Snare Audio Filter Analysis (350Hz - 2500Hz)
-      let snareEnergy = 0;
-      if (snareAnalyserRef?.current) {
-        try {
-          const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
-          snareAnalyserRef.current.getByteFrequencyData(arr);
-          let sum = 0;
-          for (let i = 0; i < arr.length; i++) sum += arr[i];
-          snareEnergy = sum / arr.length;
-        } catch {}
-      }
-
-      if (snareEnergy === 0 && analyserRef?.current) {
+      if (analyserRef?.current) {
         try {
           const arr = new Uint8Array(analyserRef.current.frequencyBinCount);
           analyserRef.current.getByteFrequencyData(arr);
-          let sSum = 0;
-          for (let i = 10; i < 28 && i < arr.length; i++) sSum += arr[i];
-          snareEnergy = sSum / 18;
+          const len = arr.length;
+
+          // 1. Lead Vocal Core Formant Band (Bins 7 to 20, ~450Hz - 1700Hz)
+          let vSum = 0;
+          let vCount = 0;
+          for (let i = 7; i <= 20 && i < len; i++) {
+            vSum += arr[i];
+            vCount++;
+          }
+          leadVocalEnergy = vCount > 0 ? vSum / (vCount * 255) : 0;
+
+          // 2. Background Mask (Low Sub 0-4 + Extreme Highs/Adlib Reverb 28-64)
+          let bSum = 0;
+          for (let i = 0; i < 5 && i < len; i++) bSum += arr[i];
+          const bassRatio = bSum / (5 * 255);
+
+          let hSum = 0;
+          const hEnd = Math.min(64, len);
+          for (let i = 28; i < hEnd; i++) hSum += arr[i];
+          const highRatio = hSum / ((hEnd - 28) * 255);
+
+          backgroundMask = bassRatio * 0.45 + highRatio * 0.45;
         } catch {}
       }
 
-      const deltaSnare = Math.max(0, snareEnergy - prevSnarePunchRef.current);
-      prevSnarePunchRef.current = snareEnergy;
-      smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.76 + deltaSnare * 0.24;
-      const snareThresh = Math.max(5.0, smoothedSnarePunchRef.current * 1.25);
+      // Compute isolated Lead Vocal Prominence (Subtracting background mask to reject beat & adlib reverb)
+      const rawProminence = Math.max(0, leadVocalEnergy - backgroundMask * 0.85);
+      const vocalThreshold = 0.085;
+      const isLeadVocalActive = rawProminence > vocalThreshold;
 
-      if (!isSnareBeat && deltaSnare > snareThresh && deltaSnare > 7 && snareEnergy > 18 && (now - lastSnareTimeRef.current > 140)) {
-        isSnareBeat = true;
-        lastSnareTimeRef.current = now;
-      }
-
-      // Snare Physical Bounce State
-      if (isSnareBeat) {
-        albumSnareScaleRef.current = 1.052;
-        albumSnareYRef.current = -9;
+      if (isLeadVocalActive) {
+        const activeVocal = rawProminence - vocalThreshold;
+        albumVocalScaleRef.current = 1.0 + Math.min(0.048, activeVocal * 0.24);
+        albumVocalYRef.current = -1 * Math.min(8.5, activeVocal * 38);
       } else {
-        albumSnareScaleRef.current = albumSnareScaleRef.current + (1.0 - albumSnareScaleRef.current) * 0.35;
-        albumSnareYRef.current = albumSnareYRef.current * 0.65;
+        albumVocalScaleRef.current = albumVocalScaleRef.current + (1.0 - albumVocalScaleRef.current) * 0.22;
+        albumVocalYRef.current = albumVocalYRef.current * 0.68;
       }
 
-      if (Math.abs(albumSnareScaleRef.current - 1.0) < 0.001) albumSnareScaleRef.current = 1.0;
-      if (Math.abs(albumSnareYRef.current) < 0.1) albumSnareYRef.current = 0;
+      if (Math.abs(albumVocalScaleRef.current - 1.0) < 0.001) albumVocalScaleRef.current = 1.0;
+      if (Math.abs(albumVocalYRef.current) < 0.1) albumVocalYRef.current = 0;
 
-      // Apply SNARE-ONLY physical bounce to Album Cover and Vinyl Disc (100% borderless)
+      // Apply Lead Vocal reaction to Album Cover and Vinyl Disc (100% borderless)
       const albumCoverEl = document.getElementById('album-cover-box');
       const vinylEl = document.getElementById('album-vinyl-disc');
 
       if (albumCoverEl) {
-        albumCoverEl.style.transform = `scale(${albumSnareScaleRef.current.toFixed(4)}) translateY(${albumSnareYRef.current.toFixed(2)}px)`;
+        albumCoverEl.style.transform = `scale(${albumVocalScaleRef.current.toFixed(4)}) translateY(${albumVocalYRef.current.toFixed(2)}px)`;
         albumCoverEl.style.boxShadow = '';
         albumCoverEl.style.borderColor = '';
       }
 
       if (vinylEl) {
-        vinylEl.style.transform = `scale(${albumSnareScaleRef.current.toFixed(4)}) translateY(${albumSnareYRef.current.toFixed(2)}px)`;
+        vinylEl.style.transform = `scale(${albumVocalScaleRef.current.toFixed(4)}) translateY(${albumVocalYRef.current.toFixed(2)}px)`;
         vinylEl.style.boxShadow = '';
         vinylEl.style.borderColor = '';
       }
@@ -461,7 +440,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, analyserRef, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset]);
+  }, [isPlaying, showVideo, showLyrics, analyserRef, kickAnalyserRef, kickTimestampsRef, currentTime, audioRef, videoOffset]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -572,14 +551,8 @@ export default function GlobalPlayerBar() {
           hasDrawerOpen ? 'rounded-[28px] sm:rounded-[32px]' : 'rounded-2xl sm:rounded-[32px]'
         }`}
       >
-        {/* Continuous Fluid Ambient Gradient across ENTIRE card */}
-        {isPlaying && <div className="fluid-ambient-gradient rounded-[inherit]" />}
-
-        {/* High-Energy Fire Effect Flash Gradient Overlay */}
+        {/* High-Energy Kick Flash Gradient Overlay */}
         <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-[inherit]" />
-
-        {/* Electric Neon Cyan/Purple Flash Gradient Overlay */}
-        <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0 rounded-[inherit]" />
 
         {/* ============================================================= */}
         {/* INTEGRATED DRAWER 1: DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
