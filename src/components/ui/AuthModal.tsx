@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, AlertCircle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { setStoredAdminSession, setStoredUserSession } from '@/lib/authSession';
 
 interface AuthModalProps {
   isOpen: boolean;
