@@ -47,8 +47,8 @@ Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV B
 
 ## ⚡️ 3. CƠ SỞ DỮ LIỆU & SUPABASE CONFIGURATION
 
-* **Project Ref**: `yodctlkebsbtivmkskdo`
-* **URL REST API**: `https://yodctlkebsbtivmkskdo.supabase.co`
+* **Project Ref**: `muemwfqynfljpmvxmpep`
+* **URL REST API**: `https://muemwfqynfljpmvxmpep.supabase.co`
 * **Schema SQL File**: `supabase/schema.sql`
 
 ### **Cấu Trúc Các Bảng Trên Postgres (Supabase)**:
