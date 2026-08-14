@@ -35,7 +35,8 @@ function AlbumCard3D({
   const { pointer } = useThree();
 
   const ITEM_SPACING = 4.4;
-  const TOTAL_HEIGHT = totalAlbums * ITEM_SPACING;
+  const safeTotalAlbums = Math.max(1, totalAlbums);
+  const TOTAL_HEIGHT = safeTotalAlbums * ITEM_SPACING;
 
   useFrame((_, delta) => {
     if (!cardGroupRef.current) return;
