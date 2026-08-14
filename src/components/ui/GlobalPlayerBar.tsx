@@ -151,6 +151,21 @@ export default function GlobalPlayerBar() {
     return extractVideoOffset(currentTrack?.lyrics || '');
   }, [currentTrack?.lyrics]);
 
+  // Master Play/Pause toggler that reliably controls both Video and Audio
+  const handleTogglePlay = () => {
+    if (showVideo && videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    } else {
+      togglePlay();
+    }
+  };
+
   // Seamless Audio <-> Video playback handoff with accurate videoOffset synchronization
   useEffect(() => {
     const audio = audioRef?.current;
@@ -168,6 +183,9 @@ export default function GlobalPlayerBar() {
         if (Math.abs(vid.currentTime - targetVidTime) > 0.6) {
           vid.currentTime = targetVidTime;
         }
+        if (vid.duration > 0 && isFinite(vid.duration)) {
+          setDuration(vid.duration);
+        }
         if (isPlaying) {
           vid.play().catch(() => {});
         } else {
@@ -177,13 +195,19 @@ export default function GlobalPlayerBar() {
     } else {
       // Switching back to Audio Mode: convert video time back to audio song time
       if (vid) {
-        const effectiveAudioTime = Math.max(0, vid.currentTime - videoOffset);
+        let effectiveAudioTime = 0;
+        if (vid.currentTime >= videoOffset) {
+          effectiveAudioTime = vid.currentTime - videoOffset;
+        }
         vid.pause();
         if (audio) {
           audio.muted = false;
           if (Math.abs(audio.currentTime - effectiveAudioTime) > 0.6) {
             audio.currentTime = effectiveAudioTime;
             setCurrentTime(effectiveAudioTime);
+          }
+          if (audio.duration > 0 && isFinite(audio.duration)) {
+            setDuration(audio.duration);
           }
           if (isPlaying) {
             audio.play().catch(() => {});
@@ -206,9 +230,11 @@ export default function GlobalPlayerBar() {
 
   // Handle seek for both audio and video
   const handleSeek = (newTime: number) => {
-    seekTo(newTime);
     if (showVideo && videoRef.current) {
-      videoRef.current.currentTime = Math.max(0, newTime + videoOffset);
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    } else {
+      seekTo(newTime);
     }
   };
 
@@ -224,9 +250,13 @@ export default function GlobalPlayerBar() {
         barContainerRef.current.style.borderColor = '';
       }
       const albumCoverEl = document.getElementById('album-cover-box');
+      const albumGlowEl = document.getElementById('album-cover-glow');
       if (albumCoverEl) {
         albumCoverEl.style.boxShadow = '';
         albumCoverEl.style.borderColor = '';
+      }
+      if (albumGlowEl) {
+        albumGlowEl.style.opacity = '0';
       }
       return;
     }
@@ -327,34 +357,41 @@ export default function GlobalPlayerBar() {
 
       // Synchronized Edge Rim Lighting on Player Bar AND Album Cover
       const albumCoverEl = document.getElementById('album-cover-box');
+      const albumGlowEl = document.getElementById('album-cover-glow');
 
       if (barContainerRef.current) {
         const scaleVal = showLyrics ? 1.0 : currentScaleRef.current;
         barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
 
-        if (fireIntensityRef.current > 0.18) {
-          const kickAlpha = (fireIntensityRef.current * 0.85).toFixed(2);
-          const rimColor = `rgba(255, 130, 0, ${(0.4 + fireIntensityRef.current * 0.6).toFixed(2)})`;
-          const shadowStyle = `0 15px 45px rgba(255, 60, 0, ${kickAlpha}), 0 0 35px rgba(255, 120, 0, ${kickAlpha}), inset 0 0 25px rgba(255, 100, 0, ${(fireIntensityRef.current * 0.5).toFixed(2)})`;
+        if (fireIntensityRef.current > 0.15) {
+          const kickAlpha = fireIntensityRef.current.toFixed(2);
+          const rimColor = `rgba(255, 120, 0, ${kickAlpha})`;
 
-          barContainerRef.current.style.boxShadow = shadowStyle;
+          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(255, 60, 0, ${kickAlpha}), inset 0 0 25px rgba(255, 100, 0, ${(fireIntensityRef.current * 0.6).toFixed(2)})`;
           barContainerRef.current.style.borderColor = rimColor;
 
           if (albumCoverEl) {
-            albumCoverEl.style.boxShadow = `0 25px 65px rgba(255, 60, 0, ${kickAlpha}), 0 0 45px rgba(255, 120, 0, ${kickAlpha})`;
+            albumCoverEl.style.boxShadow = `0 0 45px rgba(255, 80, 0, ${kickAlpha}), 0 0 90px rgba(255, 30, 0, ${(fireIntensityRef.current * 0.5).toFixed(2)})`;
             albumCoverEl.style.borderColor = rimColor;
           }
-        } else if (snareIntensityRef.current > 0.18) {
-          const snareAlpha = (snareIntensityRef.current * 0.85).toFixed(2);
-          const rimColor = `rgba(0, 240, 255, ${(0.4 + snareIntensityRef.current * 0.6).toFixed(2)})`;
-          const shadowStyle = `0 15px 45px rgba(0, 240, 255, ${snareAlpha}), 0 0 35px rgba(160, 30, 255, ${snareAlpha}), inset 0 0 25px rgba(0, 240, 255, ${(snareIntensityRef.current * 0.5).toFixed(2)})`;
+          if (albumGlowEl) {
+            albumGlowEl.style.opacity = (fireIntensityRef.current * 0.85).toFixed(2);
+            albumGlowEl.style.background = 'radial-gradient(circle, rgba(255,100,0,0.85) 0%, rgba(255,30,0,0.45) 60%, transparent 100%)';
+          }
+        } else if (snareIntensityRef.current > 0.15) {
+          const snareAlpha = snareIntensityRef.current.toFixed(2);
+          const rimColor = `rgba(0, 240, 255, ${snareAlpha})`;
 
-          barContainerRef.current.style.boxShadow = shadowStyle;
+          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(0, 240, 255, ${snareAlpha}), inset 0 0 25px rgba(0, 240, 255, ${(snareIntensityRef.current * 0.6).toFixed(2)})`;
           barContainerRef.current.style.borderColor = rimColor;
 
           if (albumCoverEl) {
-            albumCoverEl.style.boxShadow = `0 25px 65px rgba(0, 240, 255, ${snareAlpha}), 0 0 45px rgba(160, 30, 255, ${snareAlpha})`;
+            albumCoverEl.style.boxShadow = `0 0 45px rgba(0, 240, 255, ${snareAlpha}), 0 0 90px rgba(160, 30, 255, ${(snareIntensityRef.current * 0.5).toFixed(2)})`;
             albumCoverEl.style.borderColor = rimColor;
+          }
+          if (albumGlowEl) {
+            albumGlowEl.style.opacity = (snareIntensityRef.current * 0.85).toFixed(2);
+            albumGlowEl.style.background = 'radial-gradient(circle, rgba(0,240,255,0.85) 0%, rgba(160,30,255,0.45) 60%, transparent 100%)';
           }
         } else {
           barContainerRef.current.style.boxShadow = '';
@@ -362,6 +399,9 @@ export default function GlobalPlayerBar() {
           if (albumCoverEl) {
             albumCoverEl.style.boxShadow = '';
             albumCoverEl.style.borderColor = '';
+          }
+          if (albumGlowEl) {
+            albumGlowEl.style.opacity = '0';
           }
         }
       }
@@ -426,7 +466,7 @@ export default function GlobalPlayerBar() {
       const key = e.key.toLowerCase();
       if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
-        togglePlay();
+        handleTogglePlay();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         nextTrack();
@@ -540,7 +580,7 @@ export default function GlobalPlayerBar() {
               {/* Play / Pause indicator button when paused */}
               {!isPlaying && (
                 <div
-                  onClick={() => togglePlay()}
+                  onClick={handleTogglePlay}
                   className="absolute inset-0 z-30 flex items-center justify-center cursor-pointer bg-black/40 backdrop-blur-xs"
                 >
                   <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
@@ -555,7 +595,7 @@ export default function GlobalPlayerBar() {
                 src={currentTrack.video_url}
                 playsInline
                 preload="auto"
-                onClick={() => togglePlay()}
+                onClick={handleTogglePlay}
                 onDoubleClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -758,7 +798,7 @@ export default function GlobalPlayerBar() {
 
               {/* Big Play Button */}
               <button
-                onClick={togglePlay}
+                onClick={handleTogglePlay}
                 className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform flex-shrink-0"
                 title={isPlaying ? 'Tạm dừng' : 'Phát'}
               >
@@ -963,7 +1003,7 @@ export default function GlobalPlayerBar() {
             </button>
 
             <button
-              onClick={togglePlay}
+              onClick={handleTogglePlay}
               className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform flex-shrink-0"
               title={isPlaying ? 'Tạm dừng' : 'Phát'}
             >
