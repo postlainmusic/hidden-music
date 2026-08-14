@@ -150,10 +150,17 @@ export default function AlbumDetailPage() {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const handleBackClick = () => {
+    setAnimateSlide(false);
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 280);
+  };
+
   if (!mounted || (loading && !album)) {
     return (
       <main className="h-screen bg-black text-white p-8 flex flex-col items-center justify-center font-mono overflow-hidden">
-        <Navbar showBackButton={true} />
+        <Navbar showBackButton={true} onBackClick={handleBackClick} />
         <div className="flex items-center gap-3 text-slate-400">
           <Disc3 className="w-6 h-6 animate-spin text-white" />
           <span className="text-xs uppercase tracking-widest font-cyber">DECRYPTING VAULT ARCHIVE...</span>
@@ -165,7 +172,7 @@ export default function AlbumDetailPage() {
   if (!album) {
     return (
       <main className="h-screen bg-black text-white p-8 flex flex-col items-center justify-center font-mono text-center overflow-hidden">
-        <Navbar showBackButton={true} />
+        <Navbar showBackButton={true} onBackClick={handleBackClick} />
         <h2 className="text-xl font-bold mb-4 font-cyber">ALBUM NOT FOUND IN VAULT</h2>
         <Link
           href="/"
@@ -180,7 +187,7 @@ export default function AlbumDetailPage() {
   return (
     <main className="h-[100dvh] w-full bg-[#09090d] text-white font-cyber relative overflow-hidden flex flex-col justify-between select-none">
       {/* Top Fixed Header with clean BACK button */}
-      <Navbar showBackButton={true} />
+      <Navbar showBackButton={true} onBackClick={handleBackClick} title={album.title} />
 
       {/* Dynamic Ambient Background Glow from Cover Art */}
       <div

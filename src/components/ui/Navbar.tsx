@@ -13,6 +13,7 @@ interface NavbarProps {
   onLogout?: () => void;
   onOpenAuthModal?: (tab?: 'login' | 'register') => void;
   showBackButton?: boolean;
+  onBackClick?: () => void;
   title?: string;
 }
 
@@ -29,6 +30,7 @@ export default function Navbar({
   onLogout: propOnLogout,
   onOpenAuthModal: propOnOpenAuthModal,
   showBackButton = false,
+  onBackClick,
   title,
 }: NavbarProps) {
   const [mounted, setMounted] = useState(false);
@@ -149,14 +151,22 @@ export default function Navbar({
         {/* Left: Logo + Optional Back Button */}
         <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {showBackButton && (
-            <Link
-              href="/"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all text-xs font-mono uppercase font-bold tracking-wider flex-shrink-0"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                if (onBackClick) {
+                  onBackClick();
+                } else {
+                  window.location.href = '/';
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all text-xs font-mono uppercase font-bold tracking-wider flex-shrink-0 cursor-pointer active:scale-95"
               title="Quay lại"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span className="hidden xs:inline sm:inline">BACK</span>
-            </Link>
+            </button>
           )}
 
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2.5 group min-w-0">
