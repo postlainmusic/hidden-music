@@ -21,44 +21,6 @@ import {
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex, extractVideoOffset } from '@/lib/lrcParser';
 
-export function getMediaEmbedInfo(rawUrl: string | undefined): {
-  type: 'youtube' | 'gdrive' | 'direct';
-  embedUrl: string;
-  directUrl: string;
-} {
-  if (!rawUrl) return { type: 'direct', embedUrl: '', directUrl: '' };
-  const trimmed = rawUrl.trim();
-
-  // 1. YouTube detection
-  const ytMatch = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
-  if (ytMatch) {
-    const ytId = ytMatch[1];
-    return {
-      type: 'youtube',
-      embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&enablejsapi=1&controls=1&modestbranding=1&rel=0`,
-      directUrl: trimmed,
-    };
-  }
-
-  // 2. Google Drive detection
-  const gdriveMatch = trimmed.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/i);
-  if (gdriveMatch) {
-    const gdriveId = gdriveMatch[1];
-    return {
-      type: 'gdrive',
-      embedUrl: `https://drive.google.com/file/d/${gdriveId}/preview`,
-      directUrl: `https://drive.google.com/uc?export=download&id=${gdriveId}`,
-    };
-  }
-
-  // 3. Direct HTML5 video (Supabase, MP4, WebM, etc.)
-  return {
-    type: 'direct',
-    embedUrl: trimmed,
-    directUrl: trimmed,
-  };
-}
-
 export default function GlobalPlayerBar() {
   const {
     currentTrack,
@@ -123,11 +85,6 @@ export default function GlobalPlayerBar() {
     setMounted(true);
   }, []);
 
-  // Media embed resolution
-  const videoMediaInfo = useMemo(() => {
-    return getMediaEmbedInfo(currentTrack?.video_url);
-  }, [currentTrack?.video_url]);
-
   // Reset fired indices on track change
   useEffect(() => {
     lastFiredKickIndexRef.current = -1;
@@ -153,23 +110,18 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Sync Audio <-> Video playback for direct HTML5 videos
+  // Sync Audio <-> Video playback
   useEffect(() => {
     const audio = audioRef?.current;
     const vid = videoRef.current;
 
-    if (showVideo && videoMediaInfo.type === 'direct') {
+    if (showVideo) {
       if (audio) {
         audio.pause();
         audio.muted = true;
       }
-      if (vid && currentTrack?.video_url) {
-        if (vid.src !== currentTrack.video_url) {
-          vid.src = currentTrack.video_url;
-          vid.load();
-        }
+      if (vid) {
         vid.volume = volume;
-        vid.currentTime = currentTime;
         if (isPlaying) {
           vid.play().catch(() => {});
         } else {
@@ -187,8 +139,7 @@ export default function GlobalPlayerBar() {
         }
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo, currentTrack?.video_url, isPlaying, videoMediaInfo.type]);
+  }, [showVideo, isPlaying, volume, audioRef]);
 
   // Keep video volume in sync
   useEffect(() => {
@@ -198,7 +149,7 @@ export default function GlobalPlayerBar() {
   // Handle seek for both audio and video
   const handleSeek = (newTime: number) => {
     seekTo(newTime);
-    if (showVideo && videoRef.current && videoMediaInfo.type === 'direct') {
+    if (showVideo && videoRef.current) {
       videoRef.current.currentTime = newTime;
     }
   };
@@ -222,7 +173,7 @@ export default function GlobalPlayerBar() {
       let isSnareBeat = false;
 
       const now = performance.now();
-      const liveCurrentTime = showVideo && videoRef.current && videoMediaInfo.type === 'direct'
+      const liveCurrentTime = showVideo && videoRef.current
         ? videoRef.current.currentTime
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
@@ -334,7 +285,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoMediaInfo.type]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef]);
 
   const videoOffset = useMemo(() => {
     return extractVideoOffset(currentTrack?.lyrics || '');
@@ -452,7 +403,7 @@ export default function GlobalPlayerBar() {
         <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0 rounded-[inherit]" />
 
         {/* ============================================================= */}
-        {/* INTEGRATED DRAWER 1: NATIVE WEB VIDEO PLAYER (MV STAGE) */}
+        {/* INTEGRATED DRAWER 1: DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
           <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[32px]">
@@ -466,7 +417,7 @@ export default function GlobalPlayerBar() {
                   <h3 className="font-extrabold text-xs sm:text-sm text-white truncate tracking-wider font-cyber flex items-center gap-2">
                     <span>{currentTrack.title}</span>
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/15 text-white border border-white/30 uppercase">
-                      {videoMediaInfo.type === 'youtube' ? 'YOUTUBE MV' : videoMediaInfo.type === 'gdrive' ? 'DRIVE MV' : '1080P MV'}
+                      1080P MV
                     </span>
                     {videoOffset > 0 && (
                       <span className="px-2 py-0.5 rounded-full text-[8px] font-mono bg-amber-500/20 text-amber-300 border border-amber-400/40 uppercase">
@@ -488,7 +439,7 @@ export default function GlobalPlayerBar() {
               </div>
             </div>
 
-            {/* Video Stage Viewport (CLEAN, NO OVERLAYS OVER VIDEO PIXELS) */}
+            {/* Video Stage Viewport */}
             <div
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -509,7 +460,7 @@ export default function GlobalPlayerBar() {
                 <span>DRM PROTECTED</span>
               </div>
 
-              {/* YouTube Style Clean Subtitle Overlay with Live Beat Sync */}
+              {/* Clean Subtitle Overlay with Live Beat Sync */}
               {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
                 <div className="absolute bottom-6 left-4 right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-150">
                   <div className="bg-black/90 backdrop-blur-md px-5 py-2.5 rounded-xl border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.95)] max-w-2xl text-center">
@@ -520,99 +471,60 @@ export default function GlobalPlayerBar() {
                 </div>
               )}
 
-              {/* IFRAME EMBED (GOOGLE DRIVE / YOUTUBE) OR NATIVE HTML5 VIDEO */}
-              {videoMediaInfo.type === 'youtube' ? (
-                <iframe
-                  src={videoMediaInfo.embedUrl}
-                  title={currentTrack.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="w-full h-full border-0 relative z-20 pointer-events-auto"
-                />
-              ) : videoMediaInfo.type === 'gdrive' ? (
-                <iframe
-                  src={videoMediaInfo.embedUrl}
-                  title={currentTrack.title}
-                  allow="autoplay; fullscreen"
-                  allowFullScreen
-                  className="w-full h-full border-0 relative z-20 pointer-events-auto"
-                />
-              ) : (
-                <>
-                  {/* Click-to-Play & Double-Click Fullscreen Overlay for Direct Video */}
-                  <div
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return false;
-                    }}
-                    onClick={() => togglePlay()}
-                    onDoubleClick={(e) => {
-                      e.preventDefault();
-                      const container = e.currentTarget.parentElement;
-                      if (container) {
-                        if (!document.fullscreenElement) {
-                          container.requestFullscreen?.().catch(() => {});
-                        } else {
-                          document.exitFullscreen?.().catch(() => {});
-                        }
-                      }
-                    }}
-                    className="absolute inset-0 z-30 w-full h-full cursor-pointer flex items-center justify-center select-none bg-transparent"
-                  >
-                    {!isPlaying && (
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse pointer-events-none">
-                        <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current ml-1" />
-                      </div>
-                    )}
+              {/* Play / Pause indicator button when paused */}
+              {!isPlaying && (
+                <div
+                  onClick={() => togglePlay()}
+                  className="absolute inset-0 z-30 flex items-center justify-center cursor-pointer bg-black/40 backdrop-blur-xs"
+                >
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
+                    <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current ml-1" />
                   </div>
-
-                  {/* Native Direct Video Element */}
-                  <video
-                    ref={videoRef}
-                    src={currentTrack?.video_url}
-                    onTimeUpdate={(e) => {
-                      if (showVideo) {
-                        setCurrentTime(e.currentTarget.currentTime);
-                      }
-                    }}
-                    onDurationChange={(e) => {
-                      if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                        setDuration(e.currentTarget.duration);
-                      }
-                    }}
-                    onLoadedMetadata={(e) => {
-                      if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                        setDuration(e.currentTarget.duration);
-                      }
-                    }}
-                    onPlay={() => {
-                      if (showVideo) setIsPlaying(true);
-                    }}
-                    onPause={() => {
-                      if (showVideo) setIsPlaying(false);
-                    }}
-                    onEnded={nextTrack}
-                    playsInline
-                    controls={false}
-                    controlsList="nodownload nofullscreen noremoteplayback"
-                    disablePictureInPicture={true}
-                    disableRemotePlayback={true}
-                    draggable={false}
-                    onDragStart={(e) => {
-                      e.preventDefault();
-                      return false;
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return false;
-                    }}
-                    style={{ pointerEvents: 'none' }}
-                    className="w-full h-full object-contain max-h-full select-none pointer-events-none relative z-10"
-                  />
-                </>
+                </div>
               )}
+
+              {/* Direct HTML5 Video Player */}
+              <video
+                ref={videoRef}
+                src={currentTrack.video_url}
+                playsInline
+                preload="auto"
+                onClick={() => togglePlay()}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  const container = e.currentTarget.parentElement;
+                  if (container) {
+                    if (!document.fullscreenElement) {
+                      container.requestFullscreen?.().catch(() => {});
+                    } else {
+                      document.exitFullscreen?.().catch(() => {});
+                    }
+                  }
+                }}
+                onTimeUpdate={(e) => {
+                  if (showVideo) {
+                    setCurrentTime(e.currentTarget.currentTime);
+                  }
+                }}
+                onDurationChange={(e) => {
+                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                    setDuration(e.currentTarget.duration);
+                  }
+                }}
+                onLoadedMetadata={(e) => {
+                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                    setDuration(e.currentTarget.duration);
+                  }
+                }}
+                onPlay={() => {
+                  if (showVideo) setIsPlaying(true);
+                }}
+                onPause={() => {
+                  if (showVideo) setIsPlaying(false);
+                }}
+                onEnded={nextTrack}
+                className="w-full h-full object-contain select-none cursor-pointer relative z-10"
+              />
             </div>
 
             {/* Bottom Info Status inside Video Drawer */}
@@ -621,7 +533,7 @@ export default function GlobalPlayerBar() {
                 <Sparkles className="w-3 h-3 animate-spin" />
                 <span>AUDIO-VIDEO BEAT SYNCED</span>
               </span>
-              <span className="text-slate-400 uppercase">Nhấp 2 lần để phóng to video</span>
+              <span className="text-slate-400 uppercase">Nhấp vào video để phát/dừng • Nhấp 2 lần để phóng to</span>
             </div>
           </div>
         )}
