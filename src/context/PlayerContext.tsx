@@ -42,100 +42,36 @@ const PLAYER_STATE_KEY = 'hidden_vault_player_state';
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [currentTrack, setCurrentTrack] = useState<TrackItem | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed?.currentTrack) return parsed.currentTrack;
-        }
-      } catch {}
-    }
-    return null;
-  });
-
-  const [currentAlbum, setCurrentAlbum] = useState<Album | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed?.currentAlbum) return parsed.currentAlbum;
-        }
-      } catch {}
-    }
-    return null;
-  });
-
-  const [playlist, setPlaylist] = useState<TrackItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed?.playlist)) return parsed.playlist;
-        }
-      } catch {}
-    }
-    return [];
-  });
-
+  const [currentTrack, setCurrentTrack] = useState<TrackItem | null>(null);
+  const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
+  const [playlist, setPlaylist] = useState<TrackItem[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (typeof parsed?.currentTime === 'number') return parsed.currentTime;
-        }
-      } catch {}
-    }
-    return 0;
-  });
-
+  const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (typeof parsed?.volume === 'number') return parsed.volume;
-        }
-      } catch {}
-    }
-    return 0.8;
-  });
-
-  const [shuffleMode, setShuffleMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (typeof parsed?.shuffleMode === 'boolean') return parsed.shuffleMode;
-        }
-      } catch {}
-    }
-    return false;
-  });
-
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(PLAYER_STATE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed?.repeatMode) return parsed.repeatMode;
-        }
-      } catch {}
-    }
-    return 'all';
-  });
-
+  const [volume, setVolumeState] = useState<number>(0.8);
+  const [shuffleMode, setShuffleMode] = useState<boolean>(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
   const [isCinematicFxEnabled, setIsCinematicFxEnabled] = useState(true);
+
+  // Restore player state safely on client mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(PLAYER_STATE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.currentTrack) setCurrentTrack(parsed.currentTrack);
+        if (parsed?.currentAlbum) setCurrentAlbum(parsed.currentAlbum);
+        if (Array.isArray(parsed?.playlist)) setPlaylist(parsed.playlist);
+        if (typeof parsed?.currentTime === 'number') setCurrentTime(parsed.currentTime);
+        if (typeof parsed?.volume === 'number') setVolumeState(parsed.volume);
+        if (typeof parsed?.shuffleMode === 'boolean') setShuffleMode(parsed.shuffleMode);
+        if (parsed?.repeatMode) setRepeatMode(parsed.repeatMode);
+      }
+    } catch (err) {
+      console.warn('Player state restore warning:', err);
+    }
+  }, []);
 
   // Auto save player state to localStorage across F5
   useEffect(() => {

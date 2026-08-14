@@ -56,10 +56,15 @@ export default function GlobalPlayerBar() {
     toggleCinematicFx
   } = usePlayer();
 
+  const [mounted, setMounted] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const activeLineRef = useRef<HTMLDivElement | null>(null);
   // Video player ref for synced playback
@@ -358,7 +363,7 @@ export default function GlobalPlayerBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay, nextTrack, prevTrack, toggleShuffle, toggleRepeat]);
 
-  if (!currentTrack) return null;
+  if (!mounted || !currentTrack) return null;
 
   const effectiveDuration = (duration > 0 && isFinite(duration)) ? duration : (currentTrack.duration || 0);
 

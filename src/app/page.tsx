@@ -20,26 +20,30 @@ import {
 export default function Home() {
   const router = useRouter();
 
-  // Instant state initializer using persistent session storage across F5
-  const [userSession, setUserSession] = useState<any>(() => {
-    return getStoredUserSession();
-  });
-
-  const [albums, setAlbums] = useState<Album[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('hidden_vault_cached_albums');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const [mounted, setMounted] = useState(false);
+  const [userSession, setUserSession] = useState<any>(null);
+  const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(true);
 
   useEffect(() => {
+    setMounted(true);
+
+    // 1. Immediately read cached session & albums on client mount (0ms)
+    const session = getStoredUserSession();
+    if (session) {
+      setUserSession(session);
+    }
+
+    try {
+      const cached = localStorage.getItem('hidden_vault_cached_albums');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAlbums(parsed);
+        }
+      }
+    } catch {}
+
     const supabase = createClient();
 
     // Background auth verification with Supabase
@@ -120,6 +124,20 @@ export default function Home() {
   const handleLogout = async () => {
     await performLogout();
   };
+
+  // 0. Initial SSR / Mount placeholder to guarantee zero hydration error
+  if (!mounted) {
+    return (
+      <main className="min-h-screen w-full bg-black flex items-center justify-center font-mono">
+        <div className="tv-grain-overlay" />
+        <div className="crt-scanlines" />
+        <div className="flex items-center gap-3 text-slate-400">
+          <Disc3 className="w-6 h-6 animate-spin text-white" />
+          <span className="text-xs uppercase tracking-widest font-cyber">INITIALIZING VAULT...</span>
+        </div>
+      </main>
+    );
+  }
 
   // 1. Mandatory Login Screen before accessing 3D Vault
   if (!userSession) {

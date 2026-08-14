@@ -31,9 +31,9 @@ export default function Navbar({
   showBackButton = false,
   title,
 }: NavbarProps) {
-  const initialStored = typeof window !== 'undefined' ? getStoredUserSession() : null;
-  const [internalEmail, setInternalEmail] = useState<string | null>(initialStored?.email || null);
-  const [displayName, setDisplayName] = useState<string | null>(initialStored?.display_name?.toUpperCase() || null);
+  const [mounted, setMounted] = useState(false);
+  const [internalEmail, setInternalEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
   
@@ -42,6 +42,7 @@ export default function Navbar({
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const supabase = createClient();
 
     const fetchUserData = async () => {
@@ -159,7 +160,9 @@ export default function Navbar({
 
         {/* Right: User Display Name Badge & Settings Button */}
         <div className="flex items-center gap-2 sm:gap-3 font-mono">
-          {isLoggedIn ? (
+          {!mounted ? (
+            <div className="h-8 w-20" />
+          ) : isLoggedIn ? (
             <div className="flex items-center gap-1.5 sm:gap-2">
               {/* BUTTON 1: USER DISPLAY NAME (OPENS PROFILE WINDOW) */}
               <button

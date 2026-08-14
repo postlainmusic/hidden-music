@@ -21,6 +21,7 @@ export default function AlbumDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
+  const [mounted, setMounted] = useState(false);
   const [album, setAlbum] = useState<Album | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTrack, setSelectedTrack] = useState<TrackItem | null>(null);
@@ -28,9 +29,31 @@ export default function AlbumDetailPage() {
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
 
   useEffect(() => {
+    setMounted(true);
+
     async function checkAuthAndFetchAlbum() {
       if (!id) return;
-      setLoading(true);
+
+      // 1. Try to load from instant local cache (0ms)
+      try {
+        const cached = localStorage.getItem(`hidden_vault_album_cache_${id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.id) {
+            setAlbum(parsed);
+            if (parsed.tracks && parsed.tracks.length > 0) {
+              setSelectedTrack(parsed.tracks[0]);
+            }
+            setLoading(false);
+          }
+        }
+      } catch {}
+
+      // Safety timeout: Never hang in loading state for more than 3 seconds
+      const timeoutTimer = setTimeout(() => {
+        setLoading(false);
+      }, 3000);
+
       try {
         const supabase = createClient();
         let authenticated = hasActiveSession();
@@ -44,6 +67,7 @@ export default function AlbumDetailPage() {
         }
 
         if (!authenticated) {
+          clearTimeout(timeoutTimer);
           window.location.href = '/';
           return;
         }
@@ -56,7 +80,6 @@ export default function AlbumDetailPage() {
 
         if (error) {
           console.error('Supabase album query error:', error);
-          setAlbum(null);
         } else if (data) {
           if (data.tracks) {
             data.tracks.sort((a: TrackItem, b: TrackItem) => {
@@ -64,29 +87,31 @@ export default function AlbumDetailPage() {
             });
           }
           setAlbum(data);
-          if (data.tracks && data.tracks.length > 0) {
+          try {
+            localStorage.setItem(`hidden_vault_album_cache_${id}`, JSON.stringify(data));
+          } catch {}
+          if (data.tracks && data.tracks.length > 0 && !selectedTrack) {
             setSelectedTrack(data.tracks[0]);
           }
-        } else {
-          setAlbum(null);
         }
       } catch (err) {
         console.error('Error fetching album details:', err);
-        setAlbum(null);
       } finally {
+        clearTimeout(timeoutTimer);
         setLoading(false);
       }
     }
+
     checkAuthAndFetchAlbum();
   }, [id]);
 
-  if (loading && !album) {
+  if (!mounted || (loading && !album)) {
     return (
       <main className="min-h-screen bg-black text-white p-8 flex flex-col items-center justify-center font-mono">
         <Navbar showBackButton={true} />
         <div className="flex items-center gap-3 text-slate-400">
           <Disc3 className="w-6 h-6 animate-spin text-white" />
-          <span className="text-xs uppercase tracking-widest font-cyber">LOADING VAULT ARCHIVE...</span>
+          <span className="text-xs uppercase tracking-widest font-cyber">DECRYPTING VAULT ARCHIVE...</span>
         </div>
       </main>
     );
