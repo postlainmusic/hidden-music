@@ -414,13 +414,9 @@ export default function AlbumDetailPage() {
                   })
                 )}
               </div>
-
             </div>
-
           </div>
-
         </div>
-      </div>
     </main>
   );
 }
