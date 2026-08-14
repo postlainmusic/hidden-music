@@ -45,6 +45,7 @@ export default function GlobalPlayerBar() {
     playTrack,
     togglePlay,
     nextTrack,
+    prevTrack,
     seekTo,
     setCurrentTime,
     setDuration,
