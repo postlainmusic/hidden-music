@@ -149,10 +149,12 @@ export default function VaultScene({
   return (
     <div className="w-full h-full absolute inset-0 z-0 bg-[#09090d] flex items-center justify-center overflow-hidden px-3 sm:px-6 md:px-8 select-none">
       {/* ========================================================================= */}
-      {/* 1. 3D MOUSE-INTERACTIVE COSMIC SKY (NEVER UNMOUNTS OR JUMPS)              */}
+      {/* 1A. VAULT 3D COSMIC SKY (ACTIVE IN VAULT MODE, SMOOTH FADEOUT IN DETAIL)  */}
       {/* ========================================================================= */}
       <div
-        className="cosmic-sky transition-transform duration-700 ease-out"
+        className={`cosmic-sky transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isDetail ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
+        }`}
         style={{
           transform: `translate3d(${mouseOffset.x * 14}px, ${mouseOffset.y * 14}px, 0)`,
         }}
@@ -193,6 +195,35 @@ export default function VaultScene({
           className="cosmic-flash cosmic-flash-two transition-transform duration-300 ease-out"
           style={{
             transform: `translate3d(${mouseOffset.x * -75}px, ${mouseOffset.y * -75}px, 0)`,
+          }}
+        />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 1B. ALBUM SIDE DEDICATED AMBIENT BACKGROUND (SMOOTH FADEIN IN DETAIL)     */}
+      {/* ========================================================================= */}
+      <div
+        className={`absolute inset-0 z-0 transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none overflow-hidden ${
+          isDetail ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+        }`}
+        aria-hidden="true"
+      >
+        {/* Deep Dark Studio Vignette */}
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+
+        {/* Dynamic Cover Artwork Ambient Aura */}
+        <div
+          className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[750px] h-[600px] sm:h-[750px] rounded-full opacity-25 blur-[140px] transition-all duration-1000"
+          style={{
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(59,130,246,0.25) 35%, rgba(124,58,237,0.2) 65%, transparent 100%)`,
+          }}
+        />
+
+        {/* Right Ambient Sub-Glow for Playlist */}
+        <div
+          className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[450px] h-[450px] rounded-full opacity-15 blur-[120px] transition-all duration-1000"
+          style={{
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(30,41,59,0.5) 60%, transparent 100%)`,
           }}
         />
       </div>
