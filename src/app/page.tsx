@@ -13,6 +13,7 @@ import {
   getStoredUserSession,
   setStoredUserSession,
   getStoredAdminSession,
+  clearAllStoredSessions
 } from '@/lib/authSession';
 
 export default function Home() {
@@ -23,7 +24,19 @@ export default function Home() {
     return getStoredUserSession();
   });
 
-  const [albums, setAlbums] = useState<Album[]>([]);
+  const [albums, setAlbums] = useState<Album[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('hidden_vault_cached_albums');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [isLoadingAlbums, setIsLoadingAlbums] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
@@ -72,16 +85,23 @@ export default function Home() {
     // Clean background fetch of albums from Supabase
     const fetchSupabaseAlbums = async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('albums')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (data && Array.isArray(data) && data.length > 0) {
+        if (error) {
+          console.error('Error fetching albums from Supabase:', error);
+        } else if (data && Array.isArray(data)) {
           setAlbums(data);
+          try {
+            localStorage.setItem('hidden_vault_cached_albums', JSON.stringify(data));
+          } catch {}
         }
       } catch (err) {
         console.error('Error fetching albums from Supabase:', err);
+      } finally {
+        setIsLoadingAlbums(false);
       }
     };
 
@@ -103,8 +123,7 @@ export default function Home() {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      sessionStorage.clear();
-      document.cookie = "hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      clearAllStoredSessions();
       setUserSession(null);
       window.location.href = '/';
     }
@@ -136,8 +155,18 @@ export default function Home() {
         onLogout={handleLogout}
       />
 
-      {/* Secure Empty State when no albums exist */}
-      {albums.length === 0 && (
+      {/* Futuristic Spinner while Initial Albums are loading */}
+      {isLoadingAlbums && albums.length === 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 z-10 text-center font-mono select-none">
+          <div className="flex items-center gap-3 text-slate-400">
+            <Disc3 className="w-8 h-8 animate-spin text-white" />
+            <span className="text-xs uppercase tracking-widest font-cyber">DECRYPTING 3D VAULT ARCHIVE...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Secure Empty State ONLY when fetch completed and no albums exist */}
+      {!isLoadingAlbums && albums.length === 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-4 z-10 text-center font-mono select-none">
           <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center mb-4">
             <ShieldAlert className="w-8 h-8 text-slate-400" />
