@@ -44,6 +44,9 @@ export default function GlobalPlayerBar() {
     nextTrack,
     prevTrack,
     seekTo,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
     setVolume,
     toggleShuffle,
     toggleRepeat,
@@ -82,7 +85,7 @@ export default function GlobalPlayerBar() {
     setMounted(true);
   }, []);
 
-  // Reset fired indices on track change or seek
+  // Reset fired indices on track change
   useEffect(() => {
     lastFiredKickIndexRef.current = -1;
     lastFiredSnareIndexRef.current = -1;
@@ -149,16 +152,15 @@ export default function GlobalPlayerBar() {
     if (videoRef.current) videoRef.current.volume = volume;
   }, [volume]);
 
-  // Seek video when user drags seekbar
-  useEffect(() => {
-    const vid = videoRef.current;
-    if (!vid || !showVideo) return;
-    if (Math.abs(vid.currentTime - currentTime) > 1.5) {
-      vid.currentTime = currentTime;
+  // Handle seek for both audio and video
+  const handleSeek = (newTime: number) => {
+    seekTo(newTime);
+    if (showVideo && videoRef.current) {
+      videoRef.current.currentTime = newTime;
     }
-  }, [currentTime, showVideo]);
+  };
 
-  // Real-Time 58Hz Sub-Punch Kick & 280Hz Snare Distinct One-Shot Edge Beat Detection (Runs in BOTH Audio & Video mode)
+  // Real-Time 58Hz Sub-Punch Kick & 280Hz Snare Distinct One-Shot Edge Beat Detection
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -266,7 +268,7 @@ export default function GlobalPlayerBar() {
         snareOverlayRef.current.style.opacity = snareIntensityRef.current.toFixed(3);
       }
       if (barContainerRef.current) {
-        // When lyrics drawer is open, keep scale stable without bouncing
+        // When lyrics drawer is open, keep scale stable
         const scaleVal = showLyrics ? 1.0 : currentScaleRef.current;
         barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
         if (fireIntensityRef.current > 0.18) {
@@ -390,31 +392,27 @@ export default function GlobalPlayerBar() {
 
   return (
     <div className="fixed bottom-2 sm:bottom-3 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
-      {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD WITHOUT ANY HORIZONTAL DIVIDERS */}
+      {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD (OVERFLOW VISIBLE FOR VOLUME POPOVER) */}
       <div
         ref={barContainerRef}
-        className={`w-full max-w-6xl md:max-w-7xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-hidden ${
+        className={`w-full max-w-6xl md:max-w-7xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-visible ${
           hasDrawerOpen ? 'rounded-[32px]' : 'rounded-full sm:rounded-[32px]'
         }`}
       >
         {/* Continuous Fluid Ambient Gradient across ENTIRE card */}
-        {isPlaying && <div className="fluid-ambient-gradient" />}
+        {isPlaying && <div className="fluid-ambient-gradient rounded-[inherit]" />}
 
         {/* High-Energy Fire Effect Flash Gradient Overlay */}
-        <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-inherit" />
+        <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-[inherit]" />
 
         {/* Electric Neon Cyan/Purple Flash Gradient Overlay */}
-        <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0 rounded-inherit" />
-
-        {/* CRT Scanlines & Grain */}
-        <div className="crt-scanlines pointer-events-none opacity-20" />
-        <div className="tv-grain-overlay pointer-events-none opacity-20" />
+        <div ref={snareOverlayRef} className="snare-flash-overlay opacity-0 rounded-[inherit]" />
 
         {/* ============================================================= */}
         {/* INTEGRATED DRAWER 1: NATIVE WEB VIDEO PLAYER (MV STAGE) */}
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
-          <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent">
+          <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[32px]">
             {/* Header Bar inside Video Drawer */}
             <div className="flex items-center justify-between border-b border-white/10 pb-2 px-1 relative z-20">
               <div className="flex items-center gap-2 min-w-0 pr-2">
@@ -447,14 +445,14 @@ export default function GlobalPlayerBar() {
               </div>
             </div>
 
-            {/* Native Video Stage Viewport */}
+            {/* Native Video Stage Viewport (CLEAN, NO OVERLAYS OVER VIDEO PIXELS) */}
             <div
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
               }}
-              className="flex-1 my-2 rounded-2xl overflow-hidden border border-white/20 relative bg-black/80 flex items-center justify-center shadow-2xl z-20 select-none pointer-events-auto"
+              className="flex-1 my-2 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto"
             >
               {/* HIDDEN MUSIC Watermark */}
               <div className="absolute top-3 left-3 z-40 flex items-center gap-2 bg-black/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
@@ -468,10 +466,10 @@ export default function GlobalPlayerBar() {
                 <span>DRM PROTECTED</span>
               </div>
 
-              {/* YouTube Style Clean Subtitle Overlay with Live Beat Sync (Hidden during Intro) */}
+              {/* YouTube Style Clean Subtitle Overlay with Live Beat Sync */}
               {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
                 <div className="absolute bottom-6 left-4 right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-150">
-                  <div className="bg-black/85 backdrop-blur-md px-5 py-2 rounded-xl border border-white/15 shadow-[0_4px_25px_rgba(0,0,0,0.9)] max-w-xl text-center">
+                  <div className="bg-black/90 backdrop-blur-md px-5 py-2.5 rounded-xl border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.95)] max-w-2xl text-center">
                     <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg leading-relaxed tracking-wide">
                       {parsedLyrics[activeLyricIdx].text}
                     </p>
@@ -507,8 +505,32 @@ export default function GlobalPlayerBar() {
                 )}
               </div>
 
+              {/* Native Video Element with full live timeupdate event listeners */}
               <video
                 ref={videoRef}
+                src={currentTrack?.video_url}
+                onTimeUpdate={(e) => {
+                  if (showVideo) {
+                    setCurrentTime(e.currentTarget.currentTime);
+                  }
+                }}
+                onDurationChange={(e) => {
+                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                    setDuration(e.currentTarget.duration);
+                  }
+                }}
+                onLoadedMetadata={(e) => {
+                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                    setDuration(e.currentTarget.duration);
+                  }
+                }}
+                onPlay={() => {
+                  if (showVideo) setIsPlaying(true);
+                }}
+                onPause={() => {
+                  if (showVideo) setIsPlaying(false);
+                }}
+                onEnded={nextTrack}
                 playsInline
                 controls={false}
                 controlsList="nodownload nofullscreen noremoteplayback"
@@ -524,9 +546,8 @@ export default function GlobalPlayerBar() {
                   e.stopPropagation();
                   return false;
                 }}
-                onEnded={nextTrack}
                 style={{ pointerEvents: 'none' }}
-                className="w-full h-full object-contain max-h-full select-none pointer-events-none"
+                className="w-full h-full object-contain max-h-full select-none pointer-events-none relative z-10"
               />
             </div>
 
@@ -545,7 +566,7 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER 2: GOTHIC LYRICS (SEAMLESS CONTINUOUS PANEL) */}
         {/* ============================================================= */}
         {showLyrics && (
-          <div className="w-full h-[360px] sm:h-[430px] p-4 sm:p-6 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent">
+          <div className="w-full h-[360px] sm:h-[430px] p-4 sm:p-6 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[32px]">
             {/* Header Bar */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3 px-1 relative z-10">
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
@@ -575,7 +596,7 @@ export default function GlobalPlayerBar() {
                     <div
                       key={`${line.time}_${idx}`}
                       ref={isActive ? activeLineRef : null}
-                      onClick={() => seekTo(line.time)}
+                      onClick={() => handleSeek(line.time)}
                       className={`cursor-pointer transition-all duration-300 py-1 px-4 ${
                         isActive
                           ? 'scale-105 opacity-100'
@@ -612,7 +633,7 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER 3: QUEUE LIST */}
         {/* ============================================================= */}
         {showQueue && (
-          <div className="w-full h-[280px] sm:h-[340px] p-4 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-20 bg-transparent">
+          <div className="w-full h-[280px] sm:h-[340px] p-4 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-20 bg-transparent overflow-hidden rounded-t-[32px]">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2">
               <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider font-cyber text-[10px]">
                 <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />
@@ -654,7 +675,7 @@ export default function GlobalPlayerBar() {
         )}
 
         {/* ============================================================= */}
-        {/* MAIN GLOBAL PLAYER DYNAMIC CONTROL BAR (SEAMLESSLY JOINED) */}
+        {/* MAIN GLOBAL PLAYER DYNAMIC CONTROL BAR */}
         {/* ============================================================= */}
         <div className="w-full p-2.5 sm:p-3.5 transition-all duration-300 flex items-center justify-between gap-2 sm:gap-4 relative z-50 select-none overflow-visible bg-transparent">
           {/* Left Column: Track / Video Details */}
@@ -715,7 +736,7 @@ export default function GlobalPlayerBar() {
                 min={0}
                 max={effectiveDuration || 100}
                 value={currentTime}
-                onChange={(e) => seekTo(parseFloat(e.target.value))}
+                onChange={(e) => handleSeek(parseFloat(e.target.value))}
                 className="w-full h-2 sm:h-2.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-slate-800 shadow-inner hover:bg-slate-700 transition-all"
               />
             </div>
@@ -827,7 +848,7 @@ export default function GlobalPlayerBar() {
                 {volume === 0 ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
               </button>
 
-              {/* Popover Volume Slider */}
+              {/* Popover Volume Slider (PROPERLY UNCLIPPED ON TOP OF EVERYTHING) */}
               {showVolumeSlider && (
                 <div
                   className="absolute bottom-full pb-3 left-1/2 -translate-x-1/2 z-[999999] pointer-events-auto"
