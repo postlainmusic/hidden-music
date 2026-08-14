@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex, extractVideoOffset } from '@/lib/lrcParser';
+import { hasActiveSession } from '@/lib/authSession';
 
 export default function GlobalPlayerBar() {
   const {
@@ -54,6 +55,7 @@ export default function GlobalPlayerBar() {
   } = usePlayer();
 
   const [mounted, setMounted] = useState(false);
+  const [isAuth, setIsAuth] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -84,6 +86,19 @@ export default function GlobalPlayerBar() {
 
   useEffect(() => {
     setMounted(true);
+    setIsAuth(hasActiveSession());
+
+    const handleAuthChange = () => {
+      setIsAuth(hasActiveSession());
+    };
+
+    window.addEventListener('vault_auth_change', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+
+    return () => {
+      window.removeEventListener('vault_auth_change', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
   }, []);
 
   // Reset fired indices on track change
@@ -379,7 +394,7 @@ export default function GlobalPlayerBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay, nextTrack, prevTrack, toggleShuffle, toggleRepeat]);
 
-  if (!mounted || !currentTrack) return null;
+  if (!mounted || !currentTrack || !isAuth) return null;
 
   const effectiveDuration = duration > 0 && isFinite(duration) ? duration : currentTrack.duration || 0;
 

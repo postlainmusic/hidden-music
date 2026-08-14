@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { Album, TrackItem } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
+import { hasActiveSession } from '@/lib/authSession';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
@@ -56,21 +57,45 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Restore player state safely on client mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const saved = localStorage.getItem(PLAYER_STATE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.currentTrack) setCurrentTrack(parsed.currentTrack);
-        if (parsed?.currentAlbum) setCurrentAlbum(parsed.currentAlbum);
-        if (Array.isArray(parsed?.playlist)) setPlaylist(parsed.playlist);
-        if (typeof parsed?.currentTime === 'number') setCurrentTime(parsed.currentTime);
-        if (typeof parsed?.volume === 'number') setVolumeState(parsed.volume);
-        if (typeof parsed?.shuffleMode === 'boolean') setShuffleMode(parsed.shuffleMode);
-        if (parsed?.repeatMode) setRepeatMode(parsed.repeatMode);
+
+    const syncPlayerWithAuth = () => {
+      if (!hasActiveSession()) {
+        setCurrentTrack(null);
+        setCurrentAlbum(null);
+        setPlaylist([]);
+        setIsPlaying(false);
+        try {
+          localStorage.removeItem(PLAYER_STATE_KEY);
+        } catch {}
+        return;
       }
-    } catch (err) {
-      console.warn('Player state restore warning:', err);
-    }
+
+      try {
+        const saved = localStorage.getItem(PLAYER_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.currentTrack) setCurrentTrack(parsed.currentTrack);
+          if (parsed?.currentAlbum) setCurrentAlbum(parsed.currentAlbum);
+          if (Array.isArray(parsed?.playlist)) setPlaylist(parsed.playlist);
+          if (typeof parsed?.currentTime === 'number') setCurrentTime(parsed.currentTime);
+          if (typeof parsed?.volume === 'number') setVolumeState(parsed.volume);
+          if (typeof parsed?.shuffleMode === 'boolean') setShuffleMode(parsed.shuffleMode);
+          if (parsed?.repeatMode) setRepeatMode(parsed.repeatMode);
+        }
+      } catch (err) {
+        console.warn('Player state restore warning:', err);
+      }
+    };
+
+    syncPlayerWithAuth();
+
+    window.addEventListener('vault_auth_change', syncPlayerWithAuth);
+    window.addEventListener('storage', syncPlayerWithAuth);
+
+    return () => {
+      window.removeEventListener('vault_auth_change', syncPlayerWithAuth);
+      window.removeEventListener('storage', syncPlayerWithAuth);
+    };
   }, []);
 
   // Auto save player state to localStorage across F5

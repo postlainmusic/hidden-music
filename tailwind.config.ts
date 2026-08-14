@@ -21,7 +21,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        cyber: ["'DFVN Grafika'", "var(--font-dfvn-grafika)", "var(--font-outfit)", "sans-serif"],
+        cyber: ["'Gotham'", "'DFVN Grafika'", "var(--font-gotham)", "var(--font-dfvn-grafika)", "var(--font-outfit)", "sans-serif"],
+        sans: ["'Gotham'", "var(--font-gotham)", "var(--font-outfit)", "sans-serif"],
         mono: ["var(--font-jetbrains)", "monospace"],
       },
       backgroundImage: {

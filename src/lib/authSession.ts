@@ -83,6 +83,7 @@ export function setStoredUserSession(user: any) {
     localStorage.setItem(USER_SESSION_KEY, str);
     sessionStorage.setItem(USER_SESSION_KEY, str);
     document.cookie = `hidden_vault_session=true; path=/; max-age=2592000; SameSite=Lax`;
+    window.dispatchEvent(new Event('vault_auth_change'));
   } catch (err) {
     console.warn('Error saving user session:', err);
   }
@@ -119,6 +120,7 @@ export function setStoredAdminSession(isAdmin: boolean) {
       sessionStorage.removeItem(ADMIN_SESSION_KEY);
       document.cookie = 'hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     }
+    window.dispatchEvent(new Event('vault_auth_change'));
   } catch (err) {
     console.warn('Error saving admin session:', err);
   }
@@ -142,6 +144,7 @@ export function clearAllStoredSessions() {
     document.cookie.split(';').forEach((c) => {
       document.cookie = c.trim().split('=')[0] + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     });
+    window.dispatchEvent(new Event('vault_auth_change'));
   } catch (err) {
     console.warn('Error clearing sessions:', err);
   }

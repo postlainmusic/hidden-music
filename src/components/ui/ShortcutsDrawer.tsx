@@ -3,11 +3,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Keyboard, X, Sparkles, Music, ShieldAlert } from 'lucide-react';
 
+import { hasActiveSession } from '@/lib/authSession';
+
 export default function ShortcutsDrawer() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAuth, setIsAuth] = useState(false);
   const bubbleRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    setIsAuth(hasActiveSession());
+
+    const handleAuthChange = () => {
+      setIsAuth(hasActiveSession());
+    };
+
+    window.addEventListener('vault_auth_change', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (
@@ -20,12 +32,14 @@ export default function ShortcutsDrawer() {
         return;
       }
 
-      if (e.key === '?' || (e.shiftKey && e.key === '/') || e.key.toLowerCase() === 'h') {
+      if (
+        e.key === 'Escape' ||
+        e.key === '?' ||
+        (e.shiftKey && e.key === '/') ||
+        e.key.toLowerCase() === 'h'
+      ) {
         e.preventDefault();
         setIsOpen((prev) => !prev);
-      } else if (e.key === 'Escape' && isOpen) {
-        e.preventDefault();
-        setIsOpen(false);
       }
     };
 
@@ -40,11 +54,13 @@ export default function ShortcutsDrawer() {
     document.addEventListener('touchstart', handleClickOutside);
 
     return () => {
+      window.removeEventListener('vault_auth_change', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [isOpen]);
+  }, []);
 
   const shortcutsList = [
     {
@@ -76,6 +92,8 @@ export default function ShortcutsDrawer() {
       ],
     },
   ];
+
+  if (!isAuth) return null;
 
   return (
     <div ref={bubbleRef} className="fixed top-20 right-3 sm:right-6 z-[85] select-none font-mono">
