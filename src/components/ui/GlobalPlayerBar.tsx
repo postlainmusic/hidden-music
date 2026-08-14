@@ -376,10 +376,6 @@ export default function GlobalPlayerBar() {
     };
   }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset]);
 
-  const videoOffset = useMemo(() => {
-    return extractVideoOffset(currentTrack?.lyrics || '');
-  }, [currentTrack?.lyrics]);
-
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
     return parseLrc(currentTrack.lyrics);
