@@ -653,23 +653,48 @@ export default function GlobalPlayerBar() {
                   </span>
                 </div>
 
-                {/* Bottom Fullscreen Actions */}
-                <div className="flex items-center justify-between">
-                  <div className="text-[11px] font-cyber font-bold truncate max-w-xs uppercase">
+                {/* Bottom Fullscreen Actions (3-Column Perfectly Centered Layout) */}
+                <div className="grid grid-cols-3 items-center w-full">
+                  {/* Left: Track Info */}
+                  <div className="text-[11px] font-cyber font-bold truncate uppercase justify-self-start pr-2">
                     {currentTrack.title} <span className="text-slate-400 text-[9px] font-mono">({currentAlbum?.artist})</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={prevTrack} className="p-1.5 text-slate-300 hover:text-white" title="Bài trước">
-                      <SkipBack className="w-4 h-4 fill-current" />
+
+                  {/* Center: Playback Controls Perfectly Centered */}
+                  <div className="flex items-center justify-center gap-3 justify-self-center">
+                    <button onClick={prevTrack} className="p-1.5 text-slate-300 hover:text-white transition-colors hover:scale-110 active:scale-95" title="Bài trước">
+                      <SkipBack className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                     </button>
                     <button
                       onClick={handleTogglePlay}
-                      className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"
+                      title={isPlaying ? 'Tạm dừng' : 'Phát'}
                     >
-                      {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+                      {isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />}
                     </button>
-                    <button onClick={nextTrack} className="p-1.5 text-slate-300 hover:text-white" title="Bài kế tiếp">
-                      <SkipForward className="w-4 h-4 fill-current" />
+                    <button onClick={nextTrack} className="p-1.5 text-slate-300 hover:text-white transition-colors hover:scale-110 active:scale-95" title="Bài kế tiếp">
+                      <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                    </button>
+                  </div>
+
+                  {/* Right: Quick Mute & Exit Fullscreen Actions */}
+                  <div className="flex items-center justify-end gap-2.5 justify-self-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setVolume(volume === 0 ? 0.8 : 0);
+                      }}
+                      className="p-1.5 rounded-full text-slate-300 hover:text-white transition-colors"
+                      title={volume === 0 ? 'Bật âm thanh' : 'Tắt tiếng'}
+                    >
+                      {volume === 0 ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+                    </button>
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-1.5 text-slate-300 hover:text-white transition-colors"
+                      title="Thu nhỏ video"
+                    >
+                      <Minimize2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

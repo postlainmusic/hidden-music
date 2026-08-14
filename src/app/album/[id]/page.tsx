@@ -325,14 +325,14 @@ export default function AlbumDetailPage() {
         {/* RIGHT COLUMN: Dark Neumorphic Soft-Emboss Playlist Panel (Scrollable)     */}
         {/* ========================================================================= */}
         <div
-          className={`flex-1 min-h-0 w-full max-w-2xl h-full flex flex-col font-mono transition-all duration-700 delay-100 ease-out ${
+          className={`flex-1 min-h-0 lg:flex-none w-full max-w-xl lg:max-w-2xl h-full lg:h-[480px] xl:h-[520px] max-h-[70vh] flex flex-col font-mono transition-all duration-700 delay-100 ease-out ${
             animateSlide
               ? 'lg:translate-x-0 lg:opacity-100'
               : 'lg:translate-x-20 lg:opacity-0 pointer-events-none'
           }`}
         >
           {/* Unified Dark Neumorphic Panel */}
-          <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden">
+          <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl">
             
             {/* Scrollable Tracklist with Smooth Touch Scrolling */}
             <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
