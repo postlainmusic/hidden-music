@@ -28,6 +28,9 @@ interface PlayerContextType {
   nextTrack: () => void;
   prevTrack: () => void;
   seekTo: (time: number) => void;
+  setCurrentTime: React.Dispatch<React.SetStateAction<number>>;
+  setDuration: React.Dispatch<React.SetStateAction<number>>;
+  setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   setVolume: (vol: number) => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
@@ -466,6 +469,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         nextTrack,
         prevTrack,
         seekTo,
+        setCurrentTime,
+        setDuration,
+        setIsPlaying,
         setVolume,
         toggleShuffle,
         toggleRepeat,

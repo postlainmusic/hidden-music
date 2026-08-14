@@ -45,8 +45,10 @@ export default function GlobalPlayerBar() {
     playTrack,
     togglePlay,
     nextTrack,
-    prevTrack,
     seekTo,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
     setVolume,
     toggleShuffle,
     toggleRepeat,
@@ -84,46 +86,76 @@ export default function GlobalPlayerBar() {
   const snareIntensityRef = useRef<number>(0);
   const currentScaleRef = useRef<number>(1);
 
-  // Mute background audio when Video Stage is open
+  // Handle transition between Audio mode and Video mode seamlessly
   useEffect(() => {
-    if (!audioRef?.current) return;
-    if (showVideo) {
-      audioRef.current.pause();
-      audioRef.current.muted = true;
-    } else {
-      audioRef.current.muted = false;
-      if (isPlaying) audioRef.current.play().catch(() => {});
-    }
-  }, [showVideo, isPlaying, audioRef]);
+    const audio = audioRef?.current;
+    const vid = videoRef.current;
 
-  // Sync video element: load src, play/pause, seek, volume
+    if (showVideo) {
+      if (audio) {
+        audio.pause();
+        audio.muted = true;
+      }
+      if (vid && currentTrack?.video_url) {
+        if (vid.src !== currentTrack.video_url) {
+          vid.src = currentTrack.video_url;
+          vid.load();
+        }
+        if (currentTime > 0 && Math.abs(vid.currentTime - currentTime) > 0.5) {
+          vid.currentTime = currentTime;
+        }
+        vid.volume = volume;
+        if (isPlaying) {
+          vid.play().catch(() => {});
+        }
+      }
+    } else {
+      if (vid) {
+        vid.pause();
+      }
+      if (audio) {
+        audio.muted = false;
+        if (currentTime > 0 && Math.abs(audio.currentTime - currentTime) > 0.5) {
+          audio.currentTime = currentTime;
+        }
+        if (isPlaying) {
+          audio.play().catch(() => {});
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVideo]);
+
+  // Sync play / pause state to video element without resetting position
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid || !showVideo) return;
+    if (isPlaying) {
+      if (vid.paused) vid.play().catch(() => {});
+    } else {
+      if (!vid.paused) vid.pause();
+    }
+  }, [isPlaying, showVideo]);
+
+  // Sync new video source when track changes while Video Stage is open
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !showVideo || !currentTrack?.video_url) return;
     if (vid.src !== currentTrack.video_url) {
       vid.src = currentTrack.video_url;
       vid.load();
+      vid.currentTime = 0;
+      if (isPlaying) vid.play().catch(() => {});
     }
-    vid.volume = volume;
-    vid.currentTime = currentTime;
-    if (isPlaying) vid.play().catch(() => {});
-    else vid.pause();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo, currentTrack?.video_url, isPlaying]);
+  }, [currentTrack?.video_url, showVideo, isPlaying]);
 
-  // Keep video volume in sync
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.volume = volume;
-  }, [volume]);
-
-  // Seek video when user drags seekbar
-  useEffect(() => {
-    const vid = videoRef.current;
-    if (!vid || !showVideo) return;
-    if (Math.abs(vid.currentTime - currentTime) > 1.5) {
-      vid.currentTime = currentTime;
+  // Seek helper to keep both audio and video timeline in exact sync
+  const handleSeek = (newTime: number) => {
+    seekTo(newTime);
+    if (showVideo && videoRef.current) {
+      videoRef.current.currentTime = newTime;
     }
-  }, [currentTime, showVideo]);
+  };
 
   // Real-Time 58Hz Sub-Punch Kick & 280Hz Snare Distinct One-Shot Edge Beat Detection
   useEffect(() => {
@@ -392,8 +424,15 @@ export default function GlobalPlayerBar() {
               </button>
             </div>
 
-            {/* Native Web Video Viewport Stage */}
-            <div className="flex-1 my-2 rounded-2xl overflow-hidden border border-cyan-500/40 relative bg-black flex items-center justify-center shadow-2xl z-20 select-none pointer-events-auto">
+            {/* Native Web Video Viewport Stage with Transparent DRM Anti-Theft Shield */}
+            <div
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }}
+              className="flex-1 my-2 rounded-2xl overflow-hidden border border-cyan-500/40 relative bg-black flex items-center justify-center shadow-2xl z-20 select-none pointer-events-auto"
+            >
               {/* HIDDEN MUSIC Watermark Logo Badge (Top Left Corner) */}
               <div className="absolute top-3 left-3 z-40 flex items-center gap-2 bg-black/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-cyan-400/40 text-white shadow-2xl select-none pointer-events-none">
                 <Disc3 className="w-4 h-4 text-cyan-400 animate-spin-slow" />
@@ -406,11 +445,78 @@ export default function GlobalPlayerBar() {
                 <span>DRM PROTECTED • WEB STAGE</span>
               </div>
 
+              {/* Transparent DRM Anti-Theft Protection Shield & Click-to-Play Overlay */}
+              <div
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return false;
+                }}
+                onClick={() => {
+                  togglePlay();
+                }}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  const container = e.currentTarget.parentElement;
+                  if (container) {
+                    if (!document.fullscreenElement) {
+                      container.requestFullscreen?.().catch(() => {});
+                    } else {
+                      document.exitFullscreen?.().catch(() => {});
+                    }
+                  }
+                }}
+                className="absolute inset-0 z-30 w-full h-full cursor-pointer flex items-center justify-center select-none bg-transparent"
+                style={{
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                  userSelect: 'none',
+                }}
+              >
+                {/* Centered Quick Play/Pause Indicator on Video Screen */}
+                {!isPlaying && (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/70 border border-cyan-400/70 backdrop-blur-md flex items-center justify-center text-cyan-300 shadow-[0_0_30px_rgba(0,240,255,0.6)] animate-pulse pointer-events-none">
+                    <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current ml-1" />
+                  </div>
+                )}
+              </div>
+
               <video
                 ref={videoRef}
                 playsInline
                 controls={false}
-                className="w-full h-full object-contain select-none"
+                controlsList="nodownload nofullscreen noremoteplayback"
+                disablePictureInPicture={true}
+                disableRemotePlayback={true}
+                draggable={false}
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  return false;
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return false;
+                }}
+                onTimeUpdate={(e) => {
+                  if (showVideo) {
+                    setCurrentTime(e.currentTarget.currentTime);
+                  }
+                }}
+                onLoadedMetadata={(e) => {
+                  if (showVideo) {
+                    setDuration(e.currentTarget.duration);
+                    if (currentTime > 0 && Math.abs(e.currentTarget.currentTime - currentTime) > 0.5) {
+                      e.currentTarget.currentTime = currentTime;
+                    }
+                    if (isPlaying) {
+                      e.currentTarget.play().catch(() => {});
+                    }
+                  }
+                }}
+                onEnded={nextTrack}
+                style={{ pointerEvents: 'none' }}
+                className="w-full h-full object-contain select-none pointer-events-none"
               />
             </div>
 
@@ -646,7 +752,7 @@ export default function GlobalPlayerBar() {
                 min={0}
                 max={effectiveDuration || 100}
                 value={currentTime}
-                onChange={(e) => seekTo(parseFloat(e.target.value))}
+                onChange={(e) => handleSeek(parseFloat(e.target.value))}
                 className={`w-full h-2 sm:h-2.5 rounded-full appearance-none cursor-pointer border shadow-inner transition-all ${
                   showVideo
                     ? 'bg-cyan-950 border-cyan-500/50 accent-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.4)]'
