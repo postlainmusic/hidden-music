@@ -323,6 +323,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsCinematicFxEnabled((prev) => !prev);
   };
 
+  // Global User Interaction to unlock AudioContext for real-time Beat Analysis
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const unlockAudioCtx = () => {
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    };
+
+    window.addEventListener('click', unlockAudioCtx, { passive: true });
+    window.addEventListener('touchstart', unlockAudioCtx, { passive: true });
+    window.addEventListener('keydown', unlockAudioCtx, { passive: true });
+
+    return () => {
+      window.removeEventListener('click', unlockAudioCtx);
+      window.removeEventListener('touchstart', unlockAudioCtx);
+      window.removeEventListener('keydown', unlockAudioCtx);
+    };
+  }, []);
+
   // Hard Refresh (Ctrl + F5, Shift + F5, Ctrl + Shift + R, Cmd + Shift + R) Handler
   useEffect(() => {
     if (typeof window === 'undefined') return;

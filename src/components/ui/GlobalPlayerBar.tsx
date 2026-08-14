@@ -147,9 +147,12 @@ export default function GlobalPlayerBar() {
     }
   };
 
-  const videoOffset = useMemo(() => {
-    return extractVideoOffset(currentTrack?.lyrics || '');
-  }, [currentTrack?.lyrics]);
+  const songDuration = useMemo(() => {
+    return (currentTrack?.duration && currentTrack.duration > 0) ? currentTrack.duration : 180;
+  }, [currentTrack?.duration]);
+
+  const syncWindowStart = videoOffset;
+  const syncWindowEnd = videoOffset + songDuration;
 
   // Master Play/Pause toggler that reliably controls both Video and Audio
   const handleTogglePlay = () => {
@@ -166,7 +169,7 @@ export default function GlobalPlayerBar() {
     }
   };
 
-  // Seamless Audio <-> Video playback handoff with accurate videoOffset synchronization
+  // Seamless Audio <-> Video playback handoff with accurate sync window
   useEffect(() => {
     const audio = audioRef?.current;
     const vid = videoRef.current;
@@ -180,7 +183,7 @@ export default function GlobalPlayerBar() {
       if (vid) {
         vid.volume = volume;
         const targetVidTime = Math.max(0, currentTime + videoOffset);
-        if (Math.abs(vid.currentTime - targetVidTime) > 0.6) {
+        if (Math.abs(vid.currentTime - targetVidTime) > 0.5) {
           vid.currentTime = targetVidTime;
         }
         if (vid.duration > 0 && isFinite(vid.duration)) {
@@ -193,18 +196,25 @@ export default function GlobalPlayerBar() {
         }
       }
     } else {
-      // Switching back to Audio Mode: convert video time back to audio song time
+      // Switching back to Audio Mode: verify sync window
       if (vid) {
-        let effectiveAudioTime = 0;
-        if (vid.currentTime >= videoOffset) {
-          effectiveAudioTime = vid.currentTime - videoOffset;
-        }
+        const vidTime = vid.currentTime;
         vid.pause();
         if (audio) {
           audio.muted = false;
-          if (Math.abs(audio.currentTime - effectiveAudioTime) > 0.6) {
-            audio.currentTime = effectiveAudioTime;
-            setCurrentTime(effectiveAudioTime);
+          if (vidTime < syncWindowStart) {
+            // Before music starts (Intro): Audio starts at beginning
+            audio.currentTime = 0;
+            setCurrentTime(0);
+          } else if (vidTime >= syncWindowStart && vidTime <= syncWindowEnd) {
+            // Inside Sync Window: jump to mapped song time
+            const mappedSongTime = vidTime - videoOffset;
+            audio.currentTime = mappedSongTime;
+            setCurrentTime(mappedSongTime);
+          } else {
+            // After music finished (Outro): Advance to next track
+            nextTrack();
+            return;
           }
           if (audio.duration > 0 && isFinite(audio.duration)) {
             setDuration(audio.duration);
@@ -221,7 +231,7 @@ export default function GlobalPlayerBar() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo, videoOffset, volume, audioRef]);
+  }, [showVideo, videoOffset, songDuration, volume, audioRef]);
 
   // Keep video volume in sync
   useEffect(() => {
@@ -251,12 +261,18 @@ export default function GlobalPlayerBar() {
       }
       const albumCoverEl = document.getElementById('album-cover-box');
       const albumGlowEl = document.getElementById('album-cover-glow');
+      const vinylEl = document.getElementById('album-vinyl-disc');
       if (albumCoverEl) {
+        albumCoverEl.style.transform = 'scale(1)';
         albumCoverEl.style.boxShadow = '';
         albumCoverEl.style.borderColor = '';
       }
       if (albumGlowEl) {
         albumGlowEl.style.opacity = '0';
+      }
+      if (vinylEl) {
+        vinylEl.style.boxShadow = '';
+        vinylEl.style.borderColor = '';
       }
       return;
     }
@@ -270,7 +286,7 @@ export default function GlobalPlayerBar() {
         ? Math.max(0, videoRef.current.currentTime - videoOffset)
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
-      // 1. ONE-SHOT PCM KICK MATCHING (Edge trigger within -0.03s .. +0.04s)
+      // 1. ONE-SHOT PCM KICK MATCHING
       const kickStamps = kickTimestampsRef?.current || [];
       for (let i = 0; i < kickStamps.length; i++) {
         const diff = liveCurrentTime - kickStamps[i];
@@ -282,7 +298,7 @@ export default function GlobalPlayerBar() {
         }
       }
 
-      // 2. ONE-SHOT PCM SNARE MATCHING (Edge trigger within -0.03s .. +0.04s)
+      // 2. ONE-SHOT PCM SNARE MATCHING
       const snareStamps = snareTimestampsRef?.current || [];
       for (let i = 0; i < snareStamps.length; i++) {
         const diff = liveCurrentTime - snareStamps[i];
@@ -294,7 +310,7 @@ export default function GlobalPlayerBar() {
         }
       }
 
-      // 3. REAL-TIME AUDIO NODE FALLBACK IF PCM NOT READY
+      // 3. ADAPTIVE REAL-TIME AUDIO ANALYSER
       let kickSubPunchEnergy = 0;
       if (kickAnalyserRef?.current) {
         try {
@@ -317,14 +333,31 @@ export default function GlobalPlayerBar() {
         } catch {}
       }
 
+      // Fallback from master analyser if specialized node isn't populated
+      if (kickSubPunchEnergy === 0 && analyserRef?.current) {
+        try {
+          const arr = new Uint8Array(analyserRef.current.frequencyBinCount);
+          analyserRef.current.getByteFrequencyData(arr);
+          // Sub-bass in low bins (0-4)
+          kickSubPunchEnergy = (arr[0] + arr[1] + arr[2] + arr[3]) / 4;
+          // Snare in mid-high bins (12-24)
+          snareVocalEnergy = (arr[12] + arr[14] + arr[16] + arr[18]) / 4;
+        } catch {}
+      }
+
       const deltaKickPunch = Math.max(0, kickSubPunchEnergy - prevKickPunchRef.current);
       prevKickPunchRef.current = kickSubPunchEnergy;
       smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.78 + deltaKickPunch * 0.22;
-      const kickThreshold = Math.max(6, smoothedKickPunchRef.current * 1.25);
+      const kickThreshold = Math.max(4, smoothedKickPunchRef.current * 1.15);
 
-      if (!isKickBeat && deltaKickPunch > kickThreshold && deltaKickPunch > 10 && kickSubPunchEnergy > snareVocalEnergy * 0.9 && kickSubPunchEnergy > 28 && (now - lastKickTimeRef.current > 140)) {
+      if (!isKickBeat && deltaKickPunch > kickThreshold && deltaKickPunch > 6 && kickSubPunchEnergy > 16 && (now - lastKickTimeRef.current > 130)) {
         isKickBeat = true;
         lastKickTimeRef.current = now;
+      }
+
+      if (!isSnareBeat && snareVocalEnergy > 20 && (now - lastSnareTimeRef.current > 180) && snareVocalEnergy > kickSubPunchEnergy * 0.85) {
+        isSnareBeat = true;
+        lastSnareTimeRef.current = now;
       }
 
       // 4. APPLY DISTINCT KICK REACTION (Fiery Red/Orange Overlay + Scale Bounce)
@@ -355,15 +388,16 @@ export default function GlobalPlayerBar() {
         snareOverlayRef.current.style.opacity = snareIntensityRef.current.toFixed(3);
       }
 
-      // Synchronized Edge Rim Lighting on Player Bar AND Album Cover
+      // Synchronized Edge Rim Lighting & Scale on Player Bar, Album Cover Box, Glow & Vinyl Disc
       const albumCoverEl = document.getElementById('album-cover-box');
       const albumGlowEl = document.getElementById('album-cover-glow');
+      const vinylEl = document.getElementById('album-vinyl-disc');
 
       if (barContainerRef.current) {
         const scaleVal = showLyrics ? 1.0 : currentScaleRef.current;
         barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
 
-        if (fireIntensityRef.current > 0.15) {
+        if (fireIntensityRef.current > 0.12) {
           const kickAlpha = fireIntensityRef.current.toFixed(2);
           const rimColor = `rgba(255, 120, 0, ${kickAlpha})`;
 
@@ -371,14 +405,20 @@ export default function GlobalPlayerBar() {
           barContainerRef.current.style.borderColor = rimColor;
 
           if (albumCoverEl) {
-            albumCoverEl.style.boxShadow = `0 0 45px rgba(255, 80, 0, ${kickAlpha}), 0 0 90px rgba(255, 30, 0, ${(fireIntensityRef.current * 0.5).toFixed(2)})`;
+            const coverScale = 1.0 + (fireIntensityRef.current * 0.035);
+            albumCoverEl.style.transform = `scale(${coverScale.toFixed(4)})`;
+            albumCoverEl.style.boxShadow = `0 0 50px rgba(255, 90, 0, ${kickAlpha}), 0 0 100px rgba(255, 30, 0, ${(fireIntensityRef.current * 0.6).toFixed(2)})`;
             albumCoverEl.style.borderColor = rimColor;
           }
           if (albumGlowEl) {
-            albumGlowEl.style.opacity = (fireIntensityRef.current * 0.85).toFixed(2);
-            albumGlowEl.style.background = 'radial-gradient(circle, rgba(255,100,0,0.85) 0%, rgba(255,30,0,0.45) 60%, transparent 100%)';
+            albumGlowEl.style.opacity = (fireIntensityRef.current * 0.9).toFixed(2);
+            albumGlowEl.style.background = 'radial-gradient(circle, rgba(255,100,0,0.9) 0%, rgba(255,30,0,0.5) 60%, transparent 100%)';
           }
-        } else if (snareIntensityRef.current > 0.15) {
+          if (vinylEl) {
+            vinylEl.style.boxShadow = `0 0 45px rgba(255, 90, 0, ${kickAlpha}), 0 15px 40px rgba(0,0,0,0.9)`;
+            vinylEl.style.borderColor = rimColor;
+          }
+        } else if (snareIntensityRef.current > 0.12) {
           const snareAlpha = snareIntensityRef.current.toFixed(2);
           const rimColor = `rgba(0, 240, 255, ${snareAlpha})`;
 
@@ -386,22 +426,33 @@ export default function GlobalPlayerBar() {
           barContainerRef.current.style.borderColor = rimColor;
 
           if (albumCoverEl) {
-            albumCoverEl.style.boxShadow = `0 0 45px rgba(0, 240, 255, ${snareAlpha}), 0 0 90px rgba(160, 30, 255, ${(snareIntensityRef.current * 0.5).toFixed(2)})`;
+            const coverScale = 1.0 + (snareIntensityRef.current * 0.02);
+            albumCoverEl.style.transform = `scale(${coverScale.toFixed(4)})`;
+            albumCoverEl.style.boxShadow = `0 0 50px rgba(0, 240, 255, ${snareAlpha}), 0 0 100px rgba(160, 30, 255, ${(snareIntensityRef.current * 0.6).toFixed(2)})`;
             albumCoverEl.style.borderColor = rimColor;
           }
           if (albumGlowEl) {
-            albumGlowEl.style.opacity = (snareIntensityRef.current * 0.85).toFixed(2);
-            albumGlowEl.style.background = 'radial-gradient(circle, rgba(0,240,255,0.85) 0%, rgba(160,30,255,0.45) 60%, transparent 100%)';
+            albumGlowEl.style.opacity = (snareIntensityRef.current * 0.9).toFixed(2);
+            albumGlowEl.style.background = 'radial-gradient(circle, rgba(0,240,255,0.9) 0%, rgba(160,30,255,0.5) 60%, transparent 100%)';
+          }
+          if (vinylEl) {
+            vinylEl.style.boxShadow = `0 0 45px rgba(0, 240, 255, ${snareAlpha}), 0 15px 40px rgba(0,0,0,0.9)`;
+            vinylEl.style.borderColor = rimColor;
           }
         } else {
           barContainerRef.current.style.boxShadow = '';
           barContainerRef.current.style.borderColor = '';
           if (albumCoverEl) {
+            albumCoverEl.style.transform = 'scale(1)';
             albumCoverEl.style.boxShadow = '';
             albumCoverEl.style.borderColor = '';
           }
           if (albumGlowEl) {
             albumGlowEl.style.opacity = '0';
+          }
+          if (vinylEl) {
+            vinylEl.style.boxShadow = '';
+            vinylEl.style.borderColor = '';
           }
         }
       }
@@ -422,10 +473,17 @@ export default function GlobalPlayerBar() {
   }, [currentTrack?.lyrics]);
 
   const activeLyricIdx = useMemo(() => {
-    // If Video mode is active and there is a video offset configured, shift effective time
-    const effectiveTime = showVideo ? (currentTime - videoOffset) : currentTime;
-    return getActiveLyricIndex(parsedLyrics, effectiveTime);
-  }, [parsedLyrics, currentTime, showVideo, videoOffset]);
+    if (!parsedLyrics || parsedLyrics.length === 0) return -1;
+    if (showVideo) {
+      // Sync Window Gating: If video is in intro or outro outside the song, do not display out-of-sync lyrics
+      if (currentTime < syncWindowStart || currentTime > syncWindowEnd) {
+        return -1;
+      }
+      const effectiveSongTime = currentTime - videoOffset;
+      return getActiveLyricIndex(parsedLyrics, effectiveSongTime);
+    }
+    return getActiveLyricIndex(parsedLyrics, currentTime);
+  }, [parsedLyrics, currentTime, showVideo, videoOffset, syncWindowStart, syncWindowEnd]);
 
   // Auto-scroll active lyric line in lyrics stage
   useEffect(() => {

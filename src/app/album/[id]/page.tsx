@@ -223,11 +223,12 @@ export default function AlbumDetailPage() {
                 className="absolute inset-0 rounded-3xl transition-all duration-150 pointer-events-none opacity-0 blur-2xl scale-110 z-0"
               />
 
-              {/* Realistic Grooved 3D Vinyl Disc that slides out */}
+              {/* Realistic Grooved 3D Vinyl Disc that slides out with live beat reactivity */}
               <div
+                id="album-vinyl-disc"
                 className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 rounded-full bg-[#0a0a0a] border border-white/20 shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center transition-all duration-700 ease-out z-0 ${
                   (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? 'translate-x-16 sm:translate-x-20 md:translate-x-28 rotate-90 scale-95 opacity-100'
+                    ? 'translate-x-20 sm:translate-x-24 md:translate-x-32 rotate-90 scale-95 opacity-100'
                     : 'translate-x-0 scale-90 opacity-0'
                 }`}
                 style={{
