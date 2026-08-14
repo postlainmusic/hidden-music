@@ -84,83 +84,86 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
   if (!activeAlbum) return null;
 
   return (
-    <div className="w-full h-full absolute inset-0 z-0 bg-[#090a0f] flex items-center justify-center overflow-hidden px-4 select-none">
+    <div className="w-full h-full absolute inset-0 z-0 bg-[#09090d] flex items-center justify-center overflow-hidden px-4 select-none">
       {/* ========================================================================= */}
-      {/* 3-LAYER COSMIC STARFIELD SPACE BACKGROUND (UIVERSE PARALLAX)               */}
+      {/* BLINK-INSPIRED LUXURY COSMIC SKY (STARS, NEBULAS, FLASHES)                 */}
       {/* ========================================================================= */}
-      <div className="cosmic-space-bg">
-        <div id="stars" />
-        <div id="stars2" />
-        <div id="stars3" />
+      <div className="cosmic-sky" aria-hidden="true">
+        <div className="cosmic-stars" />
+        <div className="cosmic-nebula cosmic-nebula-one" />
+        <div className="cosmic-nebula cosmic-nebula-two" />
+        <div className="cosmic-flash cosmic-flash-one" />
+        <div className="cosmic-flash cosmic-flash-two" />
       </div>
 
-      {/* Subtle Cosmic Nebula Refraction Backlight for True Liquid Glass Depth */}
-      <div className="absolute w-[460px] h-[460px] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.18)_0%,rgba(147,51,234,0.12)_45%,transparent_75%)] blur-[90px] pointer-events-none z-0 animate-pulse" />
-
       {/* Main 3D Interactive Container */}
-      <div
-        className="relative z-10 flex flex-col items-center justify-center transition-transform duration-200 ease-out"
-        style={{
-          perspective: '1200px',
-        }}
-      >
-        {/* Liquid Crystal Glass Card (Exclusively wrapping Cover, Vinyl, Title, Artist) */}
+      <div className="relative z-10 flex flex-col items-center justify-center">
+        {/* Dynamic Glowing Glassmorphic Album Card */}
         <div
-          className="liquid-crystal-card group cursor-pointer p-4 sm:p-5 md:p-6 w-[280px] sm:w-[340px] md:w-[380px]"
+          className="group relative cursor-pointer"
+          style={{ perspective: '1000px' }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           onClick={() => onSelectAlbum(activeAlbum)}
-          style={{
-            transform: `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.03 : 1.0})`,
-            transformStyle: 'preserve-3d',
-            transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
         >
-          {/* 1. Center Album Artwork & Smooth Sliding Vinyl Disc */}
-          <div className="relative mx-auto flex items-center justify-center overflow-visible">
-            {/* Realistic Grooved Vinyl Record */}
-            <div
-              className="absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/20 shadow-2xl flex items-center justify-center transition-transform duration-500 ease-out pointer-events-none z-0"
-              style={{
-                transform: isHovered
-                  ? 'translateX(40%) rotate(180deg)'
-                  : 'translateX(0%) rotate(0deg)',
-                boxShadow: isHovered
-                  ? '0 15px 35px rgba(0,0,0,0.95), inset 0 0 25px rgba(255,255,255,0.08)'
-                  : 'none',
-              }}
-            >
-              {/* Vinyl Grooves Rings */}
-              <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
+          {/* Subtle Ambient Cosmic Glow Behind Glass */}
+          <div className="absolute -inset-8 rounded-full bg-[#243b53] opacity-35 blur-3xl transition duration-700 group-hover:opacity-75 pointer-events-none z-0" />
+
+          {/* Blink-Engine Glass Card */}
+          <div
+            className="glass-card relative z-10 p-4 sm:p-5 md:p-6 w-[280px] sm:w-[340px] md:w-[380px]"
+            style={{
+              transform: `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.03 : 1.0})`,
+              transformStyle: 'preserve-3d',
+              transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            {/* 1. Center Album Artwork & Smooth Sliding Vinyl Disc */}
+            <div className="relative mx-auto flex items-center justify-center overflow-visible">
+              {/* Realistic Grooved Vinyl Record */}
+              <div
+                className="absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/20 shadow-2xl flex items-center justify-center transition-transform duration-500 ease-out pointer-events-none z-0"
+                style={{
+                  transform: isHovered
+                    ? 'translateX(40%) rotate(180deg)'
+                    : 'translateX(0%) rotate(0deg)',
+                  boxShadow: isHovered
+                    ? '0 15px 35px rgba(0,0,0,0.95), inset 0 0 25px rgba(255,255,255,0.08)'
+                    : 'none',
+                }}
+              >
+                {/* Vinyl Grooves Rings */}
                 <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
                   <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner">
-                      <div className="w-3.5 h-3.5 rounded-full bg-black border border-white/60" />
+                    <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner">
+                        <div className="w-3.5 h-3.5 rounded-full bg-black border border-white/60" />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              {/* Original Full-Color Cover Artwork Sleeve */}
+              <div className="relative z-10 w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.9)] border border-white/15 bg-zinc-950 flex-shrink-0">
+                <img
+                  src={activeAlbum.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                  alt={activeAlbum.title}
+                  className="w-full h-full object-cover select-none"
+                  loading="eager"
+                />
+              </div>
             </div>
 
-            {/* Original Full-Color Cover Artwork Sleeve */}
-            <div className="relative z-10 w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.9)] border border-white/15 bg-zinc-950 flex-shrink-0">
-              <img
-                src={activeAlbum.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
-                alt={activeAlbum.title}
-                className="w-full h-full object-cover select-none"
-                loading="eager"
-              />
+            {/* 2. Album Title & Artist Name Only */}
+            <div className="flex flex-col items-center text-center mt-4">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
+                {activeAlbum.title}
+              </h2>
+              <p className="text-xs sm:text-sm font-mono text-zinc-300 font-bold tracking-widest uppercase mt-1">
+                {activeAlbum.artist || 'VAULT ARTIST'}
+              </p>
             </div>
-          </div>
-
-          {/* 2. Album Title & Artist Name Only */}
-          <div className="flex flex-col items-center text-center mt-4">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
-              {activeAlbum.title}
-            </h2>
-            <p className="text-xs sm:text-sm font-mono text-zinc-300 font-bold tracking-widest uppercase mt-1">
-              {activeAlbum.artist || 'VAULT ARTIST'}
-            </p>
           </div>
         </div>
 
