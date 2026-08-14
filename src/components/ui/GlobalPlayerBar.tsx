@@ -967,7 +967,7 @@ export default function GlobalPlayerBar() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setVolume((prev) => (prev === 0 ? 0.8 : 0));
+                  setVolume(volume === 0 ? 0.8 : 0);
                 }}
                 className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
                 title={volume === 0 ? 'Bật âm thanh' : 'Tắt tiếng (Mute)'}
