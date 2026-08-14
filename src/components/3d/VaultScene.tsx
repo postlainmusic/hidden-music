@@ -200,33 +200,17 @@ export default function VaultScene({
       </div>
 
       {/* ========================================================================= */}
-      {/* 1B. ALBUM SIDE DEDICATED AMBIENT BACKGROUND (SMOOTH FADEIN IN DETAIL)     */}
+      {/* 1B. ALBUM SIDE DEDICATED AMBIENT GLOW (EXACT PURPLE/BLUE GLOW FROM ALBUM)  */}
       {/* ========================================================================= */}
       <div
-        className={`absolute inset-0 z-0 transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none overflow-hidden ${
-          isDetail ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+        className={`absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[550px] sm:w-[700px] h-[550px] sm:h-[700px] rounded-full pointer-events-none blur-[130px] transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] z-0 ${
+          isDetail ? 'opacity-25 sm:opacity-30 scale-100' : 'opacity-0 scale-75'
         }`}
+        style={{
+          backgroundImage: `radial-gradient(circle, #ffffff 0%, #3b82f6 40%, #7c3aed 70%, transparent 100%)`,
+        }}
         aria-hidden="true"
-      >
-        {/* Deep Dark Studio Vignette */}
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
-
-        {/* Dynamic Cover Artwork Ambient Aura */}
-        <div
-          className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[750px] h-[600px] sm:h-[750px] rounded-full opacity-25 blur-[140px] transition-all duration-1000"
-          style={{
-            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(59,130,246,0.25) 35%, rgba(124,58,237,0.2) 65%, transparent 100%)`,
-          }}
-        />
-
-        {/* Right Ambient Sub-Glow for Playlist */}
-        <div
-          className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[450px] h-[450px] rounded-full opacity-15 blur-[120px] transition-all duration-1000"
-          style={{
-            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(30,41,59,0.5) 60%, transparent 100%)`,
-          }}
-        />
-      </div>
+      />
 
       {/* ========================================================================= */}
       {/* 2. UNIFIED CONTINUOUS STAGE (MATHEMATICALLY CENTERED IN BOTH MODES)       */}
