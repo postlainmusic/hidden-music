@@ -167,7 +167,7 @@ export default function Home() {
 
   // 2. User is Logged In -> Show 3D Vault & Albums Immediately
   return (
-    <main className="relative min-h-screen w-full bg-[#090a0f] overflow-hidden select-none">
+    <main className="relative h-[100dvh] w-full bg-[#090a0f] overflow-hidden select-none">
       {/* 3D Vertical Column of Real Albums with Full Color & 3D Tilt Hover */}
       {albums.length > 0 && (
         <VaultScene

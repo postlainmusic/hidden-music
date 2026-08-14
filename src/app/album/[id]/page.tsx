@@ -178,7 +178,7 @@ export default function AlbumDetailPage() {
   }
 
   return (
-    <main className="min-h-screen lg:h-screen w-full bg-[#09090d] text-white font-cyber relative overflow-x-hidden overflow-y-auto lg:overflow-hidden flex flex-col justify-between select-none">
+    <main className="h-[100dvh] w-full bg-[#09090d] text-white font-cyber relative overflow-hidden flex flex-col justify-between select-none">
       {/* Top Fixed Header with clean BACK button */}
       <Navbar showBackButton={true} />
 
@@ -190,155 +190,152 @@ export default function AlbumDetailPage() {
         }}
       />
 
-      {/* Main Content Area (Scrollable on Mobile, Single-Viewport on Desktop) */}
-      <div className="flex-1 w-full max-w-[1520px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 flex items-center justify-center relative z-10 pt-16 sm:pt-20 pb-36 sm:pb-40 lg:pb-24">
+      {/* Main Single-Viewport Locked Content Area (Auto-Fit across All Breakpoints) */}
+      <div className="flex-1 min-h-0 w-full max-w-[1520px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 flex flex-col lg:flex-row items-center justify-center gap-3 sm:gap-6 lg:gap-14 overflow-hidden pt-14 sm:pt-16 pb-20 sm:pb-24">
         
-        {/* Main Grid: Left Vinyl Deck & Right Clean Unified Playlist */}
-        <div className="w-full flex flex-col lg:flex-row items-center lg:items-center justify-center gap-6 sm:gap-10 lg:gap-16 xl:gap-24 max-h-full">
-          
-          {/* ========================================================================= */}
-          {/* LEFT COLUMN: Ultra-Premium 3D Vinyl Sleeve Showcase                       */}
-          {/* ========================================================================= */}
+        {/* ========================================================================= */}
+        {/* LEFT COLUMN: Ultra-Premium 3D Vinyl Sleeve Showcase (Auto-Sized)         */}
+        {/* ========================================================================= */}
+        <div
+          className={`w-full lg:w-[360px] xl:w-[400px] shrink-0 flex flex-col items-center text-center space-y-1.5 sm:space-y-3 relative z-20 transition-all duration-700 ease-out max-h-[36vh] lg:max-h-none ${
+            animateSlide
+              ? 'lg:translate-x-0 lg:opacity-100'
+              : 'lg:translate-x-[180px] lg:scale-105 opacity-90'
+          } animate-slideUp`}
+        >
+          {/* 3D Vinyl Sleeve Deck with Realistic Peek & Slide Out */}
           <div
-            className={`w-full lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col items-center text-center space-y-2.5 sm:space-y-4 relative z-20 transition-all duration-700 ease-out ${
-              animateSlide
-                ? 'lg:translate-x-0 lg:opacity-100'
-                : 'lg:translate-x-[180px] lg:scale-105 opacity-90'
-            } animate-slideUp`}
+            className="relative group cursor-pointer flex items-center justify-center overflow-visible"
+            onMouseEnter={() => setIsCoverHovered(true)}
+            onMouseLeave={() => setIsCoverHovered(false)}
+            onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
           >
-            {/* 3D Vinyl Sleeve Deck with Realistic Peek & Slide Out */}
+            {/* Outer Wrapper that handles the physical slide-out to the right */}
             <div
-              className="relative group cursor-pointer flex items-center justify-center overflow-visible"
-              onMouseEnter={() => setIsCoverHovered(true)}
-              onMouseLeave={() => setIsCoverHovered(false)}
-              onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
+              id="album-vinyl-wrapper"
+              className={`absolute w-28 h-28 xs:w-36 xs:h-36 sm:w-48 sm:h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 xl:w-72 xl:h-72 transition-all duration-700 ease-out z-0 pointer-events-none ${
+                (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
+                  ? 'translate-x-10 sm:translate-x-18 md:translate-x-22 opacity-100'
+                  : 'translate-x-0 opacity-0'
+              }`}
             >
-              {/* Outer Wrapper that handles the physical slide-out to the right */}
+              {/* Inner Disc that handles the physical vocal bounce & rotating vinyl grooves */}
               <div
-                id="album-vinyl-wrapper"
-                className={`absolute w-36 h-36 xs:w-40 xs:h-40 sm:w-52 sm:h-52 md:w-56 md:h-56 lg:w-64 lg:h-64 xl:w-72 xl:h-72 transition-all duration-700 ease-out z-0 pointer-events-none ${
-                  (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? 'translate-x-12 sm:translate-x-20 md:translate-x-24 opacity-100'
-                    : 'translate-x-0 opacity-0'
-                }`}
+                id="album-vinyl-disc"
+                className="w-full h-full rounded-full bg-[#0a0a0a] shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center will-change-transform"
+                style={{
+                  background: 'radial-gradient(circle, #222 2%, #0d0d0d 15%, #181818 30%, #080808 45%, #151515 60%, #050505 85%, #000 100%)',
+                }}
               >
-                {/* Inner Disc that handles the physical vocal bounce & rotating vinyl grooves */}
+                {/* Vinyl Grooves Texture */}
+                <div className="absolute inset-2 rounded-full border border-white/[0.04]" />
+                <div className="absolute inset-5 rounded-full border border-white/[0.06]" />
+                <div className="absolute inset-10 rounded-full border border-white/[0.08]" />
+                <div className="absolute inset-14 rounded-full border border-white/[0.05]" />
+
+                {/* Central Center Label with Mini Album Artwork */}
+                <div className={`w-10 h-10 sm:w-14 sm:h-14 md:w-18 md:h-18 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
+                  isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
+                }`}>
+                  <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute w-2 h-2 rounded-full bg-black" />
+                </div>
+              </div>
+            </div>
+
+            {/* Front Borderless Album Sleeve with Dynamic Vocal Reactivity */}
+            <div
+              id="album-cover-box"
+              className="relative w-28 h-28 xs:w-36 xs:h-36 sm:w-48 sm:h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 xl:w-72 xl:h-72 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.95)] bg-zinc-950 flex-shrink-0 z-10 will-change-transform"
+            >
+              {/* Full-Color Cover Artwork */}
+              <img
+                src={album.cover_url}
+                alt={album.title}
+                className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 ${
+                  isCurrentPlayingThisAlbum && isPlaying ? 'scale-[1.02]' : ''
+                }`}
+              />
+
+              {/* Overlay with Gloss Sheen */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/50 via-transparent to-white/10 opacity-70 group-hover:opacity-40 transition-opacity" />
+
+              {/* Floating Central Play / Pause Button with Backdrop Blur */}
+              <div className="absolute inset-0 flex items-center justify-center">
                 <div
-                  id="album-vinyl-disc"
-                  className="w-full h-full rounded-full bg-[#0a0a0a] shadow-[0_15px_40px_rgba(0,0,0,0.9)] flex items-center justify-center will-change-transform"
-                  style={{
-                    background: 'radial-gradient(circle, #222 2%, #0d0d0d 15%, #181818 30%, #080808 45%, #151515 60%, #050505 85%, #000 100%)',
-                  }}
+                  className="w-9 h-9 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/90 backdrop-blur-md text-black flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-all duration-300 group-hover:scale-110 group-hover:bg-white active:scale-95"
                 >
-                  {/* Vinyl Grooves Texture */}
-                  <div className="absolute inset-2 rounded-full border border-white/[0.04]" />
-                  <div className="absolute inset-5 rounded-full border border-white/[0.06]" />
-                  <div className="absolute inset-10 rounded-full border border-white/[0.08]" />
-                  <div className="absolute inset-14 rounded-full border border-white/[0.05]" />
-
-                  {/* Central Center Label with Mini Album Artwork */}
-                  <div className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
-                    isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
-                  }`}>
-                    <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
-                    <div className="absolute w-2.5 h-2.5 rounded-full bg-black" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Front Borderless Album Sleeve with Dynamic Vocal Reactivity */}
-              <div
-                id="album-cover-box"
-                className="relative w-40 h-40 xs:w-44 xs:h-44 sm:w-56 sm:h-56 md:w-60 md:h-60 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] bg-zinc-950 flex-shrink-0 z-10 will-change-transform"
-              >
-                {/* Full-Color Cover Artwork */}
-                <img
-                  src={album.cover_url}
-                  alt={album.title}
-                  className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 ${
-                    isCurrentPlayingThisAlbum && isPlaying ? 'scale-[1.02]' : ''
-                  }`}
-                />
-
-                {/* Overlay with Gloss Sheen */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-black/50 via-transparent to-white/10 opacity-70 group-hover:opacity-40 transition-opacity" />
-
-                {/* Floating Central Play / Pause Button with Backdrop Blur (Subtle on Mobile) */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div
-                    className="w-11 h-11 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-white/90 backdrop-blur-md text-black flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-all duration-300 group-hover:scale-110 group-hover:bg-white active:scale-95"
-                  >
-                    {isCurrentPlayingThisAlbum && isPlaying ? (
-                      <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-current" />
-                    ) : (
-                      <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-current ml-0.5" />
-                    )}
-                  </div>
+                  {isCurrentPlayingThisAlbum && isPlaying ? (
+                    <Pause className="w-4 h-4 sm:w-6 sm:h-6 fill-current" />
+                  ) : (
+                    <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current ml-0.5" />
+                  )}
                 </div>
               </div>
             </div>
-
-            {/* Album Title & Artist */}
-            <div className="space-y-0.5 sm:space-y-1 px-2 w-full">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-black tracking-tight uppercase text-white font-cyber truncate drop-shadow-md">
-                {album.title}
-              </h1>
-              <p className="text-[11px] sm:text-xs md:text-sm font-mono text-slate-300 uppercase tracking-widest font-semibold truncate">
-                {album.artist}
-              </p>
-            </div>
-
-            {/* Action Buttons Deck */}
-            <div className="w-full max-w-sm flex items-center gap-2 pt-0.5 sm:pt-1">
-              {/* Main Play / Pause Button */}
-              <button
-                onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
-                className="flex-1 py-2.5 sm:py-3 px-4 sm:px-5 rounded-full bg-white hover:bg-slate-100 text-black font-black font-mono text-[11px] sm:text-xs uppercase tracking-wider sm:tracking-widest shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-              >
-                {isCurrentPlayingThisAlbum && isPlaying ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
-                    <span>PAUSE PLAYBACK</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
-                    <span>PLAY ALL TRACKS</span>
-                  </>
-                )}
-              </button>
-
-              {/* Shuffle Button */}
-              <button
-                onClick={handleShufflePlay}
-                title={shuffleMode ? 'Tắt trộn bài' : 'Phát ngẫu nhiên'}
-                className={`p-2.5 sm:p-3 rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
-                  shuffleMode
-                    ? 'bg-white text-black border-white shadow-lg'
-                    : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
-                }`}
-              >
-                <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-
           </div>
 
-          {/* ========================================================================= */}
-          {/* RIGHT COLUMN: Dark Neumorphic Soft-Emboss Playlist Panel                  */}
-          {/* ========================================================================= */}
-          <div
-            className={`w-full flex-1 min-w-0 font-mono transition-all duration-700 delay-100 ease-out ${
-              animateSlide
-                ? 'lg:translate-x-0 lg:opacity-100'
-                : 'lg:translate-x-20 lg:opacity-0 pointer-events-none'
-            }`}
-          >
-            {/* Unified Dark Neumorphic Panel */}
-            <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 lg:p-5 h-[340px] xs:h-[380px] sm:h-[440px] md:h-[480px] lg:h-[510px] xl:h-[530px] flex flex-col w-full overflow-hidden">
-              
-              {/* Scrollable Tracklist with Smooth Touch Scrolling and Safe Bottom Spacing */}
-              <div className="flex-1 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+          {/* Album Title & Artist */}
+          <div className="space-y-0.5 px-2 w-full">
+            <h1 className="text-sm xs:text-base sm:text-2xl lg:text-3xl font-black tracking-tight uppercase text-white font-cyber truncate drop-shadow-md">
+              {album.title}
+            </h1>
+            <p className="text-[10px] sm:text-xs font-mono text-slate-300 uppercase tracking-widest font-semibold truncate">
+              {album.artist}
+            </p>
+          </div>
+
+          {/* Action Buttons Deck */}
+          <div className="w-full max-w-xs flex items-center gap-2 pt-0.5">
+            {/* Main Play / Pause Button */}
+            <button
+              onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
+              className="flex-1 py-1.5 sm:py-2.5 px-3 sm:px-4 rounded-full bg-white hover:bg-slate-100 text-black font-black font-mono text-[10px] sm:text-xs uppercase tracking-wider shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            >
+              {isCurrentPlayingThisAlbum && isPlaying ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                  <span>PAUSE</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>PLAY ALL</span>
+                </>
+              )}
+            </button>
+
+            {/* Shuffle Button */}
+            <button
+              onClick={handleShufflePlay}
+              title={shuffleMode ? 'Tắt trộn bài' : 'Phát ngẫu nhiên'}
+              className={`p-1.5 sm:p-2.5 rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
+                shuffleMode
+                  ? 'bg-white text-black border-white shadow-lg'
+                  : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+              }`}
+            >
+              <Shuffle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+        </div>
+
+        {/* ========================================================================= */}
+        {/* RIGHT COLUMN: Dark Neumorphic Soft-Emboss Playlist Panel (Scrollable)     */}
+        {/* ========================================================================= */}
+        <div
+          className={`flex-1 min-h-0 w-full max-w-2xl h-full flex flex-col font-mono transition-all duration-700 delay-100 ease-out ${
+            animateSlide
+              ? 'lg:translate-x-0 lg:opacity-100'
+              : 'lg:translate-x-20 lg:opacity-0 pointer-events-none'
+          }`}
+        >
+          {/* Unified Dark Neumorphic Panel */}
+          <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden">
+            
+            {/* Scrollable Tracklist with Smooth Touch Scrolling */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {tracks.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
                     <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />

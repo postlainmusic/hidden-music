@@ -96,7 +96,7 @@ export default function ShortcutsDrawer() {
   if (!isAuth) return null;
 
   return (
-    <div ref={bubbleRef} className="fixed top-20 right-3 sm:right-6 z-[85] select-none font-mono">
+    <div ref={bubbleRef} className="hidden md:block fixed top-20 right-3 sm:right-6 z-[85] select-none font-mono">
       {/* Mini Floating Trigger Button */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}

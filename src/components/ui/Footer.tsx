@@ -22,7 +22,7 @@ export default function Footer({ isFixed = false }: FooterProps) {
   }, []);
 
   const footerClass = isFixed
-    ? 'fixed bottom-0 left-0 right-0 z-20 pointer-events-auto bg-black/90 border-t border-white/10 px-4 md:px-8 py-2.5 text-white font-mono text-[10px] select-none backdrop-blur-md w-full'
+    ? 'hidden sm:flex fixed bottom-0 left-0 right-0 z-20 pointer-events-auto bg-black/90 border-t border-white/10 px-4 md:px-8 py-2.5 text-white font-mono text-[10px] select-none backdrop-blur-md w-full'
     : 'relative w-full z-20 pointer-events-auto bg-black border-t border-white/10 px-4 md:px-8 py-3.5 text-white font-mono text-[10px] select-none mt-auto';
 
   return (

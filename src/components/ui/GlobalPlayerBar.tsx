@@ -17,7 +17,8 @@ import {
   Mic2,
   Film,
   Sparkles,
-  Maximize2
+  Maximize2,
+  X
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex, extractVideoOffset } from '@/lib/lrcParser';
@@ -530,212 +531,261 @@ export default function GlobalPlayerBar() {
 
   const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
-  return (
-    <div className="fixed bottom-2.5 sm:bottom-4 md:bottom-12 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
-      {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD (OVERFLOW VISIBLE FOR VOLUME POPOVER) */}
-      <div
-        ref={barContainerRef}
-        className={`w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-visible ${
-          hasDrawerOpen ? 'rounded-[24px] sm:rounded-[32px]' : 'rounded-2xl sm:rounded-[32px]'
-        }`}
-      >
-        {/* High-Energy Kick Flash Gradient Overlay */}
-        <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-[inherit]" />
+  const renderDrawerContent = () => (
+    <>
+      {/* 1. DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
+      {showVideo && currentTrack?.video_url && (
+        <div className="w-full flex-1 flex flex-col justify-between text-white font-mono min-h-0">
+          <div
+            ref={videoContainerRef}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+            }}
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleFullscreen();
+            }}
+            className="flex-1 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-[220px] sm:min-h-[300px] group/video"
+          >
+            {/* HIDDEN MUSIC Watermark */}
+            <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-40 flex items-center gap-1.5 bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
+              <Disc3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white animate-spin-slow" />
+              <span className="font-cyber font-extrabold text-[10px] sm:text-[11px] tracking-wider text-white">HIDDEN MUSIC</span>
+            </div>
 
-        {/* ============================================================= */}
-        {/* INTEGRATED DRAWER 1: DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
-        {/* ============================================================= */}
-        {showVideo && currentTrack?.video_url && (
-          <div className="w-full h-[260px] xs:h-[300px] sm:h-[400px] md:h-[500px] p-2 sm:p-3 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[24px] sm:rounded-t-[32px]">
-            {/* Video Stage Viewport */}
-            <div
-              ref={videoContainerRef}
-              onContextMenu={(e) => {
-                e.preventDefault();
+            {/* Central Play/Pause Watermark Button for Double Tap/Click */}
+            {!isPlaying && (
+              <div
+                onClick={handleTogglePlay}
+                className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 cursor-pointer pointer-events-auto transition-opacity"
+              >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
+                  <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-0.5 sm:ml-1" />
+                </div>
+              </div>
+            )}
+
+            {/* Fullscreen Button */}
+            <button
+              onClick={(e) => {
                 e.stopPropagation();
-                return false;
+                toggleFullscreen();
               }}
+              title="Toàn màn hình"
+              className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-40 p-2 rounded-xl bg-black/80 hover:bg-white hover:text-black border border-white/20 text-white shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 text-[10px] font-bold font-mono"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">FULLSCREEN</span>
+            </button>
+
+            {/* Clean Subtitle Overlay with Live Beat Sync */}
+            {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
+              <div className="absolute bottom-3 sm:bottom-6 left-2 right-2 sm:left-4 sm:right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-150">
+                <div className="bg-black/90 backdrop-blur-md px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.95)] max-w-2xl text-center">
+                  <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg leading-relaxed tracking-wide">
+                    {parsedLyrics[activeLyricIdx].text}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Direct HTML5 Video Player */}
+            <video
+              ref={videoRef}
+              src={currentTrack.video_url}
+              playsInline
+              preload="auto"
+              onClick={handleTogglePlay}
               onDoubleClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 toggleFullscreen();
               }}
-              className="flex-1 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-0 group/video"
-            >
-              {/* HIDDEN MUSIC Watermark */}
-              <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-40 flex items-center gap-1.5 bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
-                <Disc3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white animate-spin-slow" />
-                <span className="font-cyber font-extrabold text-[10px] sm:text-[11px] tracking-wider text-white">HIDDEN MUSIC</span>
-              </div>
-
-              {/* Central Play/Pause Watermark Button for Double Tap/Click */}
-              {!isPlaying && (
-                <div
-                  onClick={handleTogglePlay}
-                  className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 cursor-pointer pointer-events-auto transition-opacity"
-                >
-                  <div className="w-12 h-12 sm:w-18 sm:h-18 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
-                    <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-0.5 sm:ml-1" />
-                  </div>
-                </div>
-              )}
-
-              {/* Fullscreen Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFullscreen();
-                }}
-                title="Toàn màn hình (hoặc nhấp đúp vào video)"
-                className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-40 p-2 rounded-xl bg-black/80 hover:bg-white hover:text-black border border-white/20 text-white shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 text-[10px] font-bold font-mono"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">FULLSCREEN</span>
-              </button>
-
-              {/* Clean Subtitle Overlay with Live Beat Sync */}
-              {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
-                <div className="absolute bottom-3 sm:bottom-6 left-2 right-2 sm:left-4 sm:right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-150">
-                  <div className="bg-black/90 backdrop-blur-md px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.95)] max-w-2xl text-center">
-                    <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg leading-relaxed tracking-wide">
-                      {parsedLyrics[activeLyricIdx].text}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Direct HTML5 Video Player */}
-              <video
-                ref={videoRef}
-                src={currentTrack.video_url}
-                playsInline
-                preload="auto"
-                onClick={handleTogglePlay}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  toggleFullscreen();
-                }}
-                onLoadedMetadata={(e) => {
-                  const targetVidTime = Math.max(0, currentTime + videoOffset);
-                  if (targetVidTime > 0) {
-                    e.currentTarget.currentTime = targetVidTime;
-                  }
-                  if (isPlaying) {
-                    e.currentTarget.play().catch(() => {});
-                  }
-                }}
-                onTimeUpdate={(e) => {
-                  if (showVideo) {
-                    const rawVidTime = e.currentTarget.currentTime;
-                    const effectiveSongTime = Math.max(0, rawVidTime - videoOffset);
-                    setCurrentTime(effectiveSongTime);
-                  }
-                }}
-                onPlay={() => {
-                  if (showVideo) setIsPlaying(true);
-                }}
-                onPause={() => {
-                  if (showVideo) setIsPlaying(false);
-                }}
-                onEnded={nextTrack}
-                className="w-full h-full object-contain select-none cursor-pointer relative z-10"
-              />
-            </div>
+              onLoadedMetadata={(e) => {
+                const targetVidTime = Math.max(0, currentTime + videoOffset);
+                if (targetVidTime > 0) {
+                  e.currentTarget.currentTime = targetVidTime;
+                }
+                if (isPlaying) {
+                  e.currentTarget.play().catch(() => {});
+                }
+              }}
+              onTimeUpdate={(e) => {
+                if (showVideo) {
+                  const rawVidTime = e.currentTarget.currentTime;
+                  const effectiveSongTime = Math.max(0, rawVidTime - videoOffset);
+                  setCurrentTime(effectiveSongTime);
+                }
+              }}
+              onPlay={() => {
+                if (showVideo) setIsPlaying(true);
+              }}
+              onPause={() => {
+                if (showVideo) setIsPlaying(false);
+              }}
+              onEnded={nextTrack}
+              className="w-full h-full object-contain select-none cursor-pointer relative z-10"
+            />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ============================================================= */}
-        {/* INTEGRATED DRAWER 2: GOTHIC LYRICS (SEAMLESS CONTINUOUS PANEL) */}
-        {/* ============================================================= */}
-        {showLyrics && (
-          <div className="w-full h-[260px] xs:h-[300px] sm:h-[380px] md:h-[430px] p-2.5 sm:p-5 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[24px] sm:rounded-t-[32px]">
-            {/* Gothic Synchronized Lyrics List */}
-            <div className="flex-1 overflow-y-auto no-scrollbar my-auto px-2 py-6 sm:py-10 space-y-3.5 sm:space-y-5 text-center scroll-smooth relative z-10" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {parsedLyrics.length > 0 ? (
-                parsedLyrics.map((line, idx) => {
-                  const isActive = idx === activeLyricIdx;
-                  return (
-                    <div
-                      key={`${line.time}_${idx}`}
-                      ref={isActive ? activeLineRef : null}
-                      onClick={() => handleSeek(line.time)}
-                      className={`cursor-pointer transition-all duration-300 py-1 px-2 sm:px-4 ${
-                        isActive
-                          ? 'scale-105 opacity-100'
-                          : 'opacity-35 hover:opacity-75'
-                      }`}
-                    >
-                      <p
-                        className={`transition-all duration-200 ${
-                          isActive
-                            ? 'text-white font-extrabold text-sm sm:text-lg md:text-xl tracking-wide font-cyber'
-                            : 'text-zinc-400 font-medium text-xs sm:text-sm font-sans'
-                        }`}
-                      >
-                        {line.text}
-                      </p>
-                    </div>
-                  );
-                })
-              ) : currentTrack.lyrics ? (
-                <div className="whitespace-pre-wrap text-xs sm:text-sm text-zinc-300 leading-relaxed font-sans text-center px-2 sm:px-4 py-4 sm:py-6">
-                  {currentTrack.lyrics}
-                </div>
-              ) : (
-                <div className="text-center py-12 sm:py-16 text-zinc-500 text-xs tracking-widest flex flex-col items-center gap-2 font-mono">
-                  <Mic2 className="w-5 h-5 sm:w-7 sm:h-7 text-zinc-600 mb-1" />
-                  <span>CHƯA CÓ LỜI BÀI HÁT CHO TÁC PHẨM NÀY</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================= */}
-        {/* INTEGRATED DRAWER 3: QUEUE LIST */}
-        {/* ============================================================= */}
-        {showQueue && (
-          <div className="w-full h-[240px] xs:h-[280px] sm:h-[340px] p-2.5 sm:p-4 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-20 bg-transparent overflow-hidden rounded-t-[24px] sm:rounded-t-[32px]">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2 sm:pb-2.5 mb-2">
-              <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider font-cyber text-[10px]">
-                <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />
-                <span>DANH SÁCH PHÁT ({playlist.length})</span>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 sm:space-y-1.5 pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {playlist.map((trk, i) => {
-                const isCurrent = currentTrack?.id === trk.id;
+      {/* 2. GOTHIC LYRICS PANEL */}
+      {showLyrics && (
+        <div className="w-full flex-1 flex flex-col justify-between text-white font-sans min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto no-scrollbar my-auto px-2 py-4 sm:py-8 space-y-3 sm:space-y-4 text-center scroll-smooth relative z-10" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {parsedLyrics.length > 0 ? (
+              parsedLyrics.map((line, idx) => {
+                const isActive = idx === activeLyricIdx;
                 return (
                   <div
-                    key={`${trk.id}_${i}`}
-                    onClick={() => playTrack(trk, currentAlbum, playlist)}
-                    className={`p-2 sm:p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
-                      isCurrent
-                        ? 'bg-white text-black font-extrabold border-white shadow-lg'
-                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
+                    key={`${line.time}_${idx}`}
+                    ref={isActive ? activeLineRef : null}
+                    onClick={() => handleSeek(line.time)}
+                    className={`cursor-pointer transition-all duration-300 py-1 px-2 sm:px-4 ${
+                      isActive
+                        ? 'scale-105 opacity-100'
+                        : 'opacity-35 hover:opacity-75'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <span className="text-[10px] opacity-60 w-4 font-mono">{i + 1}.</span>
-                      <span className="truncate text-xs font-semibold">{trk.title}</span>
-                    </div>
-                    {trk.video_url ? (
-                      <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/15 text-white border border-white/30 font-mono font-bold">
-                        MV
-                      </span>
-                    ) : (
-                      <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/5 text-slate-400 font-mono">
-                        AUDIO
-                      </span>
-                    )}
+                    <p
+                      className={`transition-all duration-200 ${
+                        isActive
+                          ? 'text-white font-extrabold text-sm sm:text-lg md:text-xl tracking-wide font-cyber'
+                          : 'text-zinc-400 font-medium text-xs sm:text-sm font-sans'
+                      }`}
+                    >
+                      {line.text}
+                    </p>
                   </div>
                 );
-              })}
+              })
+            ) : currentTrack.lyrics ? (
+              <div className="whitespace-pre-wrap text-xs sm:text-sm text-zinc-300 leading-relaxed font-sans text-center px-2 sm:px-4 py-4 sm:py-6">
+                {currentTrack.lyrics}
+              </div>
+            ) : (
+              <div className="text-center py-10 sm:py-16 text-zinc-500 text-xs tracking-widest flex flex-col items-center gap-2 font-mono">
+                <Mic2 className="w-5 h-5 sm:w-7 sm:h-7 text-zinc-600 mb-1" />
+                <span>CHƯA CÓ LỜI BÀI HÁT CHO TÁC PHẨM NÀY</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. QUEUE LIST PANEL */}
+      {showQueue && (
+        <div className="w-full flex-1 flex flex-col justify-between text-white font-mono text-xs min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 sm:space-y-1.5 pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {playlist.map((trk, i) => {
+              const isCurrent = currentTrack?.id === trk.id;
+              return (
+                <div
+                  key={`${trk.id}_${i}`}
+                  onClick={() => playTrack(trk, currentAlbum, playlist)}
+                  className={`p-2 sm:p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
+                    isCurrent
+                      ? 'bg-white text-black font-extrabold border-white shadow-lg'
+                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <span className="text-[10px] opacity-60 w-4 font-mono">{i + 1}.</span>
+                    <span className="truncate text-xs font-semibold">{trk.title}</span>
+                  </div>
+                  {trk.video_url ? (
+                    <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/15 text-white border border-white/30 font-mono font-bold">
+                      MV
+                    </span>
+                  ) : (
+                    <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/5 text-slate-400 font-mono">
+                      AUDIO
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {/* MOBILE FULLSCREEN BOTTOM SHEET MODAL (CLEAN SLIDE-UP, ZERO DOME CLIPPING) */}
+      {hasDrawerOpen && (
+        <div className="md:hidden fixed inset-x-0 bottom-0 top-12 z-[9999] bg-[#0c0c10]/98 backdrop-blur-3xl rounded-t-[28px] border-t border-white/20 p-3.5 flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.95)] animate-slideUp">
+          {/* Header Bar */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2.5 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              {showLyrics && <Mic2 className="w-4 h-4 text-white" />}
+              {showQueue && <Disc3 className="w-4 h-4 text-white animate-spin-slow" />}
+              {showVideo && <Film className="w-4 h-4 text-white" />}
+              <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
+                {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : showQueue ? `DANH SÁCH PHÁT (${playlist.length})` : 'VIDEO ÂM NHẠC (MV)'}
+              </span>
             </div>
+            <button
+              onClick={() => {
+                setShowLyrics(false);
+                setShowQueue(false);
+                setShowVideo(false);
+              }}
+              className="p-1.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Drawer Body */}
+          {renderDrawerContent()}
+        </div>
+      )}
+
+      {/* GLOBAL FLOATING PLAYER BAR CONTAINER */}
+      <div className="fixed bottom-2.5 sm:bottom-4 md:bottom-12 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex flex-col items-center overflow-visible">
+        {/* DESKTOP ATTACHED UPWARD DRAWER CARD */}
+        {hasDrawerOpen && (
+          <div className="hidden md:flex w-full max-w-5xl md:max-w-6xl mx-auto mb-3 rounded-2xl border border-white/20 bg-[#0c0c10]/98 backdrop-blur-3xl shadow-2xl overflow-hidden p-4 flex-col h-[380px] md:h-[450px] animate-slideUp flex-shrink-0">
+            {/* Desktop Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2.5 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                {showLyrics && <Mic2 className="w-4 h-4 text-white" />}
+                {showQueue && <Disc3 className="w-4 h-4 text-white animate-spin-slow" />}
+                {showVideo && <Film className="w-4 h-4 text-white" />}
+                <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
+                  {showLyrics ? 'LỜI BÀI HÁT (GOTHIC LYRICS)' : showQueue ? `DANH SÁCH PHÁT (${playlist.length})` : 'VIDEO ÂM NHẠC (MV)'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setShowLyrics(false);
+                  setShowQueue(false);
+                  setShowVideo(false);
+                }}
+                className="p-1.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            {renderDrawerContent()}
           </div>
         )}
+
+        {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD */}
+        <div
+          ref={barContainerRef}
+          className="w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-visible rounded-2xl sm:rounded-[32px]"
+        >
+          {/* High-Energy Kick Flash Gradient Overlay */}
+          <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-[inherit]" />
 
         {/* ============================================================= */}
         {/* MOBILE CONTROL BAR LAYOUT (< md: 2-Row Optimized Structure) */}
