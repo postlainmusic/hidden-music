@@ -575,8 +575,8 @@ export default function GlobalPlayerBar() {
 
             {/* Subtitle Overlay with Live Beat Sync (20% Black Glass & Cinema Font) */}
             {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
-              <div className={`absolute ${isFullscreen ? 'bottom-16 sm:bottom-20' : 'bottom-3 sm:bottom-6'} left-2 right-2 sm:left-4 sm:right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-200`}>
-                <div className="bg-black/20 backdrop-blur-md px-4 py-2 sm:px-6 sm:py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] max-w-2xl text-center">
+              <div className={`absolute ${isFullscreen ? 'bottom-22 sm:bottom-26' : 'bottom-3 sm:bottom-6'} left-4 right-4 sm:left-6 sm:right-6 z-40 flex justify-center pointer-events-none select-none transition-all duration-200`}>
+                <div className="bg-black/25 backdrop-blur-md px-4 py-2 sm:px-6 sm:py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] max-w-2xl text-center">
                   <p className="text-white font-medium text-sm sm:text-base md:text-lg lg:text-xl leading-relaxed tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
                     {parsedLyrics[activeLyricIdx].text}
                   </p>
@@ -653,7 +653,7 @@ export default function GlobalPlayerBar() {
               </div>
             )}
 
-            {/* Direct HTML5 Video Player (100% Muted, Audio Master Driven) */}
+            {/* Direct HTML5 Video Player (100% Muted, Natural Aspect Ratio Containment) */}
             <video
               ref={videoRef}
               src={currentTrack.video_url}
@@ -675,7 +675,11 @@ export default function GlobalPlayerBar() {
                   e.currentTarget.play().catch(() => {});
                 }
               }}
-              className="w-full h-full object-contain select-none cursor-pointer relative z-10"
+              className={`${
+                isFullscreen
+                  ? 'max-h-[82vh] max-w-[88vw] w-auto h-auto rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.95)] border border-white/10'
+                  : 'w-full h-full'
+              } object-contain select-none cursor-pointer relative z-10 transition-all duration-300`}
             />
           </div>
         </div>
