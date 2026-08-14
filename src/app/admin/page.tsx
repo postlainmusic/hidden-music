@@ -224,9 +224,10 @@ export default function AdminPage() {
       }
 
       const albumData = {
-        title: albumTitle,
-        artist: albumArtist,
-        original_year: Number(albumYear),
+        title: albumTitle.trim(),
+        artist: albumArtist.trim(),
+        original_year: Number(albumYear) || new Date().getFullYear(),
+        ban_reason: '',
         cover_url: finalCoverUrl,
         is_published: true,
       };
