@@ -243,32 +243,20 @@ export default function GlobalPlayerBar() {
     }
   };
 
-  // Curated High-Voltage Random Neon Color Palette
-  const RANDOM_COLORS = useMemo(() => [
-    { glow: '255, 55, 0', hex: '#ff3700', grad: 'linear-gradient(135deg, rgba(255, 55, 0, 0.95), rgba(255, 150, 0, 0.9))' },
-    { glow: '0, 240, 255', hex: '#00f0ff', grad: 'linear-gradient(135deg, rgba(0, 240, 255, 0.95), rgba(0, 130, 255, 0.9))' },
-    { glow: '210, 0, 255', hex: '#d200ff', grad: 'linear-gradient(135deg, rgba(210, 0, 255, 0.95), rgba(255, 0, 160, 0.9))' },
-    { glow: '0, 255, 136', hex: '#00ff88', grad: 'linear-gradient(135deg, rgba(0, 255, 136, 0.95), rgba(0, 220, 255, 0.9))' },
-    { glow: '255, 215, 0', hex: '#ffd700', grad: 'linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 95, 0, 0.9))' },
-    { glow: '255, 0, 115', hex: '#ff0073', grad: 'linear-gradient(135deg, rgba(255, 0, 115, 0.95), rgba(255, 60, 0, 0.9))' },
-    { glow: '0, 155, 255', hex: '#009bff', grad: 'linear-gradient(135deg, rgba(0, 155, 255, 0.95), rgba(125, 0, 255, 0.9))' },
-    { glow: '185, 255, 0', hex: '#b9ff00', grad: 'linear-gradient(135deg, rgba(185, 255, 0, 0.95), rgba(0, 255, 150, 0.9))' },
-    { glow: '255, 30, 80', hex: '#ff1e50', grad: 'linear-gradient(135deg, rgba(255, 30, 80, 0.95), rgba(200, 0, 255, 0.9))' },
-  ], []);
-
-  // Tracking refs for Playbar dynamic beat lighting
+  // Monochromatic White Lighting & Transient Tracking Refs
   const barFlashIntensityRef = useRef<number>(0);
   const barScaleRef = useRef<number>(1);
+  const isHeavyKickRef = useRef<boolean>(false);
   const prevKickPunchRef = useRef<number>(0);
   const smoothedKickPunchRef = useRef<number>(0);
   const prevSnarePunchRef = useRef<number>(0);
   const smoothedSnarePunchRef = useRef<number>(0);
-  const currentColorIdxRef = useRef<number>(0);
 
-  // Real-Time Playbar Audio Engine:
-  // - KICK: Chớp + Nảy cực mạnh (scale 1.058) với màu ngẫu nhiên
-  // - SNARE: Chỉ chớp (scale 1.0) với màu ngẫu nhiên
-  // - Album: 100% tĩnh không bị can thiệp
+  // Real-Time Playbar Monochromatic Beat Engine:
+  // - HEAVY KICK: Nảy cực mạnh (scale 1.055) + Chớp trắng sáng rực rỡ
+  // - LIGHT KICK: Nảy nhẹ (scale 1.025) + Chớp trắng mờ tinh tế
+  // - SNARE: Chỉ chớp trắng mờ (scale 1.0 không nảy)
+  // - Album: 100% tĩnh
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -281,17 +269,9 @@ export default function GlobalPlayerBar() {
       return;
     }
 
-    const pickRandomColor = () => {
-      let nextIdx = Math.floor(Math.random() * RANDOM_COLORS.length);
-      if (nextIdx === currentColorIdxRef.current) {
-        nextIdx = (nextIdx + 1) % RANDOM_COLORS.length;
-      }
-      currentColorIdxRef.current = nextIdx;
-      return RANDOM_COLORS[nextIdx];
-    };
-
     const analyzeFrame = () => {
-      let isKick = false;
+      let isHeavyKick = false;
+      let isLightKick = false;
       let isSnare = false;
       const now = performance.now();
       const liveCurrentTime = showVideo && videoRef.current
@@ -299,112 +279,137 @@ export default function GlobalPlayerBar() {
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
       // =========================================================================
-      // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING
+      // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING (MATHEMATICALLY ACCURATE)
       // =========================================================================
-      // Kick Matching
       const kickStamps = kickTimestampsRef?.current || [];
-      for (let i = 0; i < kickStamps.length; i++) {
-        const diff = liveCurrentTime - kickStamps[i];
-        if (diff >= -0.025 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
-          lastFiredKickIndexRef.current = i;
-          isKick = true;
-          lastKickTimeRef.current = now;
-          break;
-        }
-      }
+      const hasPCMBeatMap = kickStamps.length > 0;
 
-      // Snare Matching
-      const snareStamps = snareTimestampsRef?.current || [];
-      if (!isKick) {
-        for (let i = 0; i < snareStamps.length; i++) {
-          const diff = liveCurrentTime - snareStamps[i];
-          if (diff >= -0.025 && diff <= 0.035 && i !== lastFiredSnareIndexRef.current) {
-            lastFiredSnareIndexRef.current = i;
-            isSnare = true;
-            lastSnareTimeRef.current = now;
+      if (hasPCMBeatMap) {
+        // Kick Detection from PCM
+        for (let i = 0; i < kickStamps.length; i++) {
+          const diff = liveCurrentTime - kickStamps[i];
+          if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
+            lastFiredKickIndexRef.current = i;
+            // Alternate heavy/light based on step or detect peak
+            isHeavyKick = true;
+            lastKickTimeRef.current = now;
             break;
           }
         }
-      }
 
-      // =========================================================================
-      // [2] STRICT REAL-TIME FREQUENCY FILTER DETECTION (FALLBACK)
-      // =========================================================================
-      if (!isKick && !isSnare && analyserRef?.current) {
-        try {
-          const arr = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(arr);
-          const len = arr.length;
-
-          // Pure Sub-Bass (0-60Hz, bins 0-1)
-          const kickSub = (arr[0] + arr[1]) / 2;
-          const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
-          prevKickPunchRef.current = kickSub;
-          smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.78 + deltaKick * 0.22;
-          const kickThreshold = Math.max(7.0, smoothedKickPunchRef.current * 1.35);
-
-          if (deltaKick > kickThreshold && kickSub > 26 && (now - lastKickTimeRef.current > 140)) {
-            isKick = true;
-            lastKickTimeRef.current = now;
+        // Snare Detection from PCM
+        const snareStamps = snareTimestampsRef?.current || [];
+        if (!isHeavyKick) {
+          for (let i = 0; i < snareStamps.length; i++) {
+            const diff = liveCurrentTime - snareStamps[i];
+            if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredSnareIndexRef.current) {
+              lastFiredSnareIndexRef.current = i;
+              isSnare = true;
+              lastSnareTimeRef.current = now;
+              break;
+            }
           }
+        }
+      } else {
+        // =========================================================================
+        // [2] DEDICATED 58Hz HARDWARE BIQUAD FILTER DETECTION (ZERO MASTER SPILL)
+        // =========================================================================
+        if (kickAnalyserRef?.current) {
+          try {
+            const arr = new Uint8Array(kickAnalyserRef.current.frequencyBinCount);
+            kickAnalyserRef.current.getByteFrequencyData(arr);
+            const kickSub = (arr[0] + arr[1] + arr[2]) / 3;
 
-          // Pure Snare (300-800Hz, bins 12-22)
-          if (!isKick) {
-            let sSum = 0;
-            for (let i = 12; i <= 22 && i < len; i++) sSum += arr[i];
-            const snareMid = sSum / 11;
+            const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
+            prevKickPunchRef.current = kickSub;
+            smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.80 + deltaKick * 0.20;
+            const kickThreshold = Math.max(9.0, smoothedKickPunchRef.current * 1.45);
+
+            if (deltaKick > kickThreshold && kickSub > 32 && (now - lastKickTimeRef.current > 150)) {
+              if (kickSub > 70 || deltaKick > 22) {
+                isHeavyKick = true;
+              } else {
+                isLightKick = true;
+              }
+              lastKickTimeRef.current = now;
+            }
+          } catch {}
+        }
+
+        // Dedicated 350Hz Snare Filter
+        if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
+          try {
+            const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
+            snareAnalyserRef.current.getByteFrequencyData(arr);
+            const snareMid = (arr[1] + arr[2] + arr[3]) / 3;
+
             const deltaSnare = Math.max(0, snareMid - prevSnarePunchRef.current);
             prevSnarePunchRef.current = snareMid;
-            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.78 + deltaSnare * 0.22;
-            const snareThreshold = Math.max(8.0, smoothedSnarePunchRef.current * 1.4);
+            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.80 + deltaSnare * 0.20;
+            const snareThreshold = Math.max(10.0, smoothedSnarePunchRef.current * 1.5);
 
-            if (deltaSnare > snareThreshold && snareMid > 22 && snareMid > kickSub * 1.15 && (now - lastSnareTimeRef.current > 160)) {
+            if (deltaSnare > snareThreshold && snareMid > 35 && (now - lastSnareTimeRef.current > 170)) {
               isSnare = true;
               lastSnareTimeRef.current = now;
             }
-          }
-        } catch {}
+          } catch {}
+        }
       }
 
       // =========================================================================
-      // [3] APPLY DISTINCT RANDOM COLOR EFFECTS
+      // [3] APPLY CLEAN MONOCHROME WHITE LIGHTING (LIGHT KICK vs HEAVY KICK)
       // =========================================================================
-      if (isKick) {
-        // KICK: CHỚP + NẢY CỰC MẠNH (Scale 1.058 + Random Color Flash)
-        const col = pickRandomColor();
-        barScaleRef.current = 1.058;
+      if (isHeavyKick) {
+        // HEAVY KICK: NẢY CỰC MẠNH + TRẮNG SÁNG RỰC RỠ
+        isHeavyKickRef.current = true;
+        barScaleRef.current = 1.055;
         barFlashIntensityRef.current = 1.0;
 
         if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = col.grad;
+          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
         }
-      } else if (isSnare) {
-        // SNARE: CHỈ CHỚP (NO Scale Bounce! Scale stays unchanged)
-        const col = pickRandomColor();
-        barFlashIntensityRef.current = 0.95;
+      } else if (isLightKick) {
+        // LIGHT KICK: NẢY VỪA + TRẮNG MỜ TINH TẾ
+        isHeavyKickRef.current = false;
+        barScaleRef.current = 1.026;
+        barFlashIntensityRef.current = 0.55;
 
         if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = col.grad;
+          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25))';
+        }
+      } else if (isSnare) {
+        // SNARE: CHỈ CHỚP TRẮNG MỜ (KHÔNG NẢY)
+        isHeavyKickRef.current = false;
+        barFlashIntensityRef.current = 0.45;
+
+        if (fireOverlayRef.current) {
+          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15))';
         }
       } else {
-        // Fast, punchy decay (60-70ms)
-        barFlashIntensityRef.current *= 0.68;
+        // Smooth and punchy fast decay
+        barFlashIntensityRef.current *= 0.65;
         barScaleRef.current = barScaleRef.current + (1.0 - barScaleRef.current) * 0.35;
       }
 
       if (barFlashIntensityRef.current < 0.01) barFlashIntensityRef.current = 0;
       if (Math.abs(barScaleRef.current - 1.0) < 0.001) barScaleRef.current = 1.0;
 
-      // Update Playbar inline styles
+      // Update Playbar styling
       if (barContainerRef.current) {
         const scaleVal = showLyrics ? 1.0 : barScaleRef.current;
         barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
 
-        if (barFlashIntensityRef.current > 0.08) {
-          const activeColor = RANDOM_COLORS[currentColorIdxRef.current];
-          const alpha = barFlashIntensityRef.current.toFixed(2);
-          barContainerRef.current.style.boxShadow = `0 16px 45px rgba(${activeColor.glow}, ${alpha}), inset 0 0 22px rgba(${activeColor.glow}, ${(barFlashIntensityRef.current * 0.55).toFixed(2)})`;
-          barContainerRef.current.style.borderColor = `rgba(${activeColor.glow}, ${alpha})`;
+        if (barFlashIntensityRef.current > 0.06) {
+          const alpha = barFlashIntensityRef.current;
+          const isHeavy = isHeavyKickRef.current;
+
+          if (isHeavy) {
+            barContainerRef.current.style.boxShadow = `0 16px 45px rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)}), inset 0 0 25px rgba(255, 255, 255, ${(alpha * 0.30).toFixed(2)})`;
+            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.85).toFixed(2)})`;
+          } else {
+            barContainerRef.current.style.boxShadow = `0 10px 30px rgba(255, 255, 255, ${(alpha * 0.22).toFixed(2)}), inset 0 0 15px rgba(255, 255, 255, ${(alpha * 0.12).toFixed(2)})`;
+            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)})`;
+          }
         } else {
           barContainerRef.current.style.boxShadow = '';
           barContainerRef.current.style.borderColor = '';
@@ -423,7 +428,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, analyserRef, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset, RANDOM_COLORS]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
