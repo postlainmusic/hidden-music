@@ -25,8 +25,6 @@ Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV B
  │  - title: "HVL"                                         │
  │  - artist: "MCK"                                        │
  │  - original_year: 2024                                  │
- │  - ban_reason: "Lý do cấm / bảo mật..."                 │
- │  - security_level: "TOP SECRET" / "CONFIDENTIAL"        │
  │  - cover_url: "https://..." (Ảnh màu thực tế)           │
  └────────────────────────────┬────────────────────────────┘
                               │ 1 - N (ForeignKey: album_id)

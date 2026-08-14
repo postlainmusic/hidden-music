@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation';
 import {
   Play,
   Pause,
-  Lock,
   Music,
   Film,
   Disc3
@@ -145,10 +144,6 @@ export default function AlbumDetailPage() {
                 <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-current ml-1" />
               )}
             </button>
-          </div>
-          <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/70 border border-white/30 backdrop-blur-md font-mono text-[10px] text-white flex items-center gap-1.5">
-            <Lock className="w-3 h-3 text-white" />
-            <span>{album.security_level || 'CONFIDENTIAL'}</span>
           </div>
         </div>
 
