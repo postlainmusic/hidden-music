@@ -75,13 +75,6 @@ export default function GlobalPlayerBar() {
   const lastSnareTimeRef = useRef<number>(0);
   const lastFiredKickIndexRef = useRef<number>(-1);
   const lastFiredSnareIndexRef = useRef<number>(-1);
-
-  const prevKickPunchRef = useRef<number>(0);
-  const smoothedKickPunchRef = useRef<number>(0);
-
-  const fireIntensityRef = useRef<number>(0);
-  const snareIntensityRef = useRef<number>(0);
-  const currentScaleRef = useRef<number>(1);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
