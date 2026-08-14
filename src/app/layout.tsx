@@ -4,6 +4,7 @@ import './globals.css';
 import { PlayerProvider } from '@/context/PlayerContext';
 import GlobalPlayerBar from '@/components/ui/GlobalPlayerBar';
 import CinematicVisualizer from '@/components/ui/CinematicVisualizer';
+import ShortcutsDrawer from '@/components/ui/ShortcutsDrawer';
 
 const outfit = Outfit({
   subsets: ['latin', 'latin-ext'],
@@ -51,6 +52,7 @@ export default function RootLayout({
           </div>
           <CinematicVisualizer />
           <GlobalPlayerBar />
+          <ShortcutsDrawer />
         </PlayerProvider>
       </body>
     </html>

@@ -414,55 +414,7 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER 1: DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
-          <div className="w-full h-[320px] sm:h-[440px] md:h-[540px] p-2.5 sm:p-4 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
-            {/* Header Bar inside Video Drawer */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-2 px-1 relative z-20">
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0">
-                  <Film className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-extrabold text-xs sm:text-sm text-white truncate tracking-wider font-cyber flex items-center gap-1.5 sm:gap-2">
-                    <span className="truncate">{currentTrack.title}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold bg-white/15 text-white border border-white/30 uppercase flex-shrink-0">
-                      1080P MV
-                    </span>
-                    {videoOffset > 0 && (
-                      <span className="hidden xs:inline-block px-2 py-0.5 rounded-full text-[8px] font-mono bg-amber-500/20 text-amber-300 border border-amber-400/40 uppercase flex-shrink-0">
-                        BẮT ĐẦU: {Math.floor(videoOffset / 60)}:{String(Math.floor(videoOffset % 60)).padStart(2, '0')}
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-[8px] sm:text-[9px] text-slate-400 truncate uppercase tracking-widest font-mono">
-                    {currentAlbum?.artist || 'VAULT ARTIST'} • VIDEO STAGE
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={() => {
-                    const vidContainer = videoRef.current?.parentElement;
-                    if (vidContainer) {
-                      if (!document.fullscreenElement) {
-                        vidContainer.requestFullscreen?.().catch(() => {});
-                      } else {
-                        document.exitFullscreen?.().catch(() => {});
-                      }
-                    }
-                  }}
-                  className="p-1.5 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white hover:text-black transition-colors"
-                  title="Toàn màn hình"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-                <span className="hidden sm:flex px-2.5 py-1 rounded-xl bg-white/10 border border-white/20 text-[10px] font-mono text-white font-bold items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
-                  <span>SYNCED MV</span>
-                </span>
-              </div>
-            </div>
-
+          <div className="w-full h-[320px] sm:h-[440px] md:h-[540px] p-2 sm:p-3 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
             {/* Video Stage Viewport */}
             <div
               onContextMenu={(e) => {
@@ -470,7 +422,7 @@ export default function GlobalPlayerBar() {
                 e.stopPropagation();
                 return false;
               }}
-              className="flex-1 my-1.5 sm:my-2 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-0"
+              className="flex-1 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-0"
             >
               {/* HIDDEN MUSIC Watermark */}
               <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-40 flex items-center gap-1.5 bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
@@ -550,15 +502,6 @@ export default function GlobalPlayerBar() {
                 className="w-full h-full object-contain select-none cursor-pointer relative z-10"
               />
             </div>
-
-            {/* Bottom Info Status inside Video Drawer */}
-            <div className="flex items-center justify-between pt-1 px-1 font-mono text-[8px] sm:text-[9px] text-slate-400 relative z-20">
-              <span className="flex items-center gap-1 sm:gap-1.5 text-white font-bold">
-                <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 animate-spin" />
-                <span>BEAT SYNCED</span>
-              </span>
-              <span className="text-slate-400 uppercase">Chạm để Phát/Dừng • 2 lần để phóng to</span>
-            </div>
           </div>
         )}
 
@@ -567,28 +510,8 @@ export default function GlobalPlayerBar() {
         {/* ============================================================= */}
         {showLyrics && (
           <div className="w-full h-[320px] sm:h-[430px] p-3 sm:p-6 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
-            {/* Header Bar */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-2 sm:pb-3 px-1 relative z-10">
-              <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2">
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0">
-                  <Mic2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-extrabold text-xs sm:text-sm text-white truncate tracking-wider font-cyber">
-                    {currentTrack.title}
-                  </h3>
-                  <p className="text-[8px] sm:text-[9px] text-slate-400 truncate uppercase tracking-widest font-mono">
-                    {currentAlbum?.artist || 'VAULT ARTIST'} • GOTHIC LYRICS
-                  </p>
-                </div>
-              </div>
-              <span className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">
-                SYNCHRONIZED (.LRC)
-              </span>
-            </div>
-
             {/* Gothic Synchronized Lyrics List */}
-            <div className="flex-1 overflow-y-auto no-scrollbar my-2 px-2 py-6 sm:py-8 space-y-3 sm:space-y-4 text-center scroll-smooth relative z-10">
+            <div className="flex-1 overflow-y-auto no-scrollbar my-auto px-2 py-8 sm:py-12 space-y-4 sm:space-y-5 text-center scroll-smooth relative z-10">
               {parsedLyrics.length > 0 ? (
                 parsedLyrics.map((line, idx) => {
                   const isActive = idx === activeLyricIdx;
@@ -597,7 +520,7 @@ export default function GlobalPlayerBar() {
                       key={`${line.time}_${idx}`}
                       ref={isActive ? activeLineRef : null}
                       onClick={() => handleSeek(line.time)}
-                      className={`cursor-pointer transition-all duration-300 py-1 px-2 sm:px-4 ${
+                      className={`cursor-pointer transition-all duration-300 py-1.5 px-2 sm:px-4 ${
                         isActive
                           ? 'scale-105 opacity-100'
                           : 'opacity-35 hover:opacity-75'
@@ -606,8 +529,8 @@ export default function GlobalPlayerBar() {
                       <p
                         className={`transition-all duration-200 ${
                           isActive
-                            ? 'text-white font-extrabold text-sm sm:text-lg md:text-xl tracking-wide font-cyber'
-                            : 'text-zinc-400 font-medium text-xs sm:text-sm font-sans'
+                            ? 'text-white font-extrabold text-base sm:text-xl md:text-2xl tracking-wide font-cyber'
+                            : 'text-zinc-400 font-medium text-xs sm:text-base font-sans'
                         }`}
                       >
                         {line.text}
