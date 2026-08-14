@@ -91,6 +91,8 @@ export default function AdminPage() {
   const [mediaType, setMediaType] = useState<MediaType>('video');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaUrlInput, setMediaUrlInput] = useState('');
+  const [audioUrlInput, setAudioUrlInput] = useState('');
+  const [videoUrlInput, setVideoUrlInput] = useState('');
   const [lyrics, setLyrics] = useState('');
   const [videoOffsetInput, setVideoOffsetInput] = useState('');
 
@@ -245,7 +247,9 @@ export default function AdminPage() {
     setEditingTrackId(track.id);
     setTrackTitle(track.title);
     setMediaType(track.media_type);
-    setMediaUrlInput(track.media_type === 'video' ? (track.video_url || '') : track.audio_url);
+    setAudioUrlInput(track.audio_url || '');
+    setVideoUrlInput(track.video_url || '');
+    setMediaUrlInput(track.audio_url || track.video_url || '');
     setLyrics(track.lyrics || '');
     const offsetSecs = extractVideoOffset(track.lyrics || '');
     setVideoOffsetInput(offsetSecs > 0 ? formatOffsetString(offsetSecs) : '');
@@ -256,6 +260,8 @@ export default function AdminPage() {
     setTrackTitle('');
     setLyrics('');
     setVideoOffsetInput('');
+    setAudioUrlInput('');
+    setVideoUrlInput('');
     setMediaFile(null);
     setMediaUrlInput('');
     setAutoMetadata(null);
@@ -508,21 +514,24 @@ export default function AdminPage() {
 
     try {
       const supabase = createClient();
-      let finalAudioUrl = '';
-      let finalVideoUrl = '';
+      const currentAlbumObj = albums.find((a) => a.id === openedAlbumId);
+      const existingTrack = currentAlbumObj?.tracks?.find((t) => t.id === editingTrackId);
 
-      if (mediaUrlInput.trim()) {
-        if (mediaType === 'video') finalVideoUrl = mediaUrlInput.trim();
-        else finalAudioUrl = mediaUrlInput.trim();
-      } else if (mediaFile) {
+      let finalAudioUrl = audioUrlInput.trim() || existingTrack?.audio_url || '';
+      let finalVideoUrl = videoUrlInput.trim() || existingTrack?.video_url || '';
+
+      if (mediaFile) {
         const urls = await uploadTrackFileToStorage(
           supabase,
           mediaFile,
           mediaType,
           (msg) => setStatusMsg({ type: 'success', text: msg })
         );
-        finalAudioUrl = urls.audioUrl;
-        finalVideoUrl = urls.videoUrl;
+        if (mediaType === 'video' || urls.videoUrl) finalVideoUrl = urls.videoUrl || urls.audioUrl;
+        if (mediaType === 'audio' || urls.audioUrl) finalAudioUrl = urls.audioUrl;
+      } else if (mediaUrlInput.trim()) {
+        if (mediaType === 'video') finalVideoUrl = mediaUrlInput.trim();
+        else finalAudioUrl = mediaUrlInput.trim();
       }
 
       let finalLyrics = lyrics.trim();
@@ -531,18 +540,17 @@ export default function AdminPage() {
         finalLyrics = `[video_offset:${videoOffsetInput.trim()}]\n` + finalLyrics;
       }
 
-      const trackPayload = {
+      const trackPayload: Record<string, any> = {
         album_id: openedAlbumId,
         title: trackTitle,
-        media_type: mediaType,
-        audio_url: finalAudioUrl || mediaUrlInput || '',
-        video_url: finalVideoUrl || mediaUrlInput || '',
+        media_type: finalVideoUrl ? 'video' : mediaType,
+        audio_url: finalAudioUrl,
+        video_url: finalVideoUrl,
         lyrics: finalLyrics || undefined,
         duration: trackDuration > 0 ? trackDuration : 200,
       };
 
       // Smart Auto-Matching: Check if an existing track in this album matches the core title
-      const currentAlbumObj = albums.find((a) => a.id === openedAlbumId);
       const matchingTrack = currentAlbumObj?.tracks?.find((t) => isTitleMatching(t.title, trackTitle));
 
       if (!editingTrackId && matchingTrack && (mediaType === 'video' || finalVideoUrl)) {
@@ -1380,8 +1388,8 @@ export default function AdminPage() {
                   </div>
 
                   <div className="p-4 rounded-2xl bg-black border border-white/20 space-y-3">
-                    <label className="block text-white font-bold flex items-center gap-1.5 uppercase">
-                      <FileAudio className="w-4 h-4 text-white" /> CHỌN 1 HOẶC NHIỀU TỆP ÂM THANH (.MP3 / .WAV / .FLAC / .M4A)
+                    <label className="block text-white font-bold flex items-center gap-1.5 uppercase text-xs">
+                      <FileAudio className="w-4 h-4 text-emerald-400" /> TỆP ÂM THANH / URL AUDIO (.MP3 / .FLAC)
                     </label>
                     <input
                       type="file"
@@ -1392,10 +1400,26 @@ export default function AdminPage() {
                     />
                     <input
                       type="url"
-                      placeholder="Hoặc dán URL Audio MP3 trực tiếp"
-                      value={mediaUrlInput}
-                      onChange={(e) => handleMediaUrlInputChange(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white"
+                      placeholder="URL Audio MP3 từ Supabase..."
+                      value={audioUrlInput || mediaUrlInput}
+                      onChange={(e) => {
+                        setAudioUrlInput(e.target.value);
+                        setMediaUrlInput(e.target.value);
+                      }}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
+                    />
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-black border border-cyan-500/30 space-y-2 font-mono">
+                    <label className="block text-cyan-300 font-bold flex items-center gap-1.5 uppercase text-xs">
+                      <Film className="w-4 h-4 text-cyan-400" /> TỆP VIDEO / URL MV (.MP4 TỪ SUPABASE)
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="URL Video MP4 (Supabase Storage)..."
+                      value={videoUrlInput}
+                      onChange={(e) => setVideoUrlInput(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-cyan-200 text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-400 font-mono"
                     />
                   </div>
 
