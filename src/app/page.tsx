@@ -40,6 +40,7 @@ export default function Home() {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setAlbums(parsed);
+          setIsLoadingAlbums(false);
         }
       }
     } catch {}
@@ -69,23 +70,10 @@ export default function Home() {
 
     initAuth();
 
-    // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUserSession(session.user);
-        setStoredUserSession(session.user);
-        if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      } else {
-        if (!getStoredAdminSession()) {
-          const stored = getStoredUserSession();
-          if (!stored) {
-            setUserSession(null);
-          }
-        }
-      }
-    });
+    // Safety timeout: Never hang in loading state for more than 3 seconds
+    const timeoutTimer = setTimeout(() => {
+      setIsLoadingAlbums(false);
+    }, 3000);
 
     // Clean background fetch of albums from Supabase
     const fetchSupabaseAlbums = async () => {
@@ -106,9 +94,30 @@ export default function Home() {
       } catch (err) {
         console.error('Error fetching albums from Supabase:', err);
       } finally {
+        clearTimeout(timeoutTimer);
         setIsLoadingAlbums(false);
       }
     };
+
+    fetchSupabaseAlbums();
+
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserSession(session.user);
+        setStoredUserSession(session.user);
+        if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } else {
+        if (!getStoredAdminSession()) {
+          const stored = getStoredUserSession();
+          if (!stored) {
+            setUserSession(null);
+          }
+        }
+      }
+    });
 
     // Listen to custom session updates
     const handleCustomSessionChange = () => {
@@ -122,6 +131,7 @@ export default function Home() {
     window.addEventListener('vault_auth_change', handleCustomSessionChange);
 
     return () => {
+      clearTimeout(timeoutTimer);
       subscription.unsubscribe();
       window.removeEventListener('vault_profile_updated', handleCustomSessionChange);
       window.removeEventListener('vault_auth_change', handleCustomSessionChange);
