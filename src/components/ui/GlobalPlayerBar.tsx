@@ -781,20 +781,22 @@ export default function GlobalPlayerBar() {
       ref={playerRootRef}
       className="fixed bottom-2.5 sm:bottom-4 md:bottom-12 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex flex-col items-center overflow-visible"
     >
-      {/* SEAMLESS ATTACHED UPWARD DRAWER (0.8s ULTRA-SMOOTH GPU EXPANSION, NO GAP, DOCKED TO PLAYBAR) */}
+      {/* ========================================================================= */}
+      {/* 1. MOBILE DETACHED FLOATING DRAWER (< md: SEPARATE FLOATING CARD)          */}
+      {/* ========================================================================= */}
       <div
-        className={`w-full max-w-5xl md:max-w-6xl mx-auto rounded-t-2xl sm:rounded-t-[32px] border-t border-x border-b-0 border-white/20 bg-[#0c0c10]/95 backdrop-blur-3xl shadow-[0_-20px_50px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[height,opacity] ${
+        className={`md:hidden w-full max-w-5xl mx-auto mb-2 rounded-2xl border border-white/20 bg-[#0c0c10]/95 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col transition-all duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
           hasDrawerOpen
-            ? 'h-[280px] xs:h-[320px] sm:h-[360px] md:h-[420px] max-h-[50vh] opacity-100 p-3 sm:p-4 pointer-events-auto'
-            : 'h-0 opacity-0 p-0 border-t-0 border-x-0 pointer-events-none'
+            ? 'h-[280px] xs:h-[320px] sm:h-[360px] opacity-100 p-3 pointer-events-auto'
+            : 'h-0 opacity-0 p-0 border-0 pointer-events-none'
         }`}
       >
-        {/* Header Bar */}
+        {/* Mobile Header Bar */}
         <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {showLyrics && <Mic2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />}
-            {showQueue && <Disc3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin-slow" />}
-            {showVideo && <Film className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />}
+            {showLyrics && <Mic2 className="w-3.5 h-3.5 text-white" />}
+            {showQueue && <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />}
+            {showVideo && <Film className="w-3.5 h-3.5 text-white" />}
             <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
               {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : showQueue ? `DANH SÁCH PHÁT (${playlist.length})` : 'VIDEO ÂM NHẠC (MV)'}
             </span>
@@ -812,24 +814,60 @@ export default function GlobalPlayerBar() {
           </button>
         </div>
 
-        {/* Drawer Body */}
-        {renderDrawerContent()}
+        {/* Mobile Drawer Body */}
+        {hasDrawerOpen && renderDrawerContent()}
       </div>
 
-      {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD (SEAMLESSLY DOCKED TO DRAWER) */}
+      {/* ========================================================================= */}
+      {/* 2. UNIFIED MONOLITHIC CARD (DESKTOP ATTACHED DOCKED, MOBILE PILL)         */}
+      {/* ========================================================================= */}
       <div
         ref={barContainerRef}
-        className={`w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] overflow-visible ${
-          hasDrawerOpen
-            ? 'rounded-b-2xl sm:rounded-b-[32px] rounded-t-none border-t-0'
-            : 'rounded-2xl sm:rounded-[32px]'
-        }`}
+        className="w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden rounded-2xl md:rounded-[32px] flex flex-col"
       >
         {/* High-Energy Kick Flash Gradient Overlay */}
         <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-[inherit]" />
 
+        {/* DESKTOP INTEGRATED UPPER DRAWER COMPARTMENT (INSIDE EXACT SAME CARD) */}
+        <div
+          className={`hidden md:flex flex-col w-full overflow-hidden transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[height,opacity] ${
+            hasDrawerOpen
+              ? 'h-[380px] lg:h-[430px] max-h-[55vh] opacity-100 p-4 pb-2 border-b border-white/10 pointer-events-auto'
+              : 'h-0 opacity-0 p-0 border-b-0 pointer-events-none'
+          }`}
+        >
+          {/* Desktop Header */}
+          <div className="flex items-center justify-between pb-2 mb-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              {showLyrics && <Mic2 className="w-4 h-4 text-white" />}
+              {showQueue && <Disc3 className="w-4 h-4 text-white animate-spin-slow" />}
+              {showVideo && <Film className="w-4 h-4 text-white" />}
+              <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
+                {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : showQueue ? `DANH SÁCH PHÁT (${playlist.length})` : 'VIDEO ÂM NHẠC (MV)'}
+              </span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLyrics(false);
+                setShowQueue(false);
+                setShowVideo(false);
+              }}
+              className="p-1.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              title="Đóng bảng"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Desktop Drawer Body with Smooth Cross-Tab Motion */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+            {renderDrawerContent()}
+          </div>
+        </div>
+
         {/* ============================================================= */}
-        {/* MOBILE CONTROL BAR LAYOUT (< md: 2-Row Optimized Structure) */}
+        {/* MOBILE CONTROL BAR LAYOUT (< md: 2-Row Optimized Structure)   */}
         {/* ============================================================= */}
         <div className="md:hidden w-full p-2 px-2.5 sm:px-3.5 transition-all duration-300 flex flex-col gap-1.5 relative z-50 select-none overflow-visible bg-transparent">
           {/* Mobile Row 1: Track Metadata & Controls */}
