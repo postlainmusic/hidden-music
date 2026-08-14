@@ -151,10 +151,10 @@ export default function Navbar({
           {showBackButton && (
             <Link
               href="/"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all text-xs font-mono uppercase"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all text-xs font-mono uppercase font-bold tracking-wider"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">3D VAULT</span>
+              <span>BACK</span>
             </Link>
           )}
 

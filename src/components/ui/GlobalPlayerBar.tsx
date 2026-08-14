@@ -126,20 +126,47 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Seamless Audio <-> Video playback handoff
+  // Video Container ref for full screen
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const toggleFullscreen = () => {
+    const el = videoContainerRef.current || videoRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if ((el as any).webkitRequestFullscreen) {
+        (el as any).webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+    }
+  };
+
+  const videoOffset = useMemo(() => {
+    return extractVideoOffset(currentTrack?.lyrics || '');
+  }, [currentTrack?.lyrics]);
+
+  // Seamless Audio <-> Video playback handoff with accurate videoOffset synchronization
   useEffect(() => {
     const audio = audioRef?.current;
     const vid = videoRef.current;
 
     if (showVideo) {
+      // Switching to Video Mode: calculate target video position with offset
       if (audio) {
         audio.pause();
         audio.muted = true;
       }
       if (vid) {
         vid.volume = volume;
-        if (currentTime > 0 && Math.abs(vid.currentTime - currentTime) > 0.6) {
-          vid.currentTime = currentTime;
+        const targetVidTime = Math.max(0, currentTime + videoOffset);
+        if (Math.abs(vid.currentTime - targetVidTime) > 0.6) {
+          vid.currentTime = targetVidTime;
         }
         if (isPlaying) {
           vid.play().catch(() => {});
@@ -148,21 +175,29 @@ export default function GlobalPlayerBar() {
         }
       }
     } else {
+      // Switching back to Audio Mode: convert video time back to audio song time
       if (vid) {
+        const effectiveAudioTime = Math.max(0, vid.currentTime - videoOffset);
         vid.pause();
-      }
-      if (audio) {
-        audio.muted = false;
-        if (currentTime > 0 && Math.abs(audio.currentTime - currentTime) > 0.6) {
-          audio.currentTime = currentTime;
+        if (audio) {
+          audio.muted = false;
+          if (Math.abs(audio.currentTime - effectiveAudioTime) > 0.6) {
+            audio.currentTime = effectiveAudioTime;
+            setCurrentTime(effectiveAudioTime);
+          }
+          if (isPlaying) {
+            audio.play().catch(() => {});
+          }
         }
+      } else if (audio) {
+        audio.muted = false;
         if (isPlaying) {
           audio.play().catch(() => {});
         }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo, isPlaying, volume, audioRef]);
+  }, [showVideo, videoOffset, volume, audioRef]);
 
   // Keep video volume in sync
   useEffect(() => {
@@ -173,7 +208,7 @@ export default function GlobalPlayerBar() {
   const handleSeek = (newTime: number) => {
     seekTo(newTime);
     if (showVideo && videoRef.current) {
-      videoRef.current.currentTime = newTime;
+      videoRef.current.currentTime = Math.max(0, newTime + videoOffset);
     }
   };
 
@@ -188,6 +223,11 @@ export default function GlobalPlayerBar() {
         barContainerRef.current.style.boxShadow = '';
         barContainerRef.current.style.borderColor = '';
       }
+      const albumCoverEl = document.getElementById('album-cover-box');
+      if (albumCoverEl) {
+        albumCoverEl.style.boxShadow = '';
+        albumCoverEl.style.borderColor = '';
+      }
       return;
     }
 
@@ -197,7 +237,7 @@ export default function GlobalPlayerBar() {
 
       const now = performance.now();
       const liveCurrentTime = showVideo && videoRef.current
-        ? videoRef.current.currentTime
+        ? Math.max(0, videoRef.current.currentTime - videoOffset)
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
       // 1. ONE-SHOT PCM KICK MATCHING (Edge trigger within -0.03s .. +0.04s)
@@ -284,19 +324,45 @@ export default function GlobalPlayerBar() {
       if (snareOverlayRef.current) {
         snareOverlayRef.current.style.opacity = snareIntensityRef.current.toFixed(3);
       }
+
+      // Synchronized Edge Rim Lighting on Player Bar AND Album Cover
+      const albumCoverEl = document.getElementById('album-cover-box');
+
       if (barContainerRef.current) {
-        // When lyrics drawer is open, keep scale stable
         const scaleVal = showLyrics ? 1.0 : currentScaleRef.current;
         barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
+
         if (fireIntensityRef.current > 0.18) {
-          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(255, 60, 0, ${(fireIntensityRef.current * 0.75).toFixed(2)}), inset 0 0 25px rgba(255, 120, 0, ${(fireIntensityRef.current * 0.6).toFixed(2)})`;
-          barContainerRef.current.style.borderColor = `rgba(255, 140, 0, ${(0.3 + fireIntensityRef.current * 0.65).toFixed(2)})`;
+          const kickAlpha = (fireIntensityRef.current * 0.85).toFixed(2);
+          const rimColor = `rgba(255, 130, 0, ${(0.4 + fireIntensityRef.current * 0.6).toFixed(2)})`;
+          const shadowStyle = `0 15px 45px rgba(255, 60, 0, ${kickAlpha}), 0 0 35px rgba(255, 120, 0, ${kickAlpha}), inset 0 0 25px rgba(255, 100, 0, ${(fireIntensityRef.current * 0.5).toFixed(2)})`;
+
+          barContainerRef.current.style.boxShadow = shadowStyle;
+          barContainerRef.current.style.borderColor = rimColor;
+
+          if (albumCoverEl) {
+            albumCoverEl.style.boxShadow = `0 25px 65px rgba(255, 60, 0, ${kickAlpha}), 0 0 45px rgba(255, 120, 0, ${kickAlpha})`;
+            albumCoverEl.style.borderColor = rimColor;
+          }
         } else if (snareIntensityRef.current > 0.18) {
-          barContainerRef.current.style.boxShadow = `0 15px 45px rgba(0, 240, 255, ${(snareIntensityRef.current * 0.75).toFixed(2)}), inset 0 0 25px rgba(160, 30, 255, ${(snareIntensityRef.current * 0.6).toFixed(2)})`;
-          barContainerRef.current.style.borderColor = `rgba(0, 240, 255, ${(0.3 + snareIntensityRef.current * 0.65).toFixed(2)})`;
+          const snareAlpha = (snareIntensityRef.current * 0.85).toFixed(2);
+          const rimColor = `rgba(0, 240, 255, ${(0.4 + snareIntensityRef.current * 0.6).toFixed(2)})`;
+          const shadowStyle = `0 15px 45px rgba(0, 240, 255, ${snareAlpha}), 0 0 35px rgba(160, 30, 255, ${snareAlpha}), inset 0 0 25px rgba(0, 240, 255, ${(snareIntensityRef.current * 0.5).toFixed(2)})`;
+
+          barContainerRef.current.style.boxShadow = shadowStyle;
+          barContainerRef.current.style.borderColor = rimColor;
+
+          if (albumCoverEl) {
+            albumCoverEl.style.boxShadow = `0 25px 65px rgba(0, 240, 255, ${snareAlpha}), 0 0 45px rgba(160, 30, 255, ${snareAlpha})`;
+            albumCoverEl.style.borderColor = rimColor;
+          }
         } else {
           barContainerRef.current.style.boxShadow = '';
           barContainerRef.current.style.borderColor = '';
+          if (albumCoverEl) {
+            albumCoverEl.style.boxShadow = '';
+            albumCoverEl.style.borderColor = '';
+          }
         }
       }
 
@@ -308,7 +374,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset]);
 
   const videoOffset = useMemo(() => {
     return extractVideoOffset(currentTrack?.lyrics || '');
@@ -432,18 +498,37 @@ export default function GlobalPlayerBar() {
           <div className="w-full h-[320px] sm:h-[440px] md:h-[540px] p-2 sm:p-3 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
             {/* Video Stage Viewport */}
             <div
+              ref={videoContainerRef}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
               }}
-              className="flex-1 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-0"
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              className="flex-1 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-0 group/video"
             >
               {/* HIDDEN MUSIC Watermark */}
               <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-40 flex items-center gap-1.5 bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
                 <Disc3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white animate-spin-slow" />
                 <span className="font-cyber font-extrabold text-[10px] sm:text-[11px] tracking-wider text-white">HIDDEN MUSIC</span>
               </div>
+
+              {/* Fullscreen Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFullscreen();
+                }}
+                title="Toàn màn hình (hoặc nhấp đúp vào video)"
+                className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-40 p-2 rounded-xl bg-black/80 hover:bg-white hover:text-black border border-white/20 text-white shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 text-[10px] font-bold font-mono"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">FULLSCREEN</span>
+              </button>
 
               {/* Clean Subtitle Overlay with Live Beat Sync */}
               {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
@@ -477,21 +562,13 @@ export default function GlobalPlayerBar() {
                 onClick={() => togglePlay()}
                 onDoubleClick={(e) => {
                   e.preventDefault();
-                  const container = e.currentTarget.parentElement;
-                  if (container) {
-                    if (!document.fullscreenElement) {
-                      container.requestFullscreen?.().catch(() => {});
-                    } else {
-                      document.exitFullscreen?.().catch(() => {});
-                    }
-                  }
+                  e.stopPropagation();
+                  toggleFullscreen();
                 }}
                 onLoadedMetadata={(e) => {
-                  if (e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                    setDuration(e.currentTarget.duration);
-                  }
-                  if (currentTime > 0) {
-                    e.currentTarget.currentTime = currentTime;
+                  const targetVidTime = Math.max(0, currentTime + videoOffset);
+                  if (targetVidTime > 0) {
+                    e.currentTarget.currentTime = targetVidTime;
                   }
                   if (isPlaying) {
                     e.currentTarget.play().catch(() => {});
@@ -499,12 +576,9 @@ export default function GlobalPlayerBar() {
                 }}
                 onTimeUpdate={(e) => {
                   if (showVideo) {
-                    setCurrentTime(e.currentTarget.currentTime);
-                  }
-                }}
-                onDurationChange={(e) => {
-                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                    setDuration(e.currentTarget.duration);
+                    const rawVidTime = e.currentTarget.currentTime;
+                    const effectiveSongTime = Math.max(0, rawVidTime - videoOffset);
+                    setCurrentTime(effectiveSongTime);
                   }
                 }}
                 onPlay={() => {
