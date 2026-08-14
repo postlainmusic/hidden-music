@@ -21,6 +21,44 @@ import {
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex, extractVideoOffset } from '@/lib/lrcParser';
 
+export function getMediaEmbedInfo(rawUrl: string | undefined): {
+  type: 'youtube' | 'gdrive' | 'direct';
+  embedUrl: string;
+  directUrl: string;
+} {
+  if (!rawUrl) return { type: 'direct', embedUrl: '', directUrl: '' };
+  const trimmed = rawUrl.trim();
+
+  // 1. YouTube detection
+  const ytMatch = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+  if (ytMatch) {
+    const ytId = ytMatch[1];
+    return {
+      type: 'youtube',
+      embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&enablejsapi=1&controls=1&modestbranding=1&rel=0`,
+      directUrl: trimmed,
+    };
+  }
+
+  // 2. Google Drive detection
+  const gdriveMatch = trimmed.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/i);
+  if (gdriveMatch) {
+    const gdriveId = gdriveMatch[1];
+    return {
+      type: 'gdrive',
+      embedUrl: `https://drive.google.com/file/d/${gdriveId}/preview`,
+      directUrl: `https://drive.google.com/uc?export=download&id=${gdriveId}`,
+    };
+  }
+
+  // 3. Direct HTML5 video (Supabase, MP4, WebM, etc.)
+  return {
+    type: 'direct',
+    embedUrl: trimmed,
+    directUrl: trimmed,
+  };
+}
+
 export default function GlobalPlayerBar() {
   const {
     currentTrack,
@@ -85,6 +123,11 @@ export default function GlobalPlayerBar() {
     setMounted(true);
   }, []);
 
+  // Media embed resolution
+  const videoMediaInfo = useMemo(() => {
+    return getMediaEmbedInfo(currentTrack?.video_url);
+  }, [currentTrack?.video_url]);
+
   // Reset fired indices on track change
   useEffect(() => {
     lastFiredKickIndexRef.current = -1;
@@ -110,12 +153,12 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Sync Audio <-> Video playback
+  // Sync Audio <-> Video playback for direct HTML5 videos
   useEffect(() => {
     const audio = audioRef?.current;
     const vid = videoRef.current;
 
-    if (showVideo) {
+    if (showVideo && videoMediaInfo.type === 'direct') {
       if (audio) {
         audio.pause();
         audio.muted = true;
@@ -145,7 +188,7 @@ export default function GlobalPlayerBar() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideo, currentTrack?.video_url, isPlaying]);
+  }, [showVideo, currentTrack?.video_url, isPlaying, videoMediaInfo.type]);
 
   // Keep video volume in sync
   useEffect(() => {
@@ -155,7 +198,7 @@ export default function GlobalPlayerBar() {
   // Handle seek for both audio and video
   const handleSeek = (newTime: number) => {
     seekTo(newTime);
-    if (showVideo && videoRef.current) {
+    if (showVideo && videoRef.current && videoMediaInfo.type === 'direct') {
       videoRef.current.currentTime = newTime;
     }
   };
@@ -179,7 +222,7 @@ export default function GlobalPlayerBar() {
       let isSnareBeat = false;
 
       const now = performance.now();
-      const liveCurrentTime = showVideo && videoRef.current
+      const liveCurrentTime = showVideo && videoRef.current && videoMediaInfo.type === 'direct'
         ? videoRef.current.currentTime
         : (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
@@ -291,7 +334,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, analyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoMediaInfo.type]);
 
   const videoOffset = useMemo(() => {
     return extractVideoOffset(currentTrack?.lyrics || '');
@@ -423,7 +466,7 @@ export default function GlobalPlayerBar() {
                   <h3 className="font-extrabold text-xs sm:text-sm text-white truncate tracking-wider font-cyber flex items-center gap-2">
                     <span>{currentTrack.title}</span>
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/15 text-white border border-white/30 uppercase">
-                      1080P MV
+                      {videoMediaInfo.type === 'youtube' ? 'YOUTUBE MV' : videoMediaInfo.type === 'gdrive' ? 'DRIVE MV' : '1080P MV'}
                     </span>
                     {videoOffset > 0 && (
                       <span className="px-2 py-0.5 rounded-full text-[8px] font-mono bg-amber-500/20 text-amber-300 border border-amber-400/40 uppercase">
@@ -445,7 +488,7 @@ export default function GlobalPlayerBar() {
               </div>
             </div>
 
-            {/* Native Video Stage Viewport (CLEAN, NO OVERLAYS OVER VIDEO PIXELS) */}
+            {/* Video Stage Viewport (CLEAN, NO OVERLAYS OVER VIDEO PIXELS) */}
             <div
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -477,78 +520,99 @@ export default function GlobalPlayerBar() {
                 </div>
               )}
 
-              {/* Click-to-Play & Double-Click Fullscreen Overlay */}
-              <div
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return false;
-                }}
-                onClick={() => togglePlay()}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  const container = e.currentTarget.parentElement;
-                  if (container) {
-                    if (!document.fullscreenElement) {
-                      container.requestFullscreen?.().catch(() => {});
-                    } else {
-                      document.exitFullscreen?.().catch(() => {});
-                    }
-                  }
-                }}
-                className="absolute inset-0 z-30 w-full h-full cursor-pointer flex items-center justify-center select-none bg-transparent"
-              >
-                {!isPlaying && (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse pointer-events-none">
-                    <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current ml-1" />
+              {/* IFRAME EMBED (GOOGLE DRIVE / YOUTUBE) OR NATIVE HTML5 VIDEO */}
+              {videoMediaInfo.type === 'youtube' ? (
+                <iframe
+                  src={videoMediaInfo.embedUrl}
+                  title={currentTrack.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="w-full h-full border-0 relative z-20 pointer-events-auto"
+                />
+              ) : videoMediaInfo.type === 'gdrive' ? (
+                <iframe
+                  src={videoMediaInfo.embedUrl}
+                  title={currentTrack.title}
+                  allow="autoplay; fullscreen"
+                  allowFullScreen
+                  className="w-full h-full border-0 relative z-20 pointer-events-auto"
+                />
+              ) : (
+                <>
+                  {/* Click-to-Play & Double-Click Fullscreen Overlay for Direct Video */}
+                  <div
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return false;
+                    }}
+                    onClick={() => togglePlay()}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      const container = e.currentTarget.parentElement;
+                      if (container) {
+                        if (!document.fullscreenElement) {
+                          container.requestFullscreen?.().catch(() => {});
+                        } else {
+                          document.exitFullscreen?.().catch(() => {});
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 z-30 w-full h-full cursor-pointer flex items-center justify-center select-none bg-transparent"
+                  >
+                    {!isPlaying && (
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse pointer-events-none">
+                        <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-current ml-1" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Native Video Element with full live timeupdate event listeners */}
-              <video
-                ref={videoRef}
-                src={currentTrack?.video_url}
-                onTimeUpdate={(e) => {
-                  if (showVideo) {
-                    setCurrentTime(e.currentTarget.currentTime);
-                  }
-                }}
-                onDurationChange={(e) => {
-                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                    setDuration(e.currentTarget.duration);
-                  }
-                }}
-                onLoadedMetadata={(e) => {
-                  if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
-                    setDuration(e.currentTarget.duration);
-                  }
-                }}
-                onPlay={() => {
-                  if (showVideo) setIsPlaying(true);
-                }}
-                onPause={() => {
-                  if (showVideo) setIsPlaying(false);
-                }}
-                onEnded={nextTrack}
-                playsInline
-                controls={false}
-                controlsList="nodownload nofullscreen noremoteplayback"
-                disablePictureInPicture={true}
-                disableRemotePlayback={true}
-                draggable={false}
-                onDragStart={(e) => {
-                  e.preventDefault();
-                  return false;
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return false;
-                }}
-                style={{ pointerEvents: 'none' }}
-                className="w-full h-full object-contain max-h-full select-none pointer-events-none relative z-10"
-              />
+                  {/* Native Direct Video Element */}
+                  <video
+                    ref={videoRef}
+                    src={currentTrack?.video_url}
+                    onTimeUpdate={(e) => {
+                      if (showVideo) {
+                        setCurrentTime(e.currentTarget.currentTime);
+                      }
+                    }}
+                    onDurationChange={(e) => {
+                      if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                        setDuration(e.currentTarget.duration);
+                      }
+                    }}
+                    onLoadedMetadata={(e) => {
+                      if (showVideo && e.currentTarget.duration > 0 && isFinite(e.currentTarget.duration)) {
+                        setDuration(e.currentTarget.duration);
+                      }
+                    }}
+                    onPlay={() => {
+                      if (showVideo) setIsPlaying(true);
+                    }}
+                    onPause={() => {
+                      if (showVideo) setIsPlaying(false);
+                    }}
+                    onEnded={nextTrack}
+                    playsInline
+                    controls={false}
+                    controlsList="nodownload nofullscreen noremoteplayback"
+                    disablePictureInPicture={true}
+                    disableRemotePlayback={true}
+                    draggable={false}
+                    onDragStart={(e) => {
+                      e.preventDefault();
+                      return false;
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return false;
+                    }}
+                    style={{ pointerEvents: 'none' }}
+                    className="w-full h-full object-contain max-h-full select-none pointer-events-none relative z-10"
+                  />
+                </>
+              )}
             </div>
 
             {/* Bottom Info Status inside Video Drawer */}
