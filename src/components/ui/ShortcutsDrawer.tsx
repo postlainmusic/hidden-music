@@ -33,6 +33,7 @@ export default function ShortcutsDrawer() {
       }
 
       if (
+        e.key.toLowerCase() === 'a' ||
         e.key === 'Escape' ||
         e.key === '?' ||
         (e.shiftKey && e.key === '/') ||
@@ -80,7 +81,7 @@ export default function ShortcutsDrawer() {
         { keys: ['L'], desc: 'Bật / Tắt Lời bài hát' },
         { keys: ['Q'], desc: 'Bật / Tắt Hàng chờ' },
         { keys: ['2x Click'], desc: 'Phóng to MV toàn màn hình' },
-        { keys: ['?', 'H'], desc: 'Ẩn / Hiện phím tắt' },
+        { keys: ['A'], desc: 'Ẩn / Hiện phím tắt' },
       ],
     },
     {
@@ -96,27 +97,28 @@ export default function ShortcutsDrawer() {
   if (!isAuth) return null;
 
   return (
-    <div ref={bubbleRef} className="hidden md:block fixed top-20 right-3 sm:right-6 z-[85] select-none font-mono">
-      {/* Mini Floating Trigger Button */}
+    <div ref={bubbleRef} className="hidden md:block fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-[85] select-none font-mono">
+      {/* Mini Floating Trigger Button on Left Center */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-200 backdrop-blur-xl text-[10px] font-bold shadow-xl ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-200 backdrop-blur-xl text-[10px] font-bold shadow-2xl ${
           isOpen
-            ? 'bg-white text-black border-white scale-105 shadow-[0_0_20px_rgba(255,255,255,0.4)]'
+            ? 'bg-white text-black border-white scale-105 shadow-[0_0_25px_rgba(255,255,255,0.5)]'
             : 'bg-black/80 text-zinc-300 border-white/20 hover:border-white/60 hover:text-white hover:bg-black/95'
         }`}
-        title="Bảng phím tắt (Nhấn '?' hoặc 'H')"
+        title="Bảng phím tắt (Nhấn 'A')"
       >
+        <kbd className="px-1.5 py-0.5 rounded bg-white/15 border border-white/25 text-white font-mono font-bold text-[9px]">A</kbd>
         <Keyboard className="w-3 h-3" />
-        <span className="hidden xs:inline tracking-wider uppercase text-[9px]">PHÍM TẮT</span>
+        <span className="hidden xs:inline tracking-wider uppercase text-[9px]">HƯỚNG DẪN</span>
       </button>
 
-      {/* Floating Compact Rounded Bubble Card */}
+      {/* Floating Compact Rounded Bubble Card (Pops Out to the Right) */}
       <div
-        className={`absolute top-full right-0 mt-2 w-[270px] sm:w-[290px] bg-black/90 border border-white/20 rounded-2xl p-3 shadow-[0_15px_40px_rgba(0,0,0,0.95)] backdrop-blur-2xl transition-all duration-200 origin-top-right transform ${
+        className={`absolute left-0 top-full mt-3 sm:left-full sm:top-1/2 sm:-translate-y-1/2 sm:mt-0 sm:ml-3 w-[270px] sm:w-[290px] bg-black/90 border border-white/20 rounded-2xl p-3 shadow-[0_15px_40px_rgba(0,0,0,0.95)] backdrop-blur-2xl transition-all duration-200 origin-left transform ${
           isOpen
-            ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto'
-            : 'scale-90 opacity-0 -translate-y-2 pointer-events-none'
+            ? 'scale-100 opacity-100 translate-x-0 pointer-events-auto'
+            : 'scale-90 opacity-0 -translate-x-2 pointer-events-none'
         }`}
         style={{
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(255, 255, 255, 0.05)',
@@ -129,12 +131,12 @@ export default function ShortcutsDrawer() {
         <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 relative z-10">
           <div className="flex items-center gap-1.5">
             <Keyboard className="w-3.5 h-3.5 text-white" />
-            <span className="font-cyber font-bold text-xs text-white tracking-wide">PHÍM TẮT NHANH</span>
+            <span className="font-cyber font-bold text-xs text-white tracking-wide">HƯỚNG DẪN PHÍM TẮT</span>
           </div>
           <button
             onClick={() => setIsOpen(false)}
             className="p-1 rounded-md bg-white/10 hover:bg-white text-zinc-400 hover:text-black transition-colors"
-            title="Đóng (Esc)"
+            title="Đóng (A hoặc Esc)"
           >
             <X className="w-3 h-3" />
           </button>
@@ -177,7 +179,7 @@ export default function ShortcutsDrawer() {
 
         {/* Bubble Footer */}
         <div className="pt-2 mt-2 border-t border-white/10 text-center text-[8px] text-zinc-500 relative z-10 flex items-center justify-between font-mono">
-          <span>Nhấn <kbd className="px-1 py-0.2 rounded bg-zinc-900 border border-white/20 text-zinc-300">ESC</kbd> để đóng</span>
+          <span>Nhấn <kbd className="px-1 py-0.2 rounded bg-zinc-900 border border-white/20 text-zinc-300">A</kbd> để đóng</span>
           <span className="text-zinc-400 font-cyber font-bold">VAULT</span>
         </div>
       </div>
