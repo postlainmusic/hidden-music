@@ -198,18 +198,18 @@ export default function VaultScene({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. UNIFIED CONTINUOUS STAGE (ALBUM GLIDES FROM CENTER -> LEFT COLUMN)     */}
+      {/* 2. UNIFIED CONTINUOUS STAGE (MATHEMATICALLY CENTERED IN BOTH MODES)       */}
       {/* ========================================================================= */}
-      <div className="relative z-10 w-full max-w-[1360px] h-full flex flex-col lg:flex-row items-center justify-center pt-12 sm:pt-14 pb-20 sm:pb-22 overflow-hidden">
+      <div className="relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden">
         
-        {/* PHYSICAL ALBUM DECK (Translates with pure GPU spring physics 750ms) */}
+        {/* PHYSICAL ALBUM DECK (Slides left in detail mode, dead center in vault mode) */}
         <div
           className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20"
           style={{
             transform: isDetail
               ? (typeof window !== 'undefined' && window.innerWidth >= 1024
-                  ? 'translateX(-260px) scale(1.04)'
-                  : 'translateY(-15px) scale(0.96)')
+                  ? 'translateX(-280px) scale(1.02)'
+                  : 'translateY(-10px) scale(0.94)')
               : `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.03 : 1.0})`,
             perspective: '1000px',
             transformStyle: 'preserve-3d',
@@ -217,7 +217,7 @@ export default function VaultScene({
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Glass Card Container (Fades border into pure sleeve in detail mode) */}
+          {/* Glass Card Container */}
           <div
             onClick={() => {
               if (!isDetail) {
@@ -240,7 +240,7 @@ export default function VaultScene({
                 className="absolute w-[180px] h-[180px] sm:w-[210px] sm:h-[210px] rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/25 shadow-2xl flex items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none z-0 will-change-transform"
                 style={{
                   transform: (isDetail || isHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? (isDetail ? 'translateX(58px) rotate(180deg)' : 'translateX(26px) rotate(180deg)')
+                    ? (isDetail ? 'translateX(60px) rotate(180deg)' : 'translateX(26px) rotate(180deg)')
                     : 'translateX(0px) rotate(0deg)',
                   boxShadow: (isDetail || isHovered)
                     ? '0 20px 45px rgba(0,0,0,0.95), inset 0 0 20px rgba(255,255,255,0.1)'
@@ -266,7 +266,7 @@ export default function VaultScene({
               <div
                 className="relative z-10 w-[190px] h-[190px] sm:w-[220px] sm:h-[220px] rounded-2xl overflow-hidden shadow-[0_20px_45px_rgba(0,0,0,0.95)] border border-white/20 bg-zinc-950 flex-shrink-0 transition-transform duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform"
                 style={{
-                  transform: (isDetail || isHovered) ? 'translateX(-18px)' : 'translateX(0px)',
+                  transform: (isDetail || isHovered) ? 'translateX(-20px)' : 'translateX(0px)',
                 }}
               >
                 <img
@@ -304,7 +304,7 @@ export default function VaultScene({
 
           {/* Action Buttons Deck (Fades in below album in Detail Mode) */}
           <div
-            className={`w-full max-w-[280px] flex items-center gap-2 mt-2 transition-all duration-500 ease-out ${
+            className={`w-full max-w-[280px] flex items-center gap-2 mt-1 transition-all duration-500 ease-out ${
               isDetail
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
                 : 'opacity-0 translate-y-4 pointer-events-none'
@@ -366,14 +366,17 @@ export default function VaultScene({
         </div>
 
         {/* ========================================================================= */}
-        {/* 3. RIGHT COLUMN: PLAYLIST PANEL (SLIDES IN GRACEFULLY BESIDE THE ALBUM)   */}
+        {/* 3. RIGHT COLUMN: PLAYLIST PANEL (DESKTOP ABSOLUTE BALANCED CENTER)        */}
         {/* ========================================================================= */}
         <div
-          className={`w-full max-w-xl lg:max-w-2xl h-[320px] sm:h-[400px] lg:h-[480px] xl:h-[520px] max-h-[58vh] lg:max-h-[70vh] flex flex-col font-mono transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-10 ${
+          className={`hidden lg:flex absolute z-10 w-[500px] xl:w-[560px] h-[460px] xl:h-[500px] max-h-[70vh] flex-col font-mono transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
             isDetail
-              ? 'opacity-100 translate-x-0 lg:translate-x-[60px] pointer-events-auto'
-              : 'opacity-0 translate-x-12 lg:translate-x-[120px] pointer-events-none hidden lg:flex'
+              ? 'opacity-100 pointer-events-auto'
+              : 'opacity-0 pointer-events-none'
           }`}
+          style={{
+            transform: isDetail ? 'translateX(190px)' : 'translateX(300px)',
+          }}
         >
           <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl">
             <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
@@ -446,6 +449,59 @@ export default function VaultScene({
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* MOBILE PLAYLIST (Rendered below on small screens) */}
+        <div
+          className={`lg:hidden w-full max-w-md h-[260px] xs:h-[300px] sm:h-[340px] flex flex-col font-mono transition-all duration-500 will-change-transform z-10 mt-2 ${
+            isDetail
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-6 pointer-events-none hidden'
+          }`}
+        >
+          <div className="dark-neumorph-card p-2 sm:p-3 h-full flex flex-col w-full overflow-hidden shadow-2xl">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {tracks.map((track, idx) => {
+                const isCurrentPlaying = currentTrack?.id === track.id;
+                const trackIndex = String(idx + 1).padStart(2, '0');
+
+                return (
+                  <div
+                    key={track.id}
+                    onClick={() => {
+                      if (setSelectedTrack) setSelectedTrack(track);
+                      if (playTrack) playTrack(track, activeAlbum, tracks);
+                    }}
+                    className={`group relative h-12 px-3 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                      isCurrentPlaying
+                        ? 'bg-white/[0.10] border-white/25'
+                        : 'bg-transparent hover:bg-white/[0.04] border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <span className={`text-xs font-mono font-bold ${isCurrentPlaying ? 'text-white' : 'text-slate-500'}`}>
+                        {trackIndex}
+                      </span>
+                      <span className={`truncate text-xs font-cyber ${isCurrentPlaying ? 'text-white font-black' : 'text-slate-300'}`}>
+                        {track.title}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {track.video_url && (
+                        <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
+                          MV
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono text-slate-500">
+                        {formatDuration(track.duration)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
