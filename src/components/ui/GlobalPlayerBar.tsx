@@ -781,41 +781,49 @@ export default function GlobalPlayerBar() {
       ref={playerRootRef}
       className="fixed bottom-2.5 sm:bottom-4 md:bottom-12 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex flex-col items-center overflow-visible"
     >
-      {/* UNIFIED ATTACHED UPWARD DRAWER (MODERATE HEIGHT ON BOTH MOBILE & DESKTOP) */}
-      {hasDrawerOpen && (
-        <div className="w-full max-w-5xl md:max-w-6xl mx-auto mb-2 sm:mb-3 rounded-2xl sm:rounded-3xl border border-white/20 bg-[#0c0c10]/95 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.95)] overflow-hidden p-3 sm:p-4 flex flex-col h-[280px] xs:h-[320px] sm:h-[360px] md:h-[420px] max-h-[50vh] animate-slideUp flex-shrink-0">
-          {/* Header Bar */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              {showLyrics && <Mic2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />}
-              {showQueue && <Disc3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin-slow" />}
-              {showVideo && <Film className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />}
-              <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
-                {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : showQueue ? `DANH SÁCH PHÁT (${playlist.length})` : 'VIDEO ÂM NHẠC (MV)'}
-              </span>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowLyrics(false);
-                setShowQueue(false);
-                setShowVideo(false);
-              }}
-              className="p-1 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+      {/* SEAMLESS ATTACHED UPWARD DRAWER (0.8s ULTRA-SMOOTH GPU EXPANSION, NO GAP, DOCKED TO PLAYBAR) */}
+      <div
+        className={`w-full max-w-5xl md:max-w-6xl mx-auto rounded-t-2xl sm:rounded-t-[32px] border-t border-x border-b-0 border-white/20 bg-[#0c0c10]/95 backdrop-blur-3xl shadow-[0_-20px_50px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[height,opacity] ${
+          hasDrawerOpen
+            ? 'h-[280px] xs:h-[320px] sm:h-[360px] md:h-[420px] max-h-[50vh] opacity-100 p-3 sm:p-4 pointer-events-auto'
+            : 'h-0 opacity-0 p-0 border-t-0 border-x-0 pointer-events-none'
+        }`}
+      >
+        {/* Header Bar */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {showLyrics && <Mic2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />}
+            {showQueue && <Disc3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin-slow" />}
+            {showVideo && <Film className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />}
+            <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
+              {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : showQueue ? `DANH SÁCH PHÁT (${playlist.length})` : 'VIDEO ÂM NHẠC (MV)'}
+            </span>
           </div>
-
-          {/* Drawer Body */}
-          {renderDrawerContent()}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowLyrics(false);
+              setShowQueue(false);
+              setShowVideo(false);
+            }}
+            className="p-1 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
-      )}
 
-      {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD */}
+        {/* Drawer Body */}
+        {renderDrawerContent()}
+      </div>
+
+      {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD (SEAMLESSLY DOCKED TO DRAWER) */}
       <div
         ref={barContainerRef}
-        className="w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-visible rounded-2xl sm:rounded-[32px]"
+        className={`w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] overflow-visible ${
+          hasDrawerOpen
+            ? 'rounded-b-2xl sm:rounded-b-[32px] rounded-t-none border-t-0'
+            : 'rounded-2xl sm:rounded-[32px]'
+        }`}
       >
         {/* High-Energy Kick Flash Gradient Overlay */}
         <div ref={fireOverlayRef} className="fire-flash-overlay opacity-0 rounded-[inherit]" />
@@ -869,23 +877,24 @@ export default function GlobalPlayerBar() {
             {/* Right: Touch-Friendly Quick Actions */}
             <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
               {/* Lyrics Button */}
-              {!showVideo && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowLyrics(!showLyrics);
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLyrics(!showLyrics);
+                  if (!showLyrics) {
                     setShowQueue(false);
-                  }}
-                  className={`p-1.5 rounded-full border transition-all ${
-                    showLyrics
-                      ? 'bg-white text-black border-white shadow-md'
-                      : 'bg-white/10 text-slate-300 border-white/20'
-                  }`}
-                  title="Lyrics"
-                >
-                  <Mic2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+                    setShowVideo(false);
+                  }
+                }}
+                className={`p-1.5 rounded-full border transition-all ${
+                  showLyrics
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/10 text-slate-300 border-white/20'
+                }`}
+                title="Lyrics"
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+              </button>
 
               {/* Prev Button */}
               <button
@@ -919,23 +928,24 @@ export default function GlobalPlayerBar() {
               </button>
 
               {/* Queue Button */}
-              {!showVideo && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowQueue(!showQueue);
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowQueue(!showQueue);
+                  if (!showQueue) {
                     setShowLyrics(false);
-                  }}
-                  className={`p-1.5 rounded-full border transition-all ${
-                    showQueue
-                      ? 'bg-white text-black border-white shadow-md'
-                      : 'bg-white/10 text-slate-300 border-white/20'
-                  }`}
-                  title="Queue"
-                >
-                  <ListMusic className="w-3.5 h-3.5" />
-                </button>
-              )}
+                    setShowVideo(false);
+                  }
+                }}
+                className={`p-1.5 rounded-full border transition-all ${
+                  showQueue
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/10 text-slate-300 border-white/20'
+                }`}
+                title="Queue"
+              >
+                <ListMusic className="w-3.5 h-3.5" />
+              </button>
 
               {/* Volume Button on Mobile: MUTE / UNMUTE TOGGLE ONLY */}
               <button
@@ -1044,24 +1054,25 @@ export default function GlobalPlayerBar() {
           {/* Right Column: PLAYBACK & ACTION CONTROLS */}
           <div className="flex items-center justify-end gap-2 flex-shrink-0 overflow-visible">
             {/* LYRICS BUTTON */}
-            {!showVideo && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowLyrics(!showLyrics);
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLyrics(!showLyrics);
+                if (!showLyrics) {
                   setShowQueue(false);
-                }}
-                className={`px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
-                  showLyrics
-                    ? 'bg-white text-black border-white shadow-lg'
-                    : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
-                }`}
-                title="Lời bài hát (Gothic Lyrics)"
-              >
-                <Mic2 className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">LYRICS</span>
-              </button>
-            )}
+                  setShowVideo(false);
+                }
+              }}
+              className={`px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
+                showLyrics
+                  ? 'bg-white text-black border-white shadow-lg'
+                  : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
+              }`}
+              title="Lời bài hát (Gothic Lyrics)"
+            >
+              <Mic2 className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">LYRICS</span>
+            </button>
 
             <button
               onClick={toggleShuffle}
@@ -1112,24 +1123,25 @@ export default function GlobalPlayerBar() {
             </button>
 
             {/* QUEUE BUTTON */}
-            {!showVideo && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowQueue(!showQueue);
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowQueue(!showQueue);
+                if (!showQueue) {
                   setShowLyrics(false);
-                }}
-                className={`px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
-                  showQueue
-                    ? 'bg-white text-black border-white shadow-lg'
-                    : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
-                }`}
-                title="Hàng chờ"
-              >
-                <ListMusic className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">QUEUE</span>
-              </button>
-            )}
+                  setShowVideo(false);
+                }
+              }}
+              className={`px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
+                showQueue
+                  ? 'bg-white text-black border-white shadow-lg'
+                  : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
+              }`}
+              title="Hàng chờ"
+            >
+              <ListMusic className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">QUEUE</span>
+            </button>
 
             {/* SPEAKER WITH ZERO-GAP HOVER & ABSOLUTE TOP Z-INDEX POPUP */}
             <div
