@@ -1165,5 +1165,6 @@ export default function GlobalPlayerBar() {
         </div>
       </div>
     </div>
-  );
+  </>
+);
 }
