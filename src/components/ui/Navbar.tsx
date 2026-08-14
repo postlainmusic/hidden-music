@@ -16,6 +16,13 @@ interface NavbarProps {
   title?: string;
 }
 
+import {
+  getStoredUserSession,
+  setStoredUserSession,
+  getStoredAdminSession,
+  clearAllStoredSessions
+} from '@/lib/authSession';
+
 export default function Navbar({
   userEmail: propUserEmail,
   onLogout: propOnLogout,
@@ -23,8 +30,9 @@ export default function Navbar({
   showBackButton = false,
   title,
 }: NavbarProps) {
-  const [internalEmail, setInternalEmail] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string | null>(null);
+  const initialStored = typeof window !== 'undefined' ? getStoredUserSession() : null;
+  const [internalEmail, setInternalEmail] = useState<string | null>(initialStored?.email || null);
+  const [displayName, setDisplayName] = useState<string | null>(initialStored?.display_name?.toUpperCase() || null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
   
@@ -37,20 +45,7 @@ export default function Navbar({
 
     const fetchUserData = async () => {
       try {
-        let user: any = null;
-        if (typeof window !== 'undefined') {
-          const saved = sessionStorage.getItem('hidden_vault_user_session');
-          if (saved) {
-            try {
-              user = JSON.parse(saved);
-            } catch {}
-          }
-          const isAdminSession = sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-            document.cookie.includes('hidden_vault_admin=true');
-          if (isAdminSession && !user) {
-            user = { email: 'admin@hiddenvault.com', id: 'admin-master-id', user_metadata: { full_name: 'LUCIINGO1108' } };
-          }
-        }
+        let user: any = getStoredUserSession();
 
         if (!user) {
           const { data } = await supabase.auth.getUser();
@@ -58,11 +53,12 @@ export default function Navbar({
         }
 
         if (user) {
+          setStoredUserSession(user);
           setInternalEmail(user.email || null);
-          const initialName = user.user_metadata?.full_name || user.user_metadata?.display_name || user.user_metadata?.name || user.email?.split('@')[0] || 'VAULT MEMBER';
+          const initialName = user.display_name || user.user_metadata?.full_name || user.user_metadata?.display_name || user.user_metadata?.name || user.email?.split('@')[0] || 'VAULT MEMBER';
           setDisplayName(initialName.toUpperCase());
 
-          if (user.id && user.id !== 'admin-master-id') {
+          if (user.id && user.id !== 'admin-master-id' && !user.id.startsWith('vault-')) {
             const { data: profile } = await supabase
               .from('profiles')
               .select('display_name')
@@ -83,6 +79,7 @@ export default function Navbar({
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        setStoredUserSession(session.user);
         setInternalEmail(session.user.email || null);
         const { data: profile } = await supabase
           .from('profiles')
@@ -93,8 +90,13 @@ export default function Navbar({
         const name = profile?.display_name || session.user.user_metadata?.full_name || session.user.user_metadata?.display_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'VAULT MEMBER';
         setDisplayName(name.toUpperCase());
       } else {
-        setInternalEmail(null);
-        setDisplayName(null);
+        if (!getStoredAdminSession()) {
+          const stored = getStoredUserSession();
+          if (!stored) {
+            setInternalEmail(null);
+            setDisplayName(null);
+          }
+        }
       }
     });
 
@@ -117,8 +119,7 @@ export default function Navbar({
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      sessionStorage.clear();
-      document.cookie = "hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      clearAllStoredSessions();
       window.location.href = '/';
     }
   };

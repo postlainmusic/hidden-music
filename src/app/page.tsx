@@ -9,33 +9,18 @@ import Footer from '@/components/ui/Footer';
 import VaultGate from '@/components/ui/VaultGate';
 import { createClient } from '@/lib/supabase/client';
 import { Album } from '@/types/database';
+import {
+  getStoredUserSession,
+  setStoredUserSession,
+  getStoredAdminSession,
+} from '@/lib/authSession';
 
 export default function Home() {
   const router = useRouter();
 
-  // Lazy state initializer using sessionStorage & localStorage for tab-level session persistence across F5
+  // Instant state initializer using persistent session storage across F5
   const [userSession, setUserSession] = useState<any>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = sessionStorage.getItem('hidden_vault_user_session');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && (parsed.email || parsed.id)) return parsed;
-        }
-        const isAdminSession = sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-          document.cookie.includes('hidden_vault_admin=true');
-        if (isAdminSession) {
-          return { email: 'admin@hiddenvault.com', id: 'admin-master-id' };
-        }
-        const hasSupabaseAuth = Object.keys(localStorage).some((k) => k.includes('sb-') || k.includes('auth-token'));
-        if (hasSupabaseAuth) {
-          return { email: 'member@hiddenvault.com', id: 'vault-active-user' };
-        }
-      } catch (err) {
-        console.warn('Session parse note:', err);
-      }
-    }
-    return null;
+    return getStoredUserSession();
   });
 
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -46,17 +31,15 @@ export default function Home() {
     // Background auth verification with Supabase
     const initAuth = async () => {
       try {
-        const isAdminSession = sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-          document.cookie.includes('hidden_vault_admin=true');
-        if (isAdminSession) {
-          setUserSession({ email: 'admin@hiddenvault.com', id: 'admin-master-id' });
+        if (getStoredAdminSession()) {
+          setUserSession({ email: 'admin@hiddenvault.com', id: 'admin-master-id', display_name: 'LUCIINGO1108' });
           return;
         }
 
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUserSession(session.user);
-          sessionStorage.setItem('hidden_vault_user_session', JSON.stringify(session.user));
+          setStoredUserSession(session.user);
           if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
             window.history.replaceState({}, document.title, window.location.pathname);
           }
@@ -72,16 +55,16 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUserSession(session.user);
-        sessionStorage.setItem('hidden_vault_user_session', JSON.stringify(session.user));
+        setStoredUserSession(session.user);
         if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       } else {
-        const isAdminSession = sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-          document.cookie.includes('hidden_vault_admin=true');
-        if (!isAdminSession) {
-          sessionStorage.removeItem('hidden_vault_user_session');
-          setUserSession(null);
+        if (!getStoredAdminSession()) {
+          const stored = getStoredUserSession();
+          if (!stored) {
+            setUserSession(null);
+          }
         }
       }
     });

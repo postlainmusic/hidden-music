@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Lock, Mail, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Disc3, Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
+import { setStoredAdminSession, setStoredUserSession } from '@/lib/authSession';
+
 export default function VaultGate() {
   const [showAdminPasskey, setShowAdminPasskey] = useState(false);
   const [email, setEmail] = useState('');
@@ -61,8 +63,7 @@ export default function VaultGate() {
       (loginEmail === 'admin@hiddenvault.com' || loginEmail.toLowerCase() === 'admin') &&
       password === 'Lucii@1108'
     ) {
-      sessionStorage.setItem('hidden_vault_admin_session', 'true');
-      document.cookie = "hidden_vault_admin=true; path=/; max-age=86400";
+      setStoredAdminSession(true);
       setMsg({ type: 'success', text: 'Xác thực Admin thành công! Đang chuyển hướng...' });
       setTimeout(() => {
         window.location.href = '/admin';
@@ -80,7 +81,7 @@ export default function VaultGate() {
       if (error) throw error;
 
       if (data?.user) {
-        sessionStorage.setItem('hidden_vault_user_session', JSON.stringify(data.user));
+        setStoredUserSession(data.user);
       }
 
       setMsg({

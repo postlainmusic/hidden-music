@@ -13,6 +13,13 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/types/database';
 
+import {
+  getStoredUserSession,
+  setStoredUserSession,
+  getStoredAdminSession,
+  clearAllStoredSessions
+} from '@/lib/authSession';
+
 interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,7 +31,7 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
   const [profile, setProfile] = useState<Profile | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -32,49 +39,49 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
     if (!isOpen) return;
 
     const loadProfile = async () => {
-      setLoading(true);
       setMsg(null);
       try {
-        let currentUser: any = null;
-        if (typeof window !== 'undefined') {
-          const saved = sessionStorage.getItem('hidden_vault_user_session');
-          if (saved) {
-            try {
-              currentUser = JSON.parse(saved);
-            } catch {}
-          }
-          const isAdminSession = sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-            document.cookie.includes('hidden_vault_admin=true');
-          if (isAdminSession && !currentUser) {
-            currentUser = { email: 'admin@hiddenvault.com', id: 'admin-master-id', user_metadata: { full_name: 'Admin Lucii' } };
-          }
-        }
+        let currentUser: any = getStoredUserSession();
 
-        const supabase = createClient();
         if (!currentUser) {
+          const supabase = createClient();
           const { data } = await supabase.auth.getUser();
           currentUser = data?.user;
         }
 
-        if (currentUser) {
-          setUser(currentUser);
-          const initialName = currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || currentUser.display_name || currentUser.email?.split('@')[0] || 'Vault Listener';
-          const initialAvatar = currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || '';
-          setDisplayName(initialName);
-          setAvatarUrl(initialAvatar);
+        if (!currentUser) {
+          currentUser = {
+            id: 'vault-member-id',
+            email: 'member@hiddenvault.com',
+            display_name: 'VAULT MEMBER',
+            role: 'user',
+          };
+        }
 
-          if (currentUser.id && currentUser.id !== 'admin-master-id') {
-            const { data: dbProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', currentUser.id)
-              .maybeSingle();
+        setUser(currentUser);
+        const initialName =
+          currentUser.display_name ||
+          currentUser.user_metadata?.full_name ||
+          currentUser.user_metadata?.display_name ||
+          currentUser.user_metadata?.name ||
+          currentUser.email?.split('@')[0] ||
+          'Vault Listener';
+        const initialAvatar = currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || '';
+        setDisplayName(initialName);
+        setAvatarUrl(initialAvatar);
 
-            if (dbProfile) {
-              setProfile(dbProfile);
-              if (dbProfile.display_name) setDisplayName(dbProfile.display_name);
-              if (dbProfile.avatar_url) setAvatarUrl(dbProfile.avatar_url);
-            }
+        if (currentUser.id && currentUser.id !== 'admin-master-id' && !currentUser.id.startsWith('vault-')) {
+          const supabase = createClient();
+          const { data: dbProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+
+          if (dbProfile) {
+            setProfile(dbProfile);
+            if (dbProfile.display_name) setDisplayName(dbProfile.display_name);
+            if (dbProfile.avatar_url) setAvatarUrl(dbProfile.avatar_url);
           }
         }
       } catch (err) {

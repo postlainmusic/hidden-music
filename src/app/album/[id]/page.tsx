@@ -15,11 +15,12 @@ import { Album, TrackItem } from '@/types/database';
 import { usePlayer } from '@/context/PlayerContext';
 import Navbar from '@/components/ui/Navbar';
 
+import { hasActiveSession, getStoredUserSession, setStoredUserSession } from '@/lib/authSession';
+
 export default function AlbumDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
-  // Lazy state initializer
   const [album, setAlbum] = useState<Album | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTrack, setSelectedTrack] = useState<TrackItem | null>(null);
@@ -31,19 +32,22 @@ export default function AlbumDetailPage() {
       if (!id) return;
       setLoading(true);
       try {
-        const hasSession = typeof window !== 'undefined' && (
-          sessionStorage.getItem('hidden_vault_user_session') !== null ||
-          sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-          document.cookie.includes('hidden_vault_admin=true') ||
-          Object.keys(localStorage).some((k) => k.includes('sb-') || k.includes('auth-token'))
-        );
+        const supabase = createClient();
+        let authenticated = hasActiveSession();
 
-        if (!hasSession) {
+        if (!authenticated) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            authenticated = true;
+            setStoredUserSession(session.user);
+          }
+        }
+
+        if (!authenticated) {
           window.location.href = '/';
           return;
         }
 
-        const supabase = createClient();
         const { data, error } = await supabase
           .from('albums')
           .select('*, tracks(*)')

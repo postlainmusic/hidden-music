@@ -39,10 +39,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setMsg(null);
     try {
       const supabase = createClient();
+      const redirectUrl = window.location.origin;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
         },
       });
 
@@ -68,8 +69,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       (loginEmail === 'admin@hiddenvault.com' || loginEmail.toLowerCase() === 'admin') &&
       password === 'Lucii@1108'
     ) {
-      sessionStorage.setItem('hidden_vault_admin_session', 'true');
-      document.cookie = "hidden_vault_admin=true; path=/; max-age=86400";
+      setStoredAdminSession(true);
       setMsg({ type: 'success', text: 'Admin passkey verified! Redirecting...' });
       setTimeout(() => {
         window.location.href = '/admin';
@@ -79,12 +79,16 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password,
       });
 
       if (error) throw error;
+
+      if (data?.user) {
+        setStoredUserSession(data.user);
+      }
 
       setMsg({
         type: 'success',
