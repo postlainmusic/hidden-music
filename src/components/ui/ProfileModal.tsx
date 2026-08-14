@@ -60,10 +60,12 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
         }
 
         setUser(currentUser);
+        const storedCustomName = typeof window !== 'undefined' ? localStorage.getItem('hidden_vault_custom_name') : null;
         const initialName =
+          storedCustomName ||
           currentUser.display_name ||
-          currentUser.user_metadata?.full_name ||
           currentUser.user_metadata?.display_name ||
+          currentUser.user_metadata?.full_name ||
           currentUser.user_metadata?.name ||
           currentUser.email?.split('@')[0] ||
           'Vault Listener';
@@ -72,17 +74,22 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
         setAvatarUrl(initialAvatar);
 
         if (currentUser.id && currentUser.id !== 'admin-master-id' && !currentUser.id.startsWith('vault-')) {
-          const supabase = createClient();
-          const { data: dbProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .maybeSingle();
+          const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id);
+          if (isValidUUID) {
+            const supabase = createClient();
+            const { data: dbProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', currentUser.id)
+              .maybeSingle();
 
-          if (dbProfile) {
-            setProfile(dbProfile);
-            if (dbProfile.display_name) setDisplayName(dbProfile.display_name);
-            if (dbProfile.avatar_url) setAvatarUrl(dbProfile.avatar_url);
+            if (dbProfile) {
+              setProfile(dbProfile);
+              if (dbProfile.display_name && !storedCustomName) {
+                setDisplayName(dbProfile.display_name);
+              }
+              if (dbProfile.avatar_url) setAvatarUrl(dbProfile.avatar_url);
+            }
           }
         }
       } catch (err) {
@@ -102,36 +109,79 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
     setSaving(true);
     setMsg(null);
 
+    const updatedName = displayName.trim() || user?.email?.split('@')[0] || 'VAULT MEMBER';
+
     try {
-      if (user) {
-        const supabase = createClient();
-        const updatedName = displayName.trim() || user.email?.split('@')[0] || 'Vault Listener';
+      // 1. Instantly save to local storage & auth session (0ms delay)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hidden_vault_custom_name', updatedName);
+      }
 
-        await supabase.auth.updateUser({
-          data: { display_name: updatedName, full_name: updatedName }
-        });
+      const updatedUserObj = {
+        ...(user || {}),
+        display_name: updatedName,
+        user_metadata: {
+          ...(user?.user_metadata || {}),
+          display_name: updatedName,
+          full_name: updatedName,
+          name: updatedName,
+        },
+      };
 
-        const { error } = await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            email: user.email,
-            display_name: updatedName,
-            avatar_url: avatarUrl || null,
-            role: profile?.role || 'user',
-          });
+      setStoredUserSession(updatedUserObj);
+      setUser(updatedUserObj);
 
-        if (error) console.error('Supabase profile save warning:', error);
+      // Dispatch global events for instant reactive navbar & layout sync
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: { display_name: updatedName } }));
+        window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: updatedUserObj }));
+      }
+
+      // 2. Non-blocking asynchronous sync with Supabase (max 2 seconds safety timeout)
+      if (user?.id && !user.id.startsWith('vault-') && user.id !== 'admin-master-id') {
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+        if (isValidUUID) {
+          const supabase = createClient();
+          
+          // Sync Auth user metadata
+          try {
+            await Promise.race([
+              supabase.auth.updateUser({
+                data: { display_name: updatedName, full_name: updatedName, name: updatedName }
+              }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Auth update timeout')), 2000))
+            ]);
+          } catch (authErr) {
+            console.warn('Supabase auth metadata update notice:', authErr);
+          }
+
+          // Sync database profiles table
+          try {
+            await Promise.race([
+              supabase.from('profiles').upsert({
+                id: user.id,
+                email: user.email,
+                display_name: updatedName,
+                avatar_url: avatarUrl || null,
+                role: profile?.role || 'user',
+              }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Profile DB update timeout')), 2000))
+            ]);
+          } catch (dbErr) {
+            console.warn('Supabase profiles DB update notice:', dbErr);
+          }
+        }
       }
 
       setMsg({ type: 'success', text: 'Cập nhật tên hiển thị thành công!' });
       setTimeout(() => {
+        setSaving(false);
         onClose();
       }, 500);
     } catch (err: unknown) {
+      console.error('Error saving profile:', err);
       const errorText = err instanceof Error ? err.message : 'Không thể lưu hồ sơ.';
       setMsg({ type: 'error', text: errorText });
-    } finally {
       setSaving(false);
     }
   };

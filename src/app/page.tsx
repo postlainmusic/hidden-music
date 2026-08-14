@@ -110,10 +110,21 @@ export default function Home() {
       }
     };
 
-    fetchSupabaseAlbums();
+    // Listen to custom session updates
+    const handleCustomSessionChange = () => {
+      const stored = getStoredUserSession();
+      if (stored) {
+        setUserSession(stored);
+      }
+    };
+
+    window.addEventListener('vault_profile_updated', handleCustomSessionChange);
+    window.addEventListener('vault_auth_change', handleCustomSessionChange);
 
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener('vault_profile_updated', handleCustomSessionChange);
+      window.removeEventListener('vault_auth_change', handleCustomSessionChange);
     };
   }, []);
 

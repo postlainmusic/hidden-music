@@ -16,11 +16,16 @@ export function getStoredUserSession(): VaultUserSession | null {
   if (typeof window === 'undefined') return null;
 
   try {
+    const customName = localStorage.getItem('hidden_vault_custom_name');
+
     // 1. Try localStorage
     const local = localStorage.getItem(USER_SESSION_KEY);
     if (local) {
       const parsed = JSON.parse(local);
-      if (parsed && (parsed.id || parsed.email)) return parsed;
+      if (parsed && (parsed.id || parsed.email)) {
+        if (customName) parsed.display_name = customName;
+        return parsed;
+      }
     }
 
     // 2. Try sessionStorage
@@ -28,6 +33,7 @@ export function getStoredUserSession(): VaultUserSession | null {
     if (session) {
       const parsed = JSON.parse(session);
       if (parsed && (parsed.id || parsed.email)) {
+        if (customName) parsed.display_name = customName;
         localStorage.setItem(USER_SESSION_KEY, session);
         return parsed;
       }
@@ -38,7 +44,7 @@ export function getStoredUserSession(): VaultUserSession | null {
       return {
         id: 'admin-master-id',
         email: 'admin@hiddenvault.com',
-        display_name: 'LUCIINGO1108',
+        display_name: customName || 'LUCIINGO1108',
         role: 'admin',
       };
     }
@@ -51,7 +57,7 @@ export function getStoredUserSession(): VaultUserSession | null {
       return {
         id: 'vault-active-user',
         email: 'member@hiddenvault.com',
-        display_name: 'VAULT MEMBER',
+        display_name: customName || 'VAULT MEMBER',
         role: 'user',
       };
     }
@@ -65,17 +71,25 @@ export function getStoredUserSession(): VaultUserSession | null {
 export function setStoredUserSession(user: any) {
   if (typeof window === 'undefined' || !user) return;
   try {
+    const customStoredName = localStorage.getItem('hidden_vault_custom_name');
+    const resolvedName =
+      user.display_name ||
+      customStoredName ||
+      user.user_metadata?.display_name ||
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email?.split('@')[0] ||
+      'VAULT MEMBER';
+
     const sessionData: VaultUserSession = {
       id: user.id || 'vault-user-' + Date.now(),
       email: user.email,
-      display_name:
-        user.user_metadata?.full_name ||
-        user.user_metadata?.display_name ||
-        user.user_metadata?.name ||
-        user.display_name ||
-        user.email?.split('@')[0] ||
-        'VAULT MEMBER',
-      user_metadata: user.user_metadata,
+      display_name: resolvedName,
+      user_metadata: {
+        ...(user.user_metadata || {}),
+        display_name: resolvedName,
+        full_name: resolvedName,
+      },
       role: user.role || (user.email === 'admin@hiddenvault.com' ? 'admin' : 'user'),
     };
 
@@ -83,7 +97,8 @@ export function setStoredUserSession(user: any) {
     localStorage.setItem(USER_SESSION_KEY, str);
     sessionStorage.setItem(USER_SESSION_KEY, str);
     document.cookie = `hidden_vault_session=true; path=/; max-age=2592000; SameSite=Lax`;
-    window.dispatchEvent(new Event('vault_auth_change'));
+    window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: sessionData }));
+    window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: sessionData }));
   } catch (err) {
     console.warn('Error saving user session:', err);
   }
