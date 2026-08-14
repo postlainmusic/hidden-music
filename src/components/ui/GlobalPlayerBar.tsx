@@ -70,6 +70,7 @@ export default function GlobalPlayerBar() {
   const fireOverlayRef = useRef<HTMLDivElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
   const lastKickTimeRef = useRef<number>(0);
+  const lastSnareTimeRef = useRef<number>(0);
   const lastFiredKickIndexRef = useRef<number>(-1);
   const lastFiredSnareIndexRef = useRef<number>(-1);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
