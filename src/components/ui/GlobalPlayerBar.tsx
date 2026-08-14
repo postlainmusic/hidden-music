@@ -147,6 +147,10 @@ export default function GlobalPlayerBar() {
     }
   };
 
+  const videoOffset = useMemo(() => {
+    return extractVideoOffset(currentTrack?.lyrics || '');
+  }, [currentTrack?.lyrics]);
+
   const songDuration = useMemo(() => {
     return (currentTrack?.duration && currentTrack.duration > 0) ? currentTrack.duration : 180;
   }, [currentTrack?.duration]);
