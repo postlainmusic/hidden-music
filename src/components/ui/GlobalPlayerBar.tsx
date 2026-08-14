@@ -531,12 +531,12 @@ export default function GlobalPlayerBar() {
   const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
   return (
-    <div className="fixed bottom-12 sm:bottom-14 md:bottom-16 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
+    <div className="fixed bottom-2.5 sm:bottom-4 md:bottom-12 left-0 right-0 z-[60] px-2 sm:px-4 pointer-events-auto select-none flex justify-center overflow-visible">
       {/* 100% UNIFIED CONTINUOUS MONOLITHIC CARD (OVERFLOW VISIBLE FOR VOLUME POPOVER) */}
       <div
         ref={barContainerRef}
-        className={`w-full max-w-6xl md:max-w-7xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-visible ${
-          hasDrawerOpen ? 'rounded-[28px] sm:rounded-[32px]' : 'rounded-2xl sm:rounded-[32px]'
+        className={`w-full max-w-5xl md:max-w-6xl mx-auto dynamic-music-bar text-white transform-gpu relative shadow-2xl transition-all duration-300 overflow-visible ${
+          hasDrawerOpen ? 'rounded-[24px] sm:rounded-[32px]' : 'rounded-2xl sm:rounded-[32px]'
         }`}
       >
         {/* High-Energy Kick Flash Gradient Overlay */}
@@ -546,7 +546,7 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER 1: DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
-          <div className="w-full h-[320px] sm:h-[440px] md:h-[540px] p-2 sm:p-3 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
+          <div className="w-full h-[260px] xs:h-[300px] sm:h-[400px] md:h-[500px] p-2 sm:p-3 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[24px] sm:rounded-t-[32px]">
             {/* Video Stage Viewport */}
             <div
               ref={videoContainerRef}
@@ -568,6 +568,18 @@ export default function GlobalPlayerBar() {
                 <span className="font-cyber font-extrabold text-[10px] sm:text-[11px] tracking-wider text-white">HIDDEN MUSIC</span>
               </div>
 
+              {/* Central Play/Pause Watermark Button for Double Tap/Click */}
+              {!isPlaying && (
+                <div
+                  onClick={handleTogglePlay}
+                  className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 cursor-pointer pointer-events-auto transition-opacity"
+                >
+                  <div className="w-12 h-12 sm:w-18 sm:h-18 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
+                    <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-0.5 sm:ml-1" />
+                  </div>
+                </div>
+              )}
+
               {/* Fullscreen Button */}
               <button
                 onClick={(e) => {
@@ -588,18 +600,6 @@ export default function GlobalPlayerBar() {
                     <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg leading-relaxed tracking-wide">
                       {parsedLyrics[activeLyricIdx].text}
                     </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Play / Pause indicator button when paused */}
-              {!isPlaying && (
-                <div
-                  onClick={handleTogglePlay}
-                  className="absolute inset-0 z-30 flex items-center justify-center cursor-pointer bg-black/40 backdrop-blur-xs"
-                >
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-black/75 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
-                    <Play className="w-6 h-6 sm:w-10 sm:h-10 fill-current ml-0.5 sm:ml-1" />
                   </div>
                 </div>
               )}
@@ -649,9 +649,9 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER 2: GOTHIC LYRICS (SEAMLESS CONTINUOUS PANEL) */}
         {/* ============================================================= */}
         {showLyrics && (
-          <div className="w-full h-[320px] sm:h-[430px] p-3 sm:p-6 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
+          <div className="w-full h-[260px] xs:h-[300px] sm:h-[380px] md:h-[430px] p-2.5 sm:p-5 flex flex-col justify-between text-white font-sans animate-slideUp transition-all transform-gpu relative z-20 select-none bg-transparent overflow-hidden rounded-t-[24px] sm:rounded-t-[32px]">
             {/* Gothic Synchronized Lyrics List */}
-            <div className="flex-1 overflow-y-auto no-scrollbar my-auto px-2 py-8 sm:py-12 space-y-4 sm:space-y-5 text-center scroll-smooth relative z-10">
+            <div className="flex-1 overflow-y-auto no-scrollbar my-auto px-2 py-6 sm:py-10 space-y-3.5 sm:space-y-5 text-center scroll-smooth relative z-10" style={{ WebkitOverflowScrolling: 'touch' }}>
               {parsedLyrics.length > 0 ? (
                 parsedLyrics.map((line, idx) => {
                   const isActive = idx === activeLyricIdx;
@@ -660,7 +660,7 @@ export default function GlobalPlayerBar() {
                       key={`${line.time}_${idx}`}
                       ref={isActive ? activeLineRef : null}
                       onClick={() => handleSeek(line.time)}
-                      className={`cursor-pointer transition-all duration-300 py-1.5 px-2 sm:px-4 ${
+                      className={`cursor-pointer transition-all duration-300 py-1 px-2 sm:px-4 ${
                         isActive
                           ? 'scale-105 opacity-100'
                           : 'opacity-35 hover:opacity-75'
@@ -669,8 +669,8 @@ export default function GlobalPlayerBar() {
                       <p
                         className={`transition-all duration-200 ${
                           isActive
-                            ? 'text-white font-extrabold text-base sm:text-xl md:text-2xl tracking-wide font-cyber'
-                            : 'text-zinc-400 font-medium text-xs sm:text-base font-sans'
+                            ? 'text-white font-extrabold text-sm sm:text-lg md:text-xl tracking-wide font-cyber'
+                            : 'text-zinc-400 font-medium text-xs sm:text-sm font-sans'
                         }`}
                       >
                         {line.text}
@@ -683,8 +683,8 @@ export default function GlobalPlayerBar() {
                   {currentTrack.lyrics}
                 </div>
               ) : (
-                <div className="text-center py-16 sm:py-20 text-zinc-500 text-xs tracking-widest flex flex-col items-center gap-2 font-mono">
-                  <Mic2 className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-600 mb-1" />
+                <div className="text-center py-12 sm:py-16 text-zinc-500 text-xs tracking-widest flex flex-col items-center gap-2 font-mono">
+                  <Mic2 className="w-5 h-5 sm:w-7 sm:h-7 text-zinc-600 mb-1" />
                   <span>CHƯA CÓ LỜI BÀI HÁT CHO TÁC PHẨM NÀY</span>
                 </div>
               )}
@@ -696,7 +696,7 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER 3: QUEUE LIST */}
         {/* ============================================================= */}
         {showQueue && (
-          <div className="w-full h-[280px] sm:h-[340px] p-3 sm:p-4 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-20 bg-transparent overflow-hidden rounded-t-[28px] sm:rounded-t-[32px]">
+          <div className="w-full h-[240px] xs:h-[280px] sm:h-[340px] p-2.5 sm:p-4 text-white font-mono text-xs flex flex-col justify-between animate-slideUp transition-all transform-gpu relative z-20 bg-transparent overflow-hidden rounded-t-[24px] sm:rounded-t-[32px]">
             <div className="flex items-center justify-between border-b border-white/10 pb-2 sm:pb-2.5 mb-2">
               <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider font-cyber text-[10px]">
                 <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />
@@ -704,7 +704,7 @@ export default function GlobalPlayerBar() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar space-y-1.5 sm:space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 sm:space-y-1.5 pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
               {playlist.map((trk, i) => {
                 const isCurrent = currentTrack?.id === trk.id;
                 return (
@@ -740,12 +740,12 @@ export default function GlobalPlayerBar() {
         {/* ============================================================= */}
         {/* MOBILE CONTROL BAR LAYOUT (< md: 2-Row Optimized Structure) */}
         {/* ============================================================= */}
-        <div className="md:hidden w-full p-2 px-3 transition-all duration-300 flex flex-col gap-1.5 relative z-50 select-none overflow-visible bg-transparent">
+        <div className="md:hidden w-full p-2 px-2.5 sm:px-3.5 transition-all duration-300 flex flex-col gap-1.5 relative z-50 select-none overflow-visible bg-transparent">
           {/* Mobile Row 1: Track Metadata & Controls */}
-          <div className="flex items-center justify-between gap-2 w-full">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 w-full">
             {/* Left: Cover & Info */}
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
+              <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
                 <img
                   src={currentAlbum?.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
                   alt={currentTrack.title}
@@ -754,7 +754,7 @@ export default function GlobalPlayerBar() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1 truncate">
-                  <h4 className="text-[11px] font-extrabold text-white truncate font-cyber">
+                  <h4 className="text-[11px] sm:text-xs font-extrabold text-white truncate font-cyber uppercase tracking-wide">
                     {currentTrack.title}
                   </h4>
                   {currentTrack.video_url && (
@@ -776,14 +776,14 @@ export default function GlobalPlayerBar() {
                     </button>
                   )}
                 </div>
-                <p className="text-[8px] text-slate-400 truncate uppercase font-mono">
+                <p className="text-[9px] text-slate-400 truncate uppercase font-mono">
                   {currentAlbum?.artist || 'VAULT ARTIST'}
                 </p>
               </div>
             </div>
 
             {/* Right: Touch-Friendly Quick Actions */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
               {/* Lyrics Button */}
               {!showVideo && (
                 <button

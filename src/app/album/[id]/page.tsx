@@ -178,13 +178,9 @@ export default function AlbumDetailPage() {
   }
 
   return (
-    <main className="h-screen w-screen bg-black text-white font-cyber relative overflow-hidden flex flex-col justify-between select-none">
+    <main className="min-h-screen lg:h-screen w-full bg-[#09090d] text-white font-cyber relative overflow-x-hidden overflow-y-auto lg:overflow-hidden flex flex-col justify-between select-none">
       {/* Top Fixed Header with clean BACK button */}
       <Navbar showBackButton={true} />
-
-      {/* Analog TV Grain Noise & CRT Scanlines Overlays */}
-      <div className="tv-grain-overlay" />
-      <div className="crt-scanlines" />
 
       {/* Dynamic Ambient Background Glow from Cover Art */}
       <div
@@ -194,17 +190,17 @@ export default function AlbumDetailPage() {
         }}
       />
 
-      {/* Main Single-Viewport Content Area (Zero Page Scroll) */}
-      <div className="flex-1 w-full max-w-[1520px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 flex items-center justify-center relative z-10 pt-16 md:pt-20 pb-28 md:pb-32 overflow-hidden">
+      {/* Main Content Area (Scrollable on Mobile, Single-Viewport on Desktop) */}
+      <div className="flex-1 w-full max-w-[1520px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 flex items-center justify-center relative z-10 pt-16 sm:pt-20 pb-36 sm:pb-40 lg:pb-24">
         
         {/* Main Grid: Left Vinyl Deck & Right Clean Unified Playlist */}
-        <div className="w-full flex flex-col lg:flex-row items-center lg:items-center justify-center gap-8 sm:gap-12 lg:gap-16 xl:gap-24 max-h-full">
+        <div className="w-full flex flex-col lg:flex-row items-center lg:items-center justify-center gap-6 sm:gap-10 lg:gap-16 xl:gap-24 max-h-full">
           
           {/* ========================================================================= */}
           {/* LEFT COLUMN: Ultra-Premium 3D Vinyl Sleeve Showcase                       */}
           {/* ========================================================================= */}
           <div
-            className={`w-full lg:w-[400px] xl:w-[440px] shrink-0 flex flex-col items-center text-center space-y-3 sm:space-y-4 relative z-20 transition-all duration-700 ease-out ${
+            className={`w-full lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col items-center text-center space-y-2.5 sm:space-y-4 relative z-20 transition-all duration-700 ease-out ${
               animateSlide
                 ? 'lg:translate-x-0 lg:opacity-100'
                 : 'lg:translate-x-[180px] lg:scale-105 opacity-90'
@@ -220,9 +216,9 @@ export default function AlbumDetailPage() {
               {/* Outer Wrapper that handles the physical slide-out to the right */}
               <div
                 id="album-vinyl-wrapper"
-                className={`absolute w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 lg:w-64 lg:h-64 xl:w-72 xl:h-72 transition-all duration-700 ease-out z-0 pointer-events-none ${
+                className={`absolute w-36 h-36 xs:w-40 xs:h-40 sm:w-52 sm:h-52 md:w-56 md:h-56 lg:w-64 lg:h-64 xl:w-72 xl:h-72 transition-all duration-700 ease-out z-0 pointer-events-none ${
                   (isCoverHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? 'translate-x-16 sm:translate-x-20 md:translate-x-24 opacity-100'
+                    ? 'translate-x-12 sm:translate-x-20 md:translate-x-24 opacity-100'
                     : 'translate-x-0 opacity-0'
                 }`}
               >
@@ -236,16 +232,16 @@ export default function AlbumDetailPage() {
                 >
                   {/* Vinyl Grooves Texture */}
                   <div className="absolute inset-2 rounded-full border border-white/[0.04]" />
-                  <div className="absolute inset-6 rounded-full border border-white/[0.06]" />
-                  <div className="absolute inset-12 rounded-full border border-white/[0.08]" />
-                  <div className="absolute inset-16 rounded-full border border-white/[0.05]" />
+                  <div className="absolute inset-5 rounded-full border border-white/[0.06]" />
+                  <div className="absolute inset-10 rounded-full border border-white/[0.08]" />
+                  <div className="absolute inset-14 rounded-full border border-white/[0.05]" />
 
                   {/* Central Center Label with Mini Album Artwork */}
-                  <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
+                  <div className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full overflow-hidden shadow-inner flex items-center justify-center ${
                     isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
                   }`}>
                     <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
-                    <div className="absolute w-3 h-3 rounded-full bg-black" />
+                    <div className="absolute w-2.5 h-2.5 rounded-full bg-black" />
                   </div>
                 </div>
               </div>
@@ -253,7 +249,7 @@ export default function AlbumDetailPage() {
               {/* Front Borderless Album Sleeve with Dynamic Vocal Reactivity */}
               <div
                 id="album-cover-box"
-                className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] bg-zinc-950 flex-shrink-0 z-10 will-change-transform"
+                className="relative w-40 h-40 xs:w-44 xs:h-44 sm:w-56 sm:h-56 md:w-60 md:h-60 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] bg-zinc-950 flex-shrink-0 z-10 will-change-transform"
               >
                 {/* Full-Color Cover Artwork */}
                 <img
@@ -267,15 +263,15 @@ export default function AlbumDetailPage() {
                 {/* Overlay with Gloss Sheen */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-black/50 via-transparent to-white/10 opacity-70 group-hover:opacity-40 transition-opacity" />
 
-                {/* Floating Central Play / Pause Button with Backdrop Blur */}
+                {/* Floating Central Play / Pause Button with Backdrop Blur (Subtle on Mobile) */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div
-                    className="w-14 h-14 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-full bg-white/90 backdrop-blur-md text-black flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-all duration-300 group-hover:scale-110 group-hover:bg-white active:scale-95"
+                    className="w-11 h-11 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-white/90 backdrop-blur-md text-black flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-all duration-300 group-hover:scale-110 group-hover:bg-white active:scale-95"
                   >
                     {isCurrentPlayingThisAlbum && isPlaying ? (
-                      <Pause className="w-7 h-7 sm:w-8 sm:h-8 fill-current" />
+                      <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-current" />
                     ) : (
-                      <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-current ml-1" />
+                      <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-current ml-0.5" />
                     )}
                   </div>
                 </div>
@@ -283,30 +279,30 @@ export default function AlbumDetailPage() {
             </div>
 
             {/* Album Title & Artist */}
-            <div className="space-y-1 px-2 w-full">
-              <h1 className="text-2xl sm:text-3xl lg:text-3xl xl:text-4xl font-black tracking-tight uppercase text-white font-cyber truncate drop-shadow-md">
+            <div className="space-y-0.5 sm:space-y-1 px-2 w-full">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-black tracking-tight uppercase text-white font-cyber truncate drop-shadow-md">
                 {album.title}
               </h1>
-              <p className="text-xs sm:text-sm font-mono text-slate-300 uppercase tracking-widest font-semibold truncate">
+              <p className="text-[11px] sm:text-xs md:text-sm font-mono text-slate-300 uppercase tracking-widest font-semibold truncate">
                 {album.artist}
               </p>
             </div>
 
             {/* Action Buttons Deck */}
-            <div className="w-full max-w-sm flex items-center gap-2 pt-1">
+            <div className="w-full max-w-sm flex items-center gap-2 pt-0.5 sm:pt-1">
               {/* Main Play / Pause Button */}
               <button
                 onClick={isCurrentPlayingThisAlbum ? togglePlay : handlePlayAlbum}
-                className="flex-1 py-3 px-5 rounded-full bg-white hover:bg-slate-100 text-black font-black font-mono text-xs uppercase tracking-widest shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:scale-[1.03] active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 sm:py-3 px-4 sm:px-5 rounded-full bg-white hover:bg-slate-100 text-black font-black font-mono text-[11px] sm:text-xs uppercase tracking-wider sm:tracking-widest shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 {isCurrentPlayingThisAlbum && isPlaying ? (
                   <>
-                    <Pause className="w-4 h-4 fill-current" />
+                    <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
                     <span>PAUSE PLAYBACK</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-4 h-4 fill-current" />
+                    <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
                     <span>PLAY ALL TRACKS</span>
                   </>
                 )}
@@ -316,13 +312,13 @@ export default function AlbumDetailPage() {
               <button
                 onClick={handleShufflePlay}
                 title={shuffleMode ? 'Tắt trộn bài' : 'Phát ngẫu nhiên'}
-                className={`p-3 rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
+                className={`p-2.5 sm:p-3 rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
                   shuffleMode
                     ? 'bg-white text-black border-white shadow-lg'
                     : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
                 }`}
               >
-                <Shuffle className="w-4 h-4" />
+                <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
 
@@ -339,10 +335,10 @@ export default function AlbumDetailPage() {
             }`}
           >
             {/* Unified Dark Neumorphic Panel */}
-            <div className="dark-neumorph-card p-3 sm:p-4 md:p-5 h-[420px] sm:h-[460px] md:h-[490px] lg:h-[510px] xl:h-[530px] flex flex-col w-full overflow-hidden">
+            <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 lg:p-5 h-[340px] xs:h-[380px] sm:h-[440px] md:h-[480px] lg:h-[510px] xl:h-[530px] flex flex-col w-full overflow-hidden">
               
-              {/* Scrollable Tracklist with Perfect Padding and Clean Alignment */}
-              <div className="flex-1 overflow-y-auto space-y-1 select-none no-scrollbar px-1 py-1">
+              {/* Scrollable Tracklist with Smooth Touch Scrolling and Safe Bottom Spacing */}
+              <div className="flex-1 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {tracks.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
                     <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
