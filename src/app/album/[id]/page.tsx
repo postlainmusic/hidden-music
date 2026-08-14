@@ -165,27 +165,26 @@ export default function AlbumDetailPage() {
       <div className="tv-grain-overlay" />
       <div className="crt-scanlines" />
 
-      {/* Main Single-Viewport Content Area (No Page Scroll on Desktop) */}
-      <div className="flex-1 w-full max-w-6xl mx-auto px-4 md:px-8 flex items-center justify-center relative z-10 pt-16 md:pt-20 pb-28 md:pb-32 overflow-hidden">
+      {/* Main Single-Viewport Content Area (Wide, Zero Page Scroll on Desktop) */}
+      <div className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 md:px-10 lg:px-14 flex items-center justify-center relative z-10 pt-16 md:pt-20 pb-28 md:pb-32 overflow-hidden">
         
-        {/* Responsive Layout: Mobile Stack (scrollable within) vs Desktop Split (Side-by-Side strictly in 1 screen) */}
+        {/* Spacious Responsive Layout: Left Showcase & Right Wide Playlist */}
         <div className="w-full flex flex-col md:flex-row items-center md:items-center justify-center gap-6 md:gap-8 lg:gap-12 max-h-full">
           
           {/* ========================================================================= */}
           {/* LEFT COLUMN: Album Cover Showcase & Primary Controls                      */}
-          {/* Desktop Animation: Starts centered, then smoothly slides to the left      */}
           {/* ========================================================================= */}
           <div
-            className={`w-full md:w-[320px] lg:w-[380px] shrink-0 flex flex-col items-center text-center space-y-3.5 lg:space-y-4 transition-all duration-700 ease-out ${
+            className={`w-full md:w-[320px] lg:w-[360px] xl:w-[400px] shrink-0 flex flex-col items-center text-center space-y-3.5 lg:space-y-4 transition-all duration-700 ease-out ${
               animateSlide
                 ? 'md:translate-x-0 md:opacity-100'
-                : 'md:translate-x-[160px] lg:translate-x-[200px] md:scale-105 opacity-90'
+                : 'md:translate-x-[180px] lg:translate-x-[240px] md:scale-105 opacity-90'
             } animate-slideUp`}
           >
             {/* Album Cover Art Card */}
             <div
               id="album-cover-box"
-              className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 rounded-3xl overflow-hidden border-2 border-white/30 shadow-[0_20px_50px_rgba(0,0,0,0.9)] group bg-zinc-950 transition-all duration-500 hover:border-white/60 flex-shrink-0"
+              className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-3xl overflow-hidden border-2 border-white/30 shadow-[0_20px_50px_rgba(0,0,0,0.9)] group bg-zinc-950 transition-all duration-500 hover:border-white/60 flex-shrink-0"
             >
               <img
                 src={album.cover_url}
@@ -253,22 +252,20 @@ export default function AlbumDetailPage() {
           </div>
 
           {/* ========================================================================= */}
-          {/* RIGHT COLUMN: Unified Tracklist Card                                      */}
-          {/* Matches the exact height of the left showcase on desktop                 */}
-          {/* Desktop Animation: Slides smoothly from center to the right with stagger  */}
+          {/* RIGHT COLUMN: Wide Unified Tracklist Card (Hidden Scrollbar)              */}
           {/* ========================================================================= */}
           <div
-            className={`w-full flex-1 max-w-lg lg:max-w-xl font-mono transition-all duration-700 delay-100 ease-out ${
+            className={`w-full flex-1 min-w-0 font-mono transition-all duration-700 delay-100 ease-out ${
               animateSlide
                 ? 'md:translate-x-0 md:opacity-100'
-                : 'md:translate-x-16 md:opacity-0 pointer-events-none'
+                : 'md:translate-x-20 md:opacity-0 pointer-events-none'
             }`}
           >
-            {/* Single Unified Card Enclosing All Tracks */}
-            <div className="bw-panel rounded-3xl p-3 sm:p-4 border border-white/20 shadow-2xl backdrop-blur-2xl h-[360px] sm:h-[400px] md:h-[430px] lg:h-[470px] flex flex-col">
+            {/* Wide Unified Card Enclosing All Tracks */}
+            <div className="bw-panel rounded-3xl p-3.5 sm:p-5 border border-white/20 shadow-2xl backdrop-blur-2xl h-[370px] sm:h-[410px] md:h-[440px] lg:h-[480px] xl:h-[500px] flex flex-col w-full">
               
-              {/* Scrollable Tracklist Area with Smooth Hidden Scrollbar */}
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 select-none">
+              {/* Scrollable Tracklist Area with Zero Visible Scrollbar (Smooth Wheel Scroll) */}
+              <div className="flex-1 overflow-y-auto space-y-2.5 select-none no-scrollbar">
                 {tracks.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                     <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
@@ -286,16 +283,16 @@ export default function AlbumDetailPage() {
                           setSelectedTrack(track);
                           playTrack(track, album, tracks);
                         }}
-                        className={`p-3 sm:p-3.5 rounded-2xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                        className={`p-3 sm:p-4 rounded-2xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
                           isCurrentPlaying
                             ? 'bg-white text-black font-extrabold border-white shadow-xl scale-[1.01]'
                             : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15 hover:border-white/25 hover:text-white'
                         }`}
                       >
-                        {/* Left: Index + Title */}
-                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
+                        {/* Left: Index + Icon + Full Title */}
+                        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 pr-4">
                           <span
-                            className={`w-5 font-mono font-bold text-xs ${
+                            className={`w-5 sm:w-6 font-mono font-bold text-xs ${
                               isCurrentPlaying ? 'text-black font-black' : 'text-slate-500'
                             }`}
                           >
@@ -303,16 +300,16 @@ export default function AlbumDetailPage() {
                           </span>
 
                           <div
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border ${
+                            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center flex-shrink-0 border ${
                               isCurrentPlaying
                                 ? 'bg-black text-white border-black'
                                 : 'bg-white/10 text-white border-white/15'
                             }`}
                           >
                             {isCurrentPlaying && isPlaying ? (
-                              <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+                              <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-pulse" />
                             ) : (
-                              <Music className="w-3.5 h-3.5" />
+                              <Music className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             )}
                           </div>
 
@@ -322,10 +319,10 @@ export default function AlbumDetailPage() {
                         </div>
 
                         {/* Right: Badges & Wave Indicator */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           {track.audio_url && (
                             <span
-                              className={`text-[8px] sm:text-[9px] uppercase px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border ${
+                              className={`text-[8px] sm:text-[9px] uppercase px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 border ${
                                 isCurrentPlaying
                                   ? 'bg-black text-white border-black'
                                   : 'bg-white/10 text-white border-white/20'
@@ -337,7 +334,7 @@ export default function AlbumDetailPage() {
 
                           {track.video_url && (
                             <span
-                              className={`text-[8px] sm:text-[9px] uppercase px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border ${
+                              className={`text-[8px] sm:text-[9px] uppercase px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 border ${
                                 isCurrentPlaying
                                   ? 'bg-black text-cyan-300 border-cyan-400'
                                   : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
@@ -349,10 +346,10 @@ export default function AlbumDetailPage() {
 
                           {/* Equalizer bouncy wave indicator when actively playing */}
                           {isCurrentPlaying && isPlaying && (
-                            <div className="flex items-end gap-0.5 h-3 pl-1">
-                              <span className="w-0.5 bg-black rounded-full animate-bounce" style={{ height: '60%', animationDelay: '0ms' }} />
-                              <span className="w-0.5 bg-black rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
-                              <span className="w-0.5 bg-black rounded-full animate-bounce" style={{ height: '75%', animationDelay: '300ms' }} />
+                            <div className="flex items-end gap-0.5 h-3.5 pl-1.5">
+                              <span className="w-0.5 sm:w-1 bg-black rounded-full animate-bounce" style={{ height: '60%', animationDelay: '0ms' }} />
+                              <span className="w-0.5 sm:w-1 bg-black rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
+                              <span className="w-0.5 sm:w-1 bg-black rounded-full animate-bounce" style={{ height: '75%', animationDelay: '300ms' }} />
                             </div>
                           )}
                         </div>
