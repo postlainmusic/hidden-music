@@ -31,6 +31,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
+import { extractVideoOffset, formatOffsetString } from '@/lib/lrcParser';
 
 export interface BatchTrackItem {
   id: string;
@@ -91,6 +92,7 @@ export default function AdminPage() {
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaUrlInput, setMediaUrlInput] = useState('');
   const [lyrics, setLyrics] = useState('');
+  const [videoOffsetInput, setVideoOffsetInput] = useState('');
 
   // UUID Validator Regex
   const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -110,63 +112,37 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { data: dbAlbums, error: albErr } = await supabase
+      const { data: albumsData, error: albumsError } = await supabase
         .from('albums')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (albErr) throw albErr;
+      if (albumsError) throw albumsError;
 
-      const { data: dbTracks, error: trkErr } = await supabase
+      const { data: tracksData, error: tracksError } = await supabase
         .from('tracks')
         .select('*')
         .order('created_at', { ascending: true });
 
-      if (trkErr) throw trkErr;
+      if (tracksError) throw tracksError;
 
-      if (dbAlbums && dbAlbums.length > 0) {
-        const fullAlbums = dbAlbums.map((alb) => {
-          const albTracks = dbTracks ? dbTracks.filter((t) => t.album_id === alb.id) : [];
-          albTracks.forEach((t) => {
-            if (!t.audio_url && (t as any).url) {
-              t.audio_url = (t as any).url;
-            }
-          });
-          albTracks.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
-          return {
-            ...alb,
-            tracks: albTracks,
-          };
-        });
-        setAlbums(fullAlbums);
-      } else {
-        setAlbums([]);
-      }
+      const fullAlbums: Album[] = (albumsData || []).map((album) => ({
+        ...album,
+        tracks: (tracksData || []).filter((track) => track.album_id === album.id),
+      }));
+
+      setAlbums(fullAlbums);
     } catch (err: unknown) {
-      console.error('Supabase fetch error:', err);
-      setAlbums([]);
+      const msg = err instanceof Error ? err.message : 'Lỗi kết nối Supabase.';
+      console.error('Error fetching Supabase data:', err);
+      setStatusMsg({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClient();
-      const isAdminSession = typeof window !== 'undefined' && (
-        sessionStorage.getItem('hidden_vault_admin_session') === 'true' ||
-        document.cookie.includes('hidden_vault_admin=true')
-      );
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user && !isAdminSession) {
-        window.location.href = '/';
-        return;
-      }
-      fetchSupabaseData();
-    };
-
-    checkAuth();
+    fetchSupabaseData();
   }, []);
 
   const openCreateAlbumModal = () => {
@@ -174,12 +150,12 @@ export default function AdminPage() {
     setIsAlbumModalOpen(true);
   };
 
-  const startEditAlbum = (alb: Album) => {
-    setEditingAlbumId(alb.id);
-    setAlbumTitle(alb.title);
-    setAlbumArtist(alb.artist);
-    setAlbumYear(alb.original_year || new Date().getFullYear());
-    setCoverUrlInput(alb.cover_url || '');
+  const startEditAlbum = (album: Album) => {
+    setEditingAlbumId(album.id);
+    setAlbumTitle(album.title);
+    setAlbumArtist(album.artist);
+    setAlbumYear(album.original_year);
+    setCoverUrlInput(album.cover_url);
     setIsAlbumModalOpen(true);
   };
 
@@ -187,6 +163,7 @@ export default function AdminPage() {
     setEditingAlbumId(null);
     setAlbumTitle('');
     setAlbumArtist('');
+    setAlbumYear(new Date().getFullYear());
     setCoverFile(null);
     setCoverUrlInput('');
     setIsAlbumModalOpen(false);
@@ -195,6 +172,11 @@ export default function AdminPage() {
   // Create or Update Album Folder (100% SUPABASE ONLY)
   const handleSaveAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!albumTitle.trim() || !albumArtist.trim()) {
+      setStatusMsg({ type: 'error', text: 'Vui lòng điền đầy đủ Tên Album và Nghệ sĩ.' });
+      return;
+    }
+
     setUploading(true);
     setStatusMsg(null);
 
@@ -265,12 +247,15 @@ export default function AdminPage() {
     setMediaType(track.media_type);
     setMediaUrlInput(track.media_type === 'video' ? (track.video_url || '') : track.audio_url);
     setLyrics(track.lyrics || '');
+    const offsetSecs = extractVideoOffset(track.lyrics || '');
+    setVideoOffsetInput(offsetSecs > 0 ? formatOffsetString(offsetSecs) : '');
   };
 
   const cancelEditTrack = () => {
     setEditingTrackId(null);
     setTrackTitle('');
     setLyrics('');
+    setVideoOffsetInput('');
     setMediaFile(null);
     setMediaUrlInput('');
     setAutoMetadata(null);
@@ -540,13 +525,19 @@ export default function AdminPage() {
         finalVideoUrl = urls.videoUrl;
       }
 
+      let finalLyrics = lyrics.trim();
+      if (videoOffsetInput.trim()) {
+        finalLyrics = finalLyrics.replace(/^\[(video_offset|music_start):.*?\]\r?\n?/gim, '').trim();
+        finalLyrics = `[video_offset:${videoOffsetInput.trim()}]\n` + finalLyrics;
+      }
+
       const trackPayload = {
         album_id: openedAlbumId,
         title: trackTitle,
         media_type: mediaType,
         audio_url: finalAudioUrl || mediaUrlInput || '',
         video_url: finalVideoUrl || mediaUrlInput || '',
-        lyrics: lyrics || undefined,
+        lyrics: finalLyrics || undefined,
         duration: trackDuration > 0 ? trackDuration : 200,
       };
 
@@ -1450,6 +1441,25 @@ export default function AdminPage() {
                     />
                   </div>
 
+                  {/* Video Intro / Music Start Time Offset Input */}
+                  <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl space-y-1.5 font-mono">
+                    <label className="block text-amber-300 font-bold uppercase text-[11px] flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Film className="w-3.5 h-3.5 text-amber-400" /> MỐC BẮT ĐẦU NHẠC TRONG MV (OFFSET)
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="vd: 01:30 hoặc 90 (để trống nếu bài nhạc bắt đầu từ 0:00)"
+                      value={videoOffsetInput}
+                      onChange={(e) => setVideoOffsetInput(e.target.value)}
+                      className="w-full bg-slate-950 border border-amber-500/40 rounded-lg px-3 py-2 text-amber-200 placeholder-slate-600 focus:outline-none focus:border-amber-400 text-xs"
+                    />
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      💡 <em>Nếu video MV có đoạn hội thoại / Intro dài trước khi vào nhạc, nhập mốc thời gian nhạc cất lên (vd: <code>01:30</code>) để Lời bài hát tự động đồng bộ chính xác 100%.</em>
+                    </p>
+                  </div>
+
                   <button
                     type="submit"
                     disabled={uploading || readingMetadata}
@@ -1558,6 +1568,11 @@ export default function AdminPage() {
                             ) : (
                               <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-slate-900 text-slate-500 border border-slate-800">
                                 📜 CHƯA CÓ LRC
+                              </span>
+                            )}
+                            {t.lyrics && extractVideoOffset(t.lyrics) > 0 && (
+                              <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40">
+                                🎬 MV BẮT ĐẦU: {formatOffsetString(extractVideoOffset(t.lyrics))}
                               </span>
                             )}
                           </div>

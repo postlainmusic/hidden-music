@@ -175,13 +175,13 @@ input[type="range"]::-moz-range-thumb:hover {
 
 /* Dynamic Music Visualization Bar Styles */
 .dynamic-music-bar {
-  background: rgba(12, 12, 18, 0.75);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(12, 12, 18, 0.88);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow: 
-    0 15px 40px rgba(0, 0, 0, 0.85),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 20px 50px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
     inset 0 -1px 0 rgba(0, 0, 0, 0.5);
   transition: transform 0.08s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out;
 }
@@ -192,16 +192,16 @@ input[type="range"]::-moz-range-thumb:hover {
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(
-    125deg,
-    rgba(147, 51, 234, 0.5),
-    rgba(59, 130, 246, 0.45),
-    rgba(236, 72, 153, 0.5),
-    rgba(16, 185, 129, 0.45),
-    rgba(139, 92, 246, 0.5)
+    135deg,
+    rgba(65, 25, 95, 0.65),
+    rgba(20, 35, 75, 0.6),
+    rgba(80, 20, 60, 0.65),
+    rgba(15, 55, 65, 0.55),
+    rgba(50, 25, 80, 0.65)
   );
-  background-size: 300% 300%;
-  animation: fluidGradientMove 10s ease infinite;
-  opacity: 0.95;
+  background-size: 250% 250%;
+  animation: fluidGradientMove 12s ease infinite;
+  opacity: 0.8;
   z-index: 1;
 }
 
