@@ -6,12 +6,24 @@
   --font-outfit: 'Outfit', sans-serif;
 }
 
-body {
+html, body {
   background-color: #000000;
   color: #ffffff;
   overflow-x: hidden;
   font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;
+  cursor: default;
   user-select: none;
+  -webkit-user-select: none;
+}
+
+button, a, input[type="range"], [role="button"], label {
+  cursor: pointer;
+}
+
+input[type="text"], input[type="password"], input[type="email"], input[type="number"], textarea {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Professional Silky Micro Film Grain Overlay */

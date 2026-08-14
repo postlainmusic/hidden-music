@@ -376,7 +376,7 @@ export default function GlobalPlayerBar() {
       {/* DYNAMIC MUSIC VISUALIZATION BAR GLASSMORPHIC CONTAINER */}
       <div
         ref={barContainerRef}
-        className="w-full max-w-6xl md:max-w-7xl mx-auto rounded-3xl dynamic-music-bar text-white overflow-hidden transform-gpu relative shadow-2xl"
+        className="w-full max-w-6xl md:max-w-7xl mx-auto rounded-3xl dynamic-music-bar text-white overflow-visible transform-gpu relative shadow-2xl"
       >
         {/* Fluid Ambient Multi-Color Gradient Overlay (Always active when audio plays) */}
         {isPlaying && !showVideo && <div className="fluid-ambient-gradient" />}
@@ -391,7 +391,7 @@ export default function GlobalPlayerBar() {
         {/* INTEGRATED DRAWER: NATIVE WEB VIDEO PLAYER (SLIDE UP/DOWN) */}
         {/* ============================================================= */}
         {showVideo && currentTrack?.video_url && (
-          <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 border-b border-cyan-500/30 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu bg-black/95 backdrop-blur-2xl relative z-40 select-none">
+          <div className="w-full h-[360px] sm:h-[460px] md:h-[540px] p-3 sm:p-4 border-b border-cyan-500/30 flex flex-col justify-between text-white font-mono animate-slideUp transition-all transform-gpu bg-black/95 backdrop-blur-2xl relative z-40 select-none rounded-t-3xl overflow-hidden">
             {/* CRT TV Grain & Scanlines Overlay inside Video Drawer */}
             <div className="crt-scanlines pointer-events-none" />
             <div className="tv-grain-overlay pointer-events-none opacity-40" />
@@ -415,14 +415,13 @@ export default function GlobalPlayerBar() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowVideo(false)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors flex-shrink-0 flex items-center gap-1 text-[10px] font-bold"
-                title="Thu gọn Video Stage"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">THU GỌN</span>
-              </button>
+              {/* Status Badge */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="px-2.5 py-1 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  <span>SYNCED MV</span>
+                </span>
+              </div>
             </div>
 
             {/* Native Web Video Viewport Stage with Transparent DRM Anti-Theft Shield */}
@@ -445,6 +444,22 @@ export default function GlobalPlayerBar() {
                 <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
                 <span>DRM PROTECTED • WEB STAGE</span>
               </div>
+
+              {/* Synchronized Karaoke / Subtitle Overlay on Video */}
+              {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
+                <div className="absolute bottom-6 left-4 right-4 z-40 flex flex-col items-center justify-center text-center pointer-events-none select-none transition-all duration-300">
+                  <div className="bg-black/80 backdrop-blur-md px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl border border-cyan-400/40 shadow-[0_0_30px_rgba(0,0,0,0.9)] max-w-2xl">
+                    <p className="text-white font-cyber font-bold text-xs sm:text-base md:text-lg tracking-wide drop-shadow-[0_2px_8px_rgba(0,240,255,0.6)] leading-relaxed">
+                      {parsedLyrics[activeLyricIdx].text}
+                    </p>
+                    {parsedLyrics[activeLyricIdx + 1]?.text && (
+                      <p className="text-slate-400 font-mono text-[9px] sm:text-xs tracking-wider opacity-60 mt-1 line-clamp-1">
+                        {parsedLyrics[activeLyricIdx + 1].text}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Transparent DRM Anti-Theft Protection Shield & Click-to-Play Overlay */}
               <div
@@ -709,22 +724,24 @@ export default function GlobalPlayerBar() {
                 <h4 className="text-[10px] sm:text-[11px] font-extrabold text-white truncate uppercase tracking-wider font-cyber">
                   {currentTrack.title}
                 </h4>
-                {showVideo ? (
-                  <span className="text-[8px] uppercase px-1.5 py-0.5 rounded-full font-bold bg-cyan-400 text-black border border-cyan-300 flex items-center gap-0.5 flex-shrink-0 shadow-[0_0_10px_rgba(0,240,255,0.8)]">
-                    <Film className="w-2.5 h-2.5" /> VIDEO BAR
-                  </span>
-                ) : currentTrack.video_url ? (
-                  <span
+                {currentTrack.video_url ? (
+                  <button
                     onClick={() => {
-                      setShowVideo(true);
-                      setShowLyrics(false);
-                      setShowQueue(false);
+                      setShowVideo((prev) => !prev);
+                      if (!showVideo) {
+                        setShowLyrics(false);
+                        setShowQueue(false);
+                      }
                     }}
-                    className="text-[8px] uppercase px-2 py-0.5 rounded-full font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-400/50 flex items-center gap-1 flex-shrink-0 cursor-pointer hover:bg-cyan-900 transition-colors shadow-sm"
-                    title="Mở MV Video Stage"
+                    className={`text-[8px] uppercase px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 flex-shrink-0 cursor-pointer transition-all ${
+                      showVideo
+                        ? 'bg-cyan-400 text-black border border-cyan-300 shadow-[0_0_14px_rgba(0,240,255,0.95)] scale-105'
+                        : 'bg-cyan-950/90 text-cyan-300 border border-cyan-400/50 hover:bg-cyan-900 hover:text-white shadow-sm'
+                    }`}
+                    title={showVideo ? 'Hạ MV xuống' : 'Mở MV'}
                   >
-                    <Film className="w-2.5 h-2.5 text-cyan-400" /> MV
-                  </span>
+                    <Film className="w-2.5 h-2.5" /> MV
+                  </button>
                 ) : (
                   <span className="text-[8px] uppercase px-1.5 py-0.5 rounded-full font-bold bg-white/10 text-white border border-white/20 flex items-center gap-0.5 flex-shrink-0">
                     <Music className="w-2.5 h-2.5" /> AUDIO
@@ -786,18 +803,6 @@ export default function GlobalPlayerBar() {
               >
                 <Mic2 className="w-3.5 h-3.5" />
                 <span className="hidden lg:inline">LYRICS</span>
-              </button>
-            )}
-
-            {/* THU GỌN BUTTON (Video mode only) */}
-            {showVideo && (
-              <button
-                onClick={() => setShowVideo(false)}
-                className="px-2.5 py-1 rounded-full bg-cyan-400 text-black border border-cyan-300 text-[10px] font-bold shadow-[0_0_15px_rgba(0,240,255,0.7)] hover:bg-cyan-300 transition-all flex items-center gap-1"
-                title="Thu gọn Video Stage về Nhạc"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">THU GỌN</span>
               </button>
             )}
 
@@ -886,9 +891,9 @@ export default function GlobalPlayerBar() {
 
               {/* Vertical Hover Popover Volume Slider */}
               {showVolumeSlider && (
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 p-3 bg-black/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl flex flex-col items-center gap-2 animate-fadeIn z-50">
-                  <span className="text-[9px] font-mono text-slate-300 font-bold">{Math.round(volume * 100)}%</span>
-                  <div className="h-24 flex items-center">
+                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 p-3 bg-black/95 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.95)] flex flex-col items-center gap-2 animate-fadeIn z-[100] min-w-[48px]">
+                  <span className="text-[10px] font-mono text-cyan-300 font-bold">{Math.round(volume * 100)}%</span>
+                  <div className="h-24 flex items-center py-1">
                     <input
                       type="range"
                       min={0}
@@ -896,7 +901,7 @@ export default function GlobalPlayerBar() {
                       step={0.01}
                       value={volume}
                       onChange={(e) => setVolume(parseFloat(e.target.value))}
-                      className="h-20 w-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-white [writing-mode:vertical-lr] [direction:rtl]"
+                      className="h-20 w-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 [writing-mode:vertical-lr] [direction:rtl]"
                     />
                   </div>
                 </div>
