@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Black Circle Background -->
+  <circle cx="50" cy="50" r="48" fill="#000000" />
+  
+  <!-- Thick White Outer Border Ring -->
+  <circle cx="50" cy="50" r="41" fill="none" stroke="#ffffff" stroke-width="6" />
+  
+  <!-- Left Curved Arc Bracket (o) -->
+  <path d="M 32 35 A 19 19 0 0 0 32 65" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" />
+  
+  <!-- Center Solid White Circle Dot -->
+  <circle cx="50" cy="50" r="8.5" fill="#ffffff" />
+  
+  <!-- Right Curved Arc Bracket (o) -->
+  <path d="M 68 35 A 19 19 0 0 1 68 65" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" />
+</svg>
