@@ -94,6 +94,9 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
         <div id="stars3" />
       </div>
 
+      {/* Subtle Cosmic Nebula Refraction Backlight for True Liquid Glass Depth */}
+      <div className="absolute w-[460px] h-[460px] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.18)_0%,rgba(147,51,234,0.12)_45%,transparent_75%)] blur-[90px] pointer-events-none z-0 animate-pulse" />
+
       {/* Main 3D Interactive Container */}
       <div
         className="relative z-10 flex flex-col items-center justify-center transition-transform duration-200 ease-out"
@@ -101,9 +104,9 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
           perspective: '1200px',
         }}
       >
-        {/* Crystal Glass Card Container (Exclusively wrapping Cover, Vinyl, Title, Artist) */}
+        {/* Liquid Crystal Glass Card (Exclusively wrapping Cover, Vinyl, Title, Artist) */}
         <div
-          className="crystal-glass-card group cursor-pointer p-4 sm:p-5 md:p-6 w-[280px] sm:w-[340px] md:w-[380px]"
+          className="liquid-crystal-card group cursor-pointer p-4 sm:p-5 md:p-6 w-[280px] sm:w-[340px] md:w-[380px]"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           onClick={() => onSelectAlbum(activeAlbum)}
@@ -155,7 +158,7 @@ export default function VaultScene({ albums, onSelectAlbum }: VaultSceneProps) {
             <h2 className="text-xl sm:text-2xl md:text-3xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
               {activeAlbum.title}
             </h2>
-            <p className="text-xs sm:text-sm font-mono text-zinc-400 font-semibold tracking-widest uppercase mt-1">
+            <p className="text-xs sm:text-sm font-mono text-zinc-300 font-bold tracking-widest uppercase mt-1">
               {activeAlbum.artist || 'VAULT ARTIST'}
             </p>
           </div>
