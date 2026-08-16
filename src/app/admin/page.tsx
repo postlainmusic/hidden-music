@@ -38,7 +38,8 @@ import {
   Lock,
   Key,
   Shield,
-  Cloud
+  Cloud,
+  Link2
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
@@ -604,25 +605,38 @@ export default function AdminPage() {
     onStatus?: (msg: string) => void
   ): Promise<{ audioUrl: string; videoUrl: string }> => {
     const uploadFile = file;
-    if (onStatus) onStatus(`⚡ Đang tải "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB) lên Cloudflare R2...`);
+    const isVideo =
+      type === 'video' ||
+      file.type.startsWith('video/') ||
+      file.name.toLowerCase().endsWith('.mp4') ||
+      file.name.toLowerCase().endsWith('.webm') ||
+      file.name.toLowerCase().endsWith('.mkv') ||
+      file.name.toLowerCase().endsWith('.mov');
+
+    if (onStatus) {
+      onStatus(`⚡ Đang tải "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB) lên Cloudflare R2...`);
+    }
 
     // 1. Primary: Upload to Cloudflare R2
     try {
-      const r2Url = await uploadFileToCloudflareR2(uploadFile, 'audio');
+      const r2Url = await uploadFileToCloudflareR2(uploadFile, isVideo ? 'videos' : 'audio');
       return {
-        audioUrl: r2Url,
-        videoUrl: '',
+        audioUrl: isVideo ? '' : r2Url,
+        videoUrl: isVideo ? r2Url : '',
       };
     } catch (r2Err: any) {
       console.warn('R2 upload failed, trying fallback to Supabase:', r2Err);
     }
 
     // 2. Fallback: Supabase Storage
-    const candidateBuckets = ['audio-files', 'audio'];
+    const candidateBuckets = isVideo
+      ? ['video-files', 'videos', 'audio-files', 'audio']
+      : ['audio-files', 'audio'];
     let lastStorageErr: any = null;
 
-    const rawExt = uploadFile.name.split('.').pop() || 'mp3';
-    const fileName = `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.${rawExt}`;
+    const rawExt = uploadFile.name.split('.').pop() || (isVideo ? 'mp4' : 'mp3');
+    const prefix = isVideo ? 'video' : 'audio';
+    const fileName = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(7)}.${rawExt}`;
 
     let contentType = uploadFile.type;
     const cleanExt = rawExt.toLowerCase();
@@ -630,7 +644,9 @@ export default function AdminPage() {
       if (cleanExt === 'flac') contentType = 'audio/flac';
       else if (cleanExt === 'wav') contentType = 'audio/wav';
       else if (cleanExt === 'm4a') contentType = 'audio/mp4';
-      else contentType = 'audio/mpeg';
+      else if (cleanExt === 'mp4') contentType = 'video/mp4';
+      else if (cleanExt === 'webm') contentType = 'video/webm';
+      else contentType = isVideo ? 'video/mp4' : 'audio/mpeg';
     }
 
     for (const bName of candidateBuckets) {
@@ -649,8 +665,8 @@ export default function AdminPage() {
 
           if (publicUrlData?.publicUrl) {
             return {
-              audioUrl: publicUrlData.publicUrl,
-              videoUrl: '',
+              audioUrl: isVideo ? '' : publicUrlData.publicUrl,
+              videoUrl: isVideo ? publicUrlData.publicUrl : '',
             };
           }
         } else {
@@ -1876,13 +1892,59 @@ export default function AdminPage() {
                     />
                     <input
                       type="url"
-                      placeholder="URL Audio MP3 từ Supabase hoặc Google Drive..."
+                      placeholder="URL Audio MP3 từ Cloudflare R2 / Supabase hoặc Google Drive..."
                       value={audioUrlInput || mediaUrlInput}
                       onChange={(e) => {
                         setAudioUrlInput(e.target.value);
                         setMediaUrlInput(e.target.value);
                       }}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
+                    />
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-black border border-cyan-500/30 space-y-3 font-mono">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-cyan-300 font-bold flex items-center gap-1.5 uppercase text-xs">
+                        <Film className="w-4 h-4 text-cyan-400" /> TỆP VIDEO / URL VIDEO MV (.MP4 / .WEBM)
+                      </label>
+                      {videoUrlInput && (
+                        <button
+                          type="button"
+                          onClick={() => setVideoUrlInput('')}
+                          className="text-[10px] text-red-400 hover:underline flex items-center gap-0.5"
+                        >
+                          <X className="w-3 h-3" /> Xóa video
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      accept="video/*,.mp4,.webm,.mkv,.mov"
+                      onChange={(e) => handleSelectMediaFile(e.target.files?.[0] || null)}
+                      className="w-full text-slate-400 text-xs file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer"
+                    />
+                    <input
+                      type="url"
+                      placeholder="URL Video MP4 từ Cloudflare R2 / Supabase hoặc Google Drive..."
+                      value={videoUrlInput}
+                      onChange={(e) => setVideoUrlInput(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-cyan-200 text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-black border border-white/10 space-y-2 font-mono">
+                    <label className="block text-slate-300 font-bold flex items-center justify-between text-xs uppercase">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-yellow-400" /> LỆCH GIÂY VIDEO (VIDEO OFFSET)
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-normal">vd: +0.5s hoặc -1.2s</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="vd: +0.5 hoặc -1.2 (khớp âm thanh và hình ảnh)"
+                      value={videoOffsetInput}
+                      onChange={(e) => setVideoOffsetInput(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
                     />
                   </div>
 
@@ -1967,6 +2029,27 @@ export default function AdminPage() {
                     />
                   </label>
 
+                  <label className="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 font-extrabold text-[10px] uppercase border border-cyan-400/50 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
+                    <Film className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>🎬 TẢI VIDEO .MP4 HÀNG LOẠT</span>
+                    <input
+                      type="file"
+                      accept="video/*,.mp4,.webm,.mkv,.mov"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleBatchFileUpload(e.target.files, 'video')}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => openBatchLinkModal('video')}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-cyan-950 text-cyan-300 font-extrabold text-[10px] uppercase border border-cyan-500/40 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg font-mono"
+                  >
+                    <Link2 className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>🔗 LINK VIDEO MV HÀNG LOẠT</span>
+                  </button>
+
                   <label className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-extrabold text-[10px] uppercase border border-white/20 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
                     <UploadCloud className="w-3.5 h-3.5" />
                     <span>FILE .LRC</span>
@@ -2002,15 +2085,24 @@ export default function AdminPage() {
                         <span title="Nắm kéo để sắp xếp vị trí" className="flex-shrink-0 cursor-grab active:cursor-grabbing">
                           <GripVertical className="w-4 h-4 text-slate-500 hover:text-white" />
                         </span>
-                        <div className="p-2.5 rounded-xl border bg-emerald-950/80 text-emerald-400 border-emerald-500/40">
-                          <Music className="w-4 h-4" />
+                        <div className={`p-2.5 rounded-xl border ${
+                          t.video_url
+                            ? 'bg-cyan-950/80 text-cyan-400 border-cyan-500/40'
+                            : 'bg-emerald-950/80 text-emerald-400 border-emerald-500/40'
+                        }`}>
+                          {t.video_url ? <Film className="w-4 h-4" /> : <Music className="w-4 h-4" />}
                         </div>
                         <div>
                           <h4 className="font-extrabold text-white text-sm">{t.title}</h4>
-                          <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
                               <Music className="w-2.5 h-2.5" /> AUDIO
                             </span>
+                            {t.video_url && (
+                              <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                                <Film className="w-2.5 h-2.5" /> VIDEO MV
+                              </span>
+                            )}
                             {t.lyrics ? (
                               <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-white/10 text-white border border-white/20">
                                 📜 CÓ LRC
