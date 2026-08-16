@@ -1,7 +1,7 @@
 /**
  * =========================================================================
  * HIDDEN MUSIC VAULT - AUDIO-VIDEO TIMELINE SYNCHRONIZATION SERVICE
- * Fast Pure-JS MP4 AAC Demuxer & Waveform Cross-Correlation Fingerprinting
+ * Fast Pure-JS MP4 AAC Demuxer & Log-Compressed Acoustic Fingerprinting
  * =========================================================================
  */
 
@@ -20,7 +20,7 @@ export interface AudioSyncResult {
 
 export interface AudioSyncOptions {
   maxDurationToAnalyze?: number; // Analyze first N seconds (default: 60s)
-  downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 4000Hz)
+  downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 2000Hz)
   maxOffsetSearchSeconds?: number; // Search range: -10s to +50s (default: 50s)
   onProgress?: (percent: number, step: string) => void;
 }
@@ -165,7 +165,6 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
 
     if (!stszBox || (!stcoBox && !co64Box) || !stscBox) return null;
 
-    // 1. Parse Sample Sizes (stsz)
     const defaultSampleSize = data.getUint32(stszBox.dataStart + 4);
     const sampleCount = data.getUint32(stszBox.dataStart + 8);
     const sampleSizes: number[] = [];
@@ -180,7 +179,6 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
       }
     }
 
-    // 2. Parse Chunk Offsets (stco / co64)
     const chunkOffsets: number[] = [];
     if (stcoBox) {
       const chunkCount = data.getUint32(stcoBox.dataStart + 4);
@@ -198,7 +196,6 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
       }
     }
 
-    // 3. Parse Sample-to-Chunk Map (stsc)
     const stscEntryCount = data.getUint32(stscBox.dataStart + 4);
     const stscEntries: { firstChunk: number; samplesPerChunk: number }[] = [];
     let scOffset = stscBox.dataStart + 8;
@@ -210,10 +207,8 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
       scOffset += 12;
     }
 
-    // Calculate max samples needed
     const maxFrames = Math.min(sampleSizes.length, Math.ceil(maxDurationSeconds * (sampleRate / 1024)));
 
-    // 4. Extract samples and build ADTS stream
     const sampleRateIdx = getSampleRateIndex(sampleRate);
     const adtsChunks: Uint8Array[] = [];
     let totalAdtsBytes = 0;
@@ -224,7 +219,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
     const rawBytes = new Uint8Array(mp4Buffer);
 
     for (let chunkIdx = 0; chunkIdx < chunkOffsets.length && sampleIdx < maxFrames; chunkIdx++) {
-      const currentChunkNum = chunkIdx + 1; // 1-indexed in stsc
+      const currentChunkNum = chunkIdx + 1;
 
       if (stscIdx + 1 < stscEntries.length && currentChunkNum >= stscEntries[stscIdx + 1].firstChunk) {
         stscIdx++;
@@ -271,7 +266,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
  */
 async function decodeAudioArrayBufferToPCM(
   arrayBuffer: ArrayBuffer,
-  targetSampleRate: number = 4000,
+  targetSampleRate: number = 2000,
   maxDuration: number = 60
 ): Promise<Float32Array> {
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -318,111 +313,11 @@ async function decodeAudioArrayBufferToPCM(
 }
 
 /**
- * Fast Web Audio Element Render Fallback
- */
-async function extractAudioViaWebAudioElement(
-  videoBuffer: ArrayBuffer,
-  targetSampleRate: number = 4000,
-  maxDuration: number = 60
-): Promise<Float32Array> {
-  const blob = new Blob([videoBuffer], { type: 'video/mp4' });
-  const blobUrl = URL.createObjectURL(blob);
-
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.src = blobUrl;
-    video.preload = 'auto';
-    video.muted = false;
-    video.volume = 1;
-    video.style.position = 'fixed';
-    video.style.top = '0';
-    video.style.left = '0';
-    video.style.width = '1px';
-    video.style.height = '1px';
-    video.style.opacity = '0.01';
-    video.style.pointerEvents = 'none';
-    document.body.appendChild(video);
-
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    const audioCtx = new AudioCtx();
-    let sourceNode: MediaElementAudioSourceNode | null = null;
-    let processor: ScriptProcessorNode | null = null;
-
-    const sampleChunks: Float32Array[] = [];
-    let totalSamples = 0;
-    const targetSamples = Math.floor(maxDuration * targetSampleRate);
-    let done = false;
-
-    const cleanup = () => {
-      video.pause();
-      if (video.parentNode) video.parentNode.removeChild(video);
-      try { sourceNode?.disconnect(); } catch {}
-      try { processor?.disconnect(); } catch {}
-      audioCtx.close().catch(() => {});
-      URL.revokeObjectURL(blobUrl);
-    };
-
-    const finish = () => {
-      if (done) return;
-      done = true;
-      const merged = new Float32Array(totalSamples);
-      let off = 0;
-      for (const chunk of sampleChunks) {
-        merged.set(chunk, off);
-        off += chunk.length;
-      }
-      cleanup();
-      if (merged.length > 0) resolve(merged);
-      else reject(new Error('Không trích xuất được âm thanh từ video.'));
-    };
-
-    try {
-      sourceNode = audioCtx.createMediaElementSource(video);
-      processor = audioCtx.createScriptProcessor(4096, 1, 1);
-
-      const ratio = audioCtx.sampleRate / targetSampleRate;
-      processor.onaudioprocess = (evt) => {
-        if (done) return;
-        const inp = evt.inputBuffer.getChannelData(0);
-        const outLen = Math.floor(inp.length / ratio);
-        const down = new Float32Array(outLen);
-        for (let i = 0; i < outLen; i++) {
-          down[i] = inp[Math.floor(i * ratio)] || 0;
-        }
-        sampleChunks.push(down);
-        totalSamples += outLen;
-        if (totalSamples >= targetSamples || video.currentTime >= maxDuration) {
-          finish();
-        }
-      };
-
-      const dummyGain = audioCtx.createGain();
-      dummyGain.gain.value = 0;
-      sourceNode.connect(processor);
-      processor.connect(dummyGain);
-      dummyGain.connect(audioCtx.destination);
-
-      video.playbackRate = 2.0;
-      audioCtx.resume().then(() => {
-        video.play().catch(() => {
-          setTimeout(finish, 2000);
-        });
-      });
-
-      setTimeout(finish, 15000);
-    } catch (e: any) {
-      cleanup();
-      reject(e);
-    }
-  });
-}
-
-/**
  * Extract mono PCM samples from Video (File, Blob, ArrayBuffer, or URL)
  */
 async function extractAudioPCMFromVideo(
   videoInput: File | Blob | ArrayBuffer | string,
-  targetSampleRate: number = 4000,
+  targetSampleRate: number = 2000,
   maxDuration: number = 60,
   onProgress?: (msg: string) => void
 ): Promise<Float32Array> {
@@ -459,17 +354,17 @@ async function extractAudioPCMFromVideo(
     console.warn('[AudioSync] Direct decode fallback:', e);
   }
 
-  // Strategy 3: Fast Web Audio Element Render Fallback
-  return await extractAudioViaWebAudioElement(videoBuffer, targetSampleRate, maxDuration);
+  throw new Error('Không thể giải mã kênh âm thanh từ Video (Tệp không chứa track âm thanh AAC hoặc định dạng không hỗ trợ).');
 }
 
 /**
- * Compute Transient Beat Onset Strength Envelope of PCM signal
+ * Compute Log-Compressed Envelope with Moving Average DC Subtraction (Fingerprint Signal)
  */
-function computeOnsetStrengthEnvelope(pcm: Float32Array, windowSize: number = 40): Float32Array {
+function computeAcousticFingerprint(pcm: Float32Array, windowSize: number = 40): Float32Array {
   const numFrames = Math.floor(pcm.length / windowSize);
-  const rms = new Float32Array(numFrames);
+  const logEnergy = new Float32Array(numFrames);
 
+  // 1. RMS with Log dynamic range compression
   for (let i = 0; i < numFrames; i++) {
     let sumSquares = 0;
     const start = i * windowSize;
@@ -477,29 +372,32 @@ function computeOnsetStrengthEnvelope(pcm: Float32Array, windowSize: number = 40
       const val = pcm[start + j] || 0;
       sumSquares += val * val;
     }
-    rms[i] = Math.sqrt(sumSquares / windowSize);
+    const rms = Math.sqrt(sumSquares / windowSize);
+    logEnergy[i] = Math.log(1 + 25 * rms);
   }
 
-  const onsets = new Float32Array(numFrames);
-  let maxVal = 0;
-  for (let i = 1; i < numFrames; i++) {
-    const diff = rms[i] - rms[i - 1];
-    const onset = diff > 0 ? diff : 0;
-    onsets[i] = onset;
-    if (onset > maxVal) maxVal = onset;
-  }
+  // 2. Local Moving Average Baseline Subtraction (High-pass filter / DC removal over ~1.5s window)
+  const smoothed = new Float32Array(numFrames);
+  const halfWindow = 35; // 35 frames = 0.7s on each side (total 1.4s window)
 
-  if (maxVal > 0) {
-    for (let i = 0; i < numFrames; i++) {
-      onsets[i] /= maxVal;
+  for (let i = 0; i < numFrames; i++) {
+    let sum = 0;
+    let count = 0;
+    const wStart = Math.max(0, i - halfWindow);
+    const wEnd = Math.min(numFrames - 1, i + halfWindow);
+    for (let j = wStart; j <= wEnd; j++) {
+      sum += logEnergy[j];
+      count++;
     }
+    const localMean = sum / count;
+    smoothed[i] = logEnergy[i] - localMean;
   }
 
-  return onsets;
+  return smoothed;
 }
 
 /**
- * Normalized Cross-Correlation between Audio and Video Signals
+ * Normalized Cross-Correlation with Peak Prominence Scoring
  */
 function computeNormalizedCrossCorrelation(
   audioSignal: Float32Array,
@@ -510,6 +408,7 @@ function computeNormalizedCrossCorrelation(
   const range = maxLagSamples - minLagSamples + 1;
   const scores = new Float32Array(range);
 
+  // Mean & Std of audio
   let audioMean = 0;
   for (let i = 0; i < audioSignal.length; i++) audioMean += audioSignal[i];
   audioMean /= audioSignal.length;
@@ -546,7 +445,7 @@ function computeNormalizedCrossCorrelation(
       }
     }
 
-    if (count > audioSignal.length * 0.3) {
+    if (count > audioSignal.length * 0.35) {
       const vMean = videoSum / count;
       const vVar = Math.max(0, videoSqSum / count - vMean * vMean);
       const vStd = Math.sqrt(vVar) || 1e-6;
@@ -580,17 +479,20 @@ function computeNormalizedCrossCorrelation(
     }
   }
 
+  // Calculate Peak Prominence over Background Baseline
   const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.05;
   const prominence = maxScore / (avgBackground + 1e-4);
 
+  // Calibrated real-world acoustic match confidence (0.80 -> 0.99 for clean matches)
   let confidenceRatio = 0;
-  if (maxScore >= 0.15 && prominence >= 1.5) {
-    const rawConf = Math.min(0.98, (maxScore / 0.4) * 0.55 + (prominence / 3.0) * 0.45);
-    confidenceRatio = Math.max(0.85, Math.min(0.98, Math.round(rawConf * 100) / 100));
-  } else if (maxScore >= 0.08) {
-    confidenceRatio = Math.max(0.6, Math.min(0.84, Math.round((maxScore / 0.2) * 70) / 100));
+  if (maxScore >= 0.35 && prominence >= 2.0) {
+    confidenceRatio = Math.min(0.99, Math.round((0.85 + (maxScore - 0.35) * 0.25) * 100) / 100);
+  } else if (maxScore >= 0.2) {
+    confidenceRatio = Math.min(0.84, Math.max(0.7, Math.round((0.7 + (maxScore - 0.2) * 0.7) * 100) / 100));
+  } else if (maxScore >= 0.1) {
+    confidenceRatio = Math.min(0.69, Math.max(0.45, Math.round((0.45 + (maxScore - 0.1) * 2.5) * 100) / 100));
   } else {
-    confidenceRatio = Math.max(0, Math.min(0.5, Math.round(maxScore * 100) / 100));
+    confidenceRatio = Math.max(0.1, Math.round(maxScore * 100) / 100);
   }
 
   return { bestLag, maxScore, confidenceRatio };
@@ -606,7 +508,7 @@ export async function calculateAudioVideoSync(
 ): Promise<AudioSyncResult> {
   const {
     maxDurationToAnalyze = 60,
-    downsampleRate = 4000,
+    downsampleRate = 2000,
     maxOffsetSearchSeconds = 50,
     onProgress,
   } = options;
@@ -639,14 +541,14 @@ export async function calculateAudioVideoSync(
     }
   );
 
-  if (onProgress) onProgress(85, 'Đang so khớp sóng âm Cross-Correlation & Waveform Fingerprinting...');
+  if (onProgress) onProgress(85, 'Đang so khớp sóng âm Acoustic Fingerprinting...');
 
-  // 3. Compute Transient Beat Onset Envelopes (100 FPS)
-  const windowSize = Math.floor(downsampleRate / 100); // 40 samples per envelope frame
-  const audioEnvelope = computeOnsetStrengthEnvelope(audioPCM, windowSize);
-  const videoEnvelope = computeOnsetStrengthEnvelope(videoPCM, windowSize);
+  // 3. Compute Log Acoustic Fingerprint Envelopes (50 FPS = 20ms precision)
+  const windowSize = Math.floor(downsampleRate / 50); // 40 samples per envelope frame @ 2000Hz
+  const audioEnvelope = computeAcousticFingerprint(audioPCM, windowSize);
+  const videoEnvelope = computeAcousticFingerprint(videoPCM, windowSize);
 
-  const envelopeFrameRate = 100; // 100 frames/sec (10ms precision)
+  const envelopeFrameRate = 50; // 50 frames/sec (20ms precision)
   const minLag = Math.floor(-5 * envelopeFrameRate); // -5s search
   const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +50s search
 
