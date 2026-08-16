@@ -210,9 +210,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     // Listen to custom session updates
     const handleCustomSessionChange = () => {
       const stored = getStoredUserSession();
-      if (stored) {
-        setUserSession(stored);
-      }
+      setUserSession(stored);
     };
 
     window.addEventListener('vault_profile_updated', handleCustomSessionChange);
@@ -244,7 +242,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [albums]);
 
-  // Handle Album Selection with Seamless 60FPS Morph Transition
+  // Handle Album Selection with Smooth 60FPS Morph Transition
   const handleSelectAlbum = async (album: Album, updateHistory = true) => {
     let fullAlbum = album;
 
@@ -297,6 +295,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   };
 
   const handleLogout = async () => {
+    setUserSession(null);
     await performLogout();
   };
 

@@ -81,13 +81,15 @@ export default function Navbar({
 
     fetchUserData();
 
-    // Event listener for instant client-side profile name updates
+    // Event listener for instant client-side profile name updates & logout
     const handleProfileUpdate = (e: any) => {
       const stored = getStoredUserSession();
-      if (stored?.display_name) {
-        setDisplayName(stored.display_name.toUpperCase());
-      } else if (e?.detail?.display_name) {
-        setDisplayName(e.detail.display_name.toUpperCase());
+      if (stored) {
+        setInternalEmail(stored.email || null);
+        setDisplayName((stored.display_name || e?.detail?.display_name || 'VAULT MEMBER').toUpperCase());
+      } else {
+        setInternalEmail(null);
+        setDisplayName(null);
       }
     };
 

@@ -48,19 +48,6 @@ export function getStoredUserSession(): VaultUserSession | null {
         role: 'admin',
       };
     }
-
-    // 4. Try Supabase auth token in localStorage or cookie
-    const hasSbToken = Object.keys(localStorage).some(
-      (k) => (k.startsWith('sb-') || k.includes('auth-token')) && localStorage.getItem(k)
-    );
-    if (hasSbToken || document.cookie.includes('hidden_vault_session=true')) {
-      return {
-        id: 'vault-active-user',
-        email: 'member@hiddenvault.com',
-        display_name: customName || 'VAULT MEMBER',
-        role: 'user',
-      };
-    }
   } catch (err) {
     console.warn('Error reading stored user session:', err);
   }
@@ -149,17 +136,42 @@ export function hasActiveSession(): boolean {
 export function clearAllStoredSessions() {
   if (typeof window === 'undefined') return;
   try {
+    // 1. Remove all hidden_vault keys from localStorage
     localStorage.removeItem(USER_SESSION_KEY);
     localStorage.removeItem(ADMIN_SESSION_KEY);
     localStorage.removeItem('hidden_vault_player_state');
     localStorage.removeItem('hidden_vault_cached_albums');
+    localStorage.removeItem('hidden_vault_custom_name');
+    localStorage.removeItem('hidden_music_player_state');
+
+    // 2. Remove all Supabase auth keys from localStorage
+    Object.keys(localStorage).forEach((key) => {
+      if (
+        key.startsWith('sb-') ||
+        key.startsWith('supabase.') ||
+        key.includes('auth-token') ||
+        key.includes('hidden_vault')
+      ) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    // 3. Clear all sessionStorage
     sessionStorage.clear();
 
-    // Clear all cookies
-    document.cookie.split(';').forEach((c) => {
-      document.cookie = c.trim().split('=')[0] + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    });
-    window.dispatchEvent(new Event('vault_auth_change'));
+    // 4. Clear all auth cookies
+    const allCookies = document.cookie.split(';');
+    for (const c of allCookies) {
+      const name = c.trim().split('=')[0];
+      if (name) {
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      }
+    }
+
+    // 5. Notify all listeners
+    window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: null }));
   } catch (err) {
     console.warn('Error clearing sessions:', err);
   }
@@ -169,7 +181,8 @@ export function clearAllStoredSessions() {
 export async function performLogout() {
   try {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    await supabase.auth.signOut().catch(() => {});
   } catch (err) {
     console.warn('Supabase signOut notice:', err);
   } finally {
