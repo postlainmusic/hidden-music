@@ -1039,6 +1039,28 @@ export default function GlobalPlayerBar() {
                 <SkipForward className="w-3.5 h-3.5 fill-current" />
               </button>
 
+              {/* Video MV Button on Mobile */}
+              {currentTrack?.video_url && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowVideo(!showVideo);
+                    if (!showVideo) {
+                      setShowLyrics(false);
+                      setShowQueue(false);
+                    }
+                  }}
+                  className={`p-1.5 rounded-full border transition-all ${
+                    showVideo
+                      ? 'bg-white text-black border-white shadow-md'
+                      : 'bg-white/10 text-white border-white/20'
+                  }`}
+                  title="Xem Video MV"
+                >
+                  <Film className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               {/* Queue Button */}
               <button
                 onClick={(e) => {
@@ -1173,6 +1195,29 @@ export default function GlobalPlayerBar() {
 
           {/* Right Column: ALL BUTTONS IN 1 HORIZONTAL ROW */}
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {/* Video MV Button */}
+            {currentTrack?.video_url && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVideo(!showVideo);
+                  if (!showVideo) {
+                    setShowLyrics(false);
+                    setShowQueue(false);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 font-bold font-mono text-xs shadow-md ${
+                  showVideo
+                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
+                    : 'bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white'
+                }`}
+                title={showVideo ? 'Đóng Video MV' : 'Xem Video MV'}
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>XEM VIDEO</span>
+              </button>
+            )}
+
             {/* Lyrics Button */}
             <button
               onClick={(e) => {
