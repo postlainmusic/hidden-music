@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToR2, getPresignedPutUrl } from '@/lib/r2';
 
