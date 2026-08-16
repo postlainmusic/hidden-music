@@ -98,6 +98,14 @@ async function extractAudioPCMFromVideo(
   return new Promise((resolve, reject) => {
     let videoUrl = '';
     let isCreatedBlobUrl = false;
+    let timeoutId: any = null;
+    let sourceNode: MediaElementAudioSourceNode | null = null;
+    let processorNode: ScriptProcessorNode | null = null;
+    let audioCtx: AudioContext | null = null;
+    let isFinished = false;
+    const sampleChunks: Float32Array[] = [];
+    let totalSamplesCollected = 0;
+    const targetTotalSamples = Math.floor(maxDuration * targetSampleRate);
 
     if (typeof videoInput === 'string') {
       videoUrl = videoInput;
@@ -116,23 +124,6 @@ async function extractAudioPCMFromVideo(
     video.style.left = '-9999px';
     document.body.appendChild(video);
 
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) {
-      cleanup();
-      reject(new Error('Web Audio API không được hỗ trợ trên trình duyệt này.'));
-      return;
-    }
-
-    const audioCtx = new AudioCtx();
-    let sourceNode: MediaElementAudioSourceNode | null = null;
-    let processorNode: ScriptProcessorNode | null = null;
-
-    const sampleChunks: Float32Array[] = [];
-    let totalSamplesCollected = 0;
-    const targetTotalSamples = Math.floor(maxDuration * targetSampleRate);
-    let isFinished = false;
-    let timeoutId: any = null;
-
     const cleanup = () => {
       if (timeoutId) clearTimeout(timeoutId);
       if (video) {
@@ -144,10 +135,14 @@ async function extractAudioPCMFromVideo(
         }
       }
       if (sourceNode) {
-        try { sourceNode.disconnect(); } catch {}
+        try {
+          sourceNode.disconnect();
+        } catch {}
       }
       if (processorNode) {
-        try { processorNode.disconnect(); } catch {}
+        try {
+          processorNode.disconnect();
+        } catch {}
       }
       if (audioCtx && audioCtx.state !== 'closed') {
         audioCtx.close().catch(() => {});
@@ -171,11 +166,24 @@ async function extractAudioPCMFromVideo(
       cleanup();
 
       if (merged.length === 0) {
-        reject(new Error('Không thể trích xuất kênh âm thanh từ video (video không có âm thanh hoặc bị chặn CORS).'));
+        reject(
+          new Error(
+            'Không thể trích xuất kênh âm thanh từ video (video không có âm thanh hoặc bị chặn CORS).'
+          )
+        );
       } else {
         resolve(merged);
       }
     };
+
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) {
+      cleanup();
+      reject(new Error('Web Audio API không được hỗ trợ trên trình duyệt này.'));
+      return;
+    }
+
+    audioCtx = new AudioCtx();
 
     // Timeout safety (14s max)
     timeoutId = setTimeout(() => {
