@@ -428,7 +428,10 @@ export default function AdminPage() {
   };
 
   // Helper to upload files directly to Cloudflare R2 Object Storage (Presigned Direct URL + Server Fallback)
-  const uploadFileToCloudflareR2 = async (file: File, folder: 'audio' | 'covers' = 'audio'): Promise<string> => {
+  const uploadFileToCloudflareR2 = async (
+    file: File,
+    folder: 'audio' | 'covers' | 'videos' | string = 'audio'
+  ): Promise<string> => {
     // 1. Try Direct Presigned PUT upload (Bypasses Vercel 4.5MB limit, supports unlimited file sizes)
     try {
       const presignedRes = await fetch('/api/r2-upload', {
