@@ -200,18 +200,21 @@ export default function GlobalPlayerBar() {
     togglePlay();
   };
 
-  // Video is purely visual; Audio is 100% master audio source and master clock
+  // Synchronize Video Play/Pause & Timing with Global Audio Player
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
 
-    // Always mute video completely to prevent echo
+    // Always mute video completely to prevent echo with high-fidelity audio
     vid.muted = true;
     vid.volume = 0;
 
     if (showVideo) {
-      const targetVidTime = Math.max(0, currentTime + videoOffset);
-      if (Math.abs(vid.currentTime - targetVidTime) > 0.3) {
+      const audio = audioRef?.current;
+      const curAudioTime = audio ? audio.currentTime : currentTime;
+      const targetVidTime = Math.max(0, curAudioTime + videoOffset);
+
+      if (Math.abs(vid.currentTime - targetVidTime) > 1.0) {
         vid.currentTime = targetVidTime;
       }
       if (isPlaying) {
@@ -222,21 +225,21 @@ export default function GlobalPlayerBar() {
     } else {
       vid.pause();
     }
-  }, [showVideo, isPlaying, videoOffset, currentTrack?.id, currentTime]);
+  }, [showVideo, isPlaying, videoOffset, currentTrack?.id]);
 
-  // Periodic accurate sub-frame sync from Audio Clock to Video
+  // Periodic gentle drift correction (only corrects if drift exceeds 1.5s to prevent buffer stalls)
   useEffect(() => {
     if (!showVideo || !isPlaying) return;
     const syncInterval = setInterval(() => {
       const vid = videoRef.current;
       const audio = audioRef?.current;
-      if (vid && audio && !vid.seeking) {
+      if (vid && audio && !vid.seeking && !vid.paused) {
         const targetVidTime = Math.max(0, audio.currentTime + videoOffset);
-        if (Math.abs(vid.currentTime - targetVidTime) > 0.25) {
+        if (Math.abs(vid.currentTime - targetVidTime) > 1.5) {
           vid.currentTime = targetVidTime;
         }
       }
-    }, 400);
+    }, 1000);
     return () => clearInterval(syncInterval);
   }, [showVideo, isPlaying, videoOffset, audioRef]);
 
