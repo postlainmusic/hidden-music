@@ -748,36 +748,90 @@ export default function AdminPage() {
     throw new Error(`Lỗi tải lên tệp: ${lastStorageErr?.message || 'Không thể lưu trữ tệp tin'}`);
   };
 
-  // Resilient helpers to handle both 'audio_url' and 'url' column schemas in Supabase tracks table
+  // Resilient helpers to handle any column variations in Supabase tracks table
   const safeInsertTrack = async (supabase: ReturnType<typeof createClient>, payload: Record<string, any>) => {
-    let { error } = await supabase.from('tracks').insert([payload]);
+    let currentPayload = { ...payload };
+    let { error } = await supabase.from('tracks').insert([currentPayload]);
 
-    if (error && (error.message?.includes('audio_url') || (error as any).details?.includes('audio_url') || error.message?.includes('schema cache'))) {
-      console.warn("audio_url column missing on tracks table, falling back to 'url' column...");
-      const fallbackPayload = { ...payload };
-      if ('audio_url' in fallbackPayload) {
-        fallbackPayload.url = fallbackPayload.audio_url || fallbackPayload.video_url || '';
-        delete fallbackPayload.audio_url;
+    if (error) {
+      console.warn('tracks insert initial error, attempting smart schema adaptation:', error.message);
+
+      // Step 1: Strip optional sync columns if table was created without them
+      if (
+        error.message?.includes('video_offset') ||
+        error.message?.includes('sync_metadata') ||
+        error.message?.includes('schema cache')
+      ) {
+        const cleanedPayload = { ...currentPayload };
+        delete cleanedPayload.video_offset;
+        delete cleanedPayload.sync_metadata;
+        const retry1 = await supabase.from('tracks').insert([cleanedPayload]);
+        if (!retry1.error) return;
+        error = retry1.error;
+        currentPayload = cleanedPayload;
       }
-      const retry = await supabase.from('tracks').insert([fallbackPayload]);
-      error = retry.error;
+
+      // Step 2: Fall back from audio_url to url column
+      if (
+        error &&
+        (error.message?.includes('audio_url') ||
+          (error as any).details?.includes('audio_url') ||
+          error.message?.includes('schema cache'))
+      ) {
+        const fallbackPayload = { ...currentPayload };
+        if ('audio_url' in fallbackPayload) {
+          fallbackPayload.url = fallbackPayload.audio_url || fallbackPayload.video_url || '';
+          delete fallbackPayload.audio_url;
+        }
+        delete fallbackPayload.video_offset;
+        delete fallbackPayload.sync_metadata;
+        const retry2 = await supabase.from('tracks').insert([fallbackPayload]);
+        error = retry2.error;
+      }
     }
 
     if (error) throw new Error(`Lỗi CSDL: ${error.message}`);
   };
 
   const safeUpdateTrack = async (supabase: ReturnType<typeof createClient>, trackId: string, payload: Record<string, any>) => {
-    let { error } = await supabase.from('tracks').update(payload).eq('id', trackId);
+    let currentPayload = { ...payload };
+    let { error } = await supabase.from('tracks').update(currentPayload).eq('id', trackId);
 
-    if (error && (error.message?.includes('audio_url') || (error as any).details?.includes('audio_url') || error.message?.includes('schema cache'))) {
-      console.warn("audio_url column missing on tracks table, falling back to 'url' column...");
-      const fallbackPayload = { ...payload };
-      if ('audio_url' in fallbackPayload) {
-        fallbackPayload.url = fallbackPayload.audio_url || fallbackPayload.video_url || '';
-        delete fallbackPayload.audio_url;
+    if (error) {
+      console.warn('tracks update initial error, attempting smart schema adaptation:', error.message);
+
+      // Step 1: Strip optional sync columns if table was created without them
+      if (
+        error.message?.includes('video_offset') ||
+        error.message?.includes('sync_metadata') ||
+        error.message?.includes('schema cache')
+      ) {
+        const cleanedPayload = { ...currentPayload };
+        delete cleanedPayload.video_offset;
+        delete cleanedPayload.sync_metadata;
+        const retry1 = await supabase.from('tracks').update(cleanedPayload).eq('id', trackId);
+        if (!retry1.error) return;
+        error = retry1.error;
+        currentPayload = cleanedPayload;
       }
-      const retry = await supabase.from('tracks').update(fallbackPayload).eq('id', trackId);
-      error = retry.error;
+
+      // Step 2: Fall back from audio_url to url column
+      if (
+        error &&
+        (error.message?.includes('audio_url') ||
+          (error as any).details?.includes('audio_url') ||
+          error.message?.includes('schema cache'))
+      ) {
+        const fallbackPayload = { ...currentPayload };
+        if ('audio_url' in fallbackPayload) {
+          fallbackPayload.url = fallbackPayload.audio_url || fallbackPayload.video_url || '';
+          delete fallbackPayload.audio_url;
+        }
+        delete fallbackPayload.video_offset;
+        delete fallbackPayload.sync_metadata;
+        const retry2 = await supabase.from('tracks').update(fallbackPayload).eq('id', trackId);
+        error = retry2.error;
+      }
     }
 
     if (error) throw new Error(`Lỗi CSDL: ${error.message}`);

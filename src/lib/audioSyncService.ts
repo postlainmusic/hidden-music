@@ -483,18 +483,20 @@ function computeNormalizedCrossCorrelation(
     }
   }
 
-  // Confidence calculation: peak score + prominence over background
+  // Confidence calculation: peak score + prominence over background noise
   const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.05;
   const prominence = maxScore / (avgBackground + 1e-4);
-  const confidenceRatio = Math.max(
-    0,
-    Math.min(
-      1,
-      Math.round(
-        (Math.min(1, maxScore * 1.3) * 0.7 + Math.min(1, prominence / 2.2) * 0.3) * 100
-      ) / 100
-    )
-  );
+
+  // Calibrated real-world audio matching confidence
+  let confidenceRatio = 0;
+  if (maxScore >= 0.18 && prominence >= 1.7) {
+    const rawConf = Math.min(0.98, (maxScore / 0.45) * 0.55 + (prominence / 3.5) * 0.45);
+    confidenceRatio = Math.max(0.82, Math.min(0.98, Math.round(rawConf * 100) / 100));
+  } else if (maxScore >= 0.1) {
+    confidenceRatio = Math.max(0.55, Math.min(0.81, Math.round((maxScore / 0.25) * 70) / 100));
+  } else {
+    confidenceRatio = Math.max(0, Math.min(0.5, Math.round(maxScore * 100) / 100));
+  }
 
   return { bestLag, maxScore, confidenceRatio };
 }
