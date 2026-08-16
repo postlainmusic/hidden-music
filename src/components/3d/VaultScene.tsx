@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Shuffle, Disc3, Music, MessageSquare } from 'lucide-react';
+import { Play, Pause, Shuffle, Disc3, Music, MessageSquare, Film } from 'lucide-react';
 import { Album, TrackItem } from '@/types/database';
-import AlbumComments from '@/components/ui/AlbumComments';
 
 interface VaultSceneProps {
   albums: Album[];
