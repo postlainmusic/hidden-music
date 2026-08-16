@@ -22,6 +22,7 @@ import { Profile } from '@/types/database';
 import {
   getStoredUserSession,
   setStoredUserSession,
+  clearAllStoredSessions,
   performLogout
 } from '@/lib/authSession';
 
