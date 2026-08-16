@@ -45,85 +45,30 @@ export default function Navbar({
 
   useEffect(() => {
     setMounted(true);
-    const supabase = createClient();
 
-    const fetchUserData = async () => {
-      try {
-        let user: any = getStoredUserSession();
-
-        if (!user) {
-          const { data } = await supabase.auth.getUser();
-          user = data?.user;
-        }
-
-        if (user) {
-          setStoredUserSession(user);
-          setInternalEmail(user.email || null);
-          const initialName = user.display_name || user.user_metadata?.full_name || user.user_metadata?.display_name || user.user_metadata?.name || user.email?.split('@')[0] || 'VAULT MEMBER';
-          setDisplayName(initialName.toUpperCase());
-
-          if (user.id && user.id !== 'admin-master-id' && !user.id.startsWith('vault-')) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('display_name')
-              .eq('id', user.id)
-              .maybeSingle();
-
-            if (profile?.display_name) {
-              setDisplayName(profile.display_name.toUpperCase());
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Navbar auth error:', err);
-      }
-    };
-
-    fetchUserData();
-
-    // Event listener for instant client-side profile name updates & logout
-    const handleProfileUpdate = (e: any) => {
-      const stored = getStoredUserSession();
-      if (stored) {
-        setInternalEmail(stored.email || null);
-        setDisplayName((stored.display_name || e?.detail?.display_name || 'VAULT MEMBER').toUpperCase());
+    const syncUserData = () => {
+      const user = getStoredUserSession();
+      if (user) {
+        setInternalEmail(user.email || null);
+        const name = user.display_name || user.user_metadata?.full_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'VAULT MEMBER';
+        setDisplayName(name.toUpperCase());
       } else {
         setInternalEmail(null);
         setDisplayName(null);
       }
     };
 
-    window.addEventListener('vault_profile_updated', handleProfileUpdate);
-    window.addEventListener('vault_auth_change', handleProfileUpdate);
+    syncUserData();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setStoredUserSession(session.user);
-        setInternalEmail(session.user.email || null);
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        const storedCustomName = typeof window !== 'undefined' ? localStorage.getItem('hidden_vault_custom_name') : null;
-        const name = storedCustomName || profile?.display_name || session.user.user_metadata?.display_name || session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'VAULT MEMBER';
-        setDisplayName(name.toUpperCase());
-      } else {
-        if (!getStoredAdminSession()) {
-          const stored = getStoredUserSession();
-          if (!stored) {
-            setInternalEmail(null);
-            setDisplayName(null);
-          }
-        }
-      }
-    });
+    // Event listeners for profile and auth changes
+    window.addEventListener('vault_profile_updated', syncUserData);
+    window.addEventListener('vault_auth_change', syncUserData);
+    window.addEventListener('storage', syncUserData);
 
     return () => {
-      subscription.unsubscribe();
-      window.removeEventListener('vault_profile_updated', handleProfileUpdate);
-      window.removeEventListener('vault_auth_change', handleProfileUpdate);
+      window.removeEventListener('vault_profile_updated', syncUserData);
+      window.removeEventListener('vault_auth_change', syncUserData);
+      window.removeEventListener('storage', syncUserData);
     };
   }, []);
 

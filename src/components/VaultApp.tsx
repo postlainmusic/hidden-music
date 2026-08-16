@@ -125,19 +125,23 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUserSession(session.user);
-          setStoredUserSession(session.user);
-          if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
-            window.history.replaceState({}, document.title, window.location.pathname);
+        const hasCodeParam = typeof window !== 'undefined' && window.location.search.includes('code=');
+        const storedUser = getStoredUserSession();
+
+        if (hasCodeParam || storedUser) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            setUserSession(session.user);
+            setStoredUserSession(session.user);
+            if (hasCodeParam) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            return;
           }
-        } else {
-          // If no active session, ensure userSession is null
-          const stored = getStoredUserSession();
-          if (!stored) {
-            setUserSession(null);
-          }
+        }
+
+        if (!storedUser && !getStoredAdminSession()) {
+          setUserSession(null);
         }
       } catch (err) {
         console.warn('Auth session check error:', err);
@@ -196,19 +200,17 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     fetchSupabaseAlbums();
 
     // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUserSession(null);
+        clearAllStoredSessions();
+        return;
+      }
+      if (event === 'SIGNED_IN' && session?.user) {
         setUserSession(session.user);
         setStoredUserSession(session.user);
         if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
           window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      } else {
-        if (!getStoredAdminSession()) {
-          const stored = getStoredUserSession();
-          if (!stored) {
-            setUserSession(null);
-          }
         }
       }
     });

@@ -120,25 +120,8 @@ export function hasActiveSession(): boolean {
 export function clearAllStoredSessions() {
   if (typeof window === 'undefined') return;
   try {
-    // 1. Remove all keys from localStorage
-    localStorage.removeItem(USER_SESSION_KEY);
-    localStorage.removeItem(ADMIN_SESSION_KEY);
-    localStorage.removeItem('hidden_vault_player_state');
-    localStorage.removeItem('hidden_vault_cached_albums');
-    localStorage.removeItem('hidden_vault_custom_name');
-    localStorage.removeItem('hidden_music_player_state');
-
-    // Remove all sb-* and hidden_vault keys
-    Object.keys(localStorage).forEach((key) => {
-      if (
-        key.startsWith('sb-') ||
-        key.startsWith('supabase.') ||
-        key.includes('auth-token') ||
-        key.includes('hidden_vault')
-      ) {
-        localStorage.removeItem(key);
-      }
-    });
+    // 1. Wipe all localStorage completely
+    localStorage.clear();
 
     // 2. Clear sessionStorage completely
     sessionStorage.clear();
@@ -164,13 +147,10 @@ export function clearAllStoredSessions() {
 // Global Clean Unified Logout
 export async function performLogout() {
   try {
-    // 1. Clear local client state synchronously first
-    clearAllStoredSessions();
-
-    // 2. Supabase client-side signOut
+    // 1. Supabase global signOut
     const supabase = createClient();
+    await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-    await supabase.auth.signOut().catch(() => {});
   } catch (err) {
     console.warn('Supabase signOut notice:', err);
   } finally {
