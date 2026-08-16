@@ -37,7 +37,8 @@ import {
   ShieldAlert,
   Lock,
   Key,
-  Shield
+  Shield,
+  Cloud
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
@@ -71,6 +72,16 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Cloudflare R2 Migration Modal State
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationLogs, setMigrationLogs] = useState<string[]>([]);
+  const [migrationResults, setMigrationResults] = useState<{
+    albumsMigrated: number;
+    tracksMigrated: number;
+    storageFilesMigrated: number;
+  } | null>(null);
 
   // Feedbacks State
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
@@ -387,7 +398,27 @@ export default function AdminPage() {
     setIsAlbumModalOpen(false);
   };
 
-  // Create or Update Album Folder (100% SUPABASE ONLY)
+  // Helper to upload files directly to Cloudflare R2 Object Storage
+  const uploadFileToCloudflareR2 = async (file: File, folder: 'audio' | 'covers' = 'audio'): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+
+    const res = await fetch('/api/r2-upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Lỗi tải tệp lên Cloudflare R2 (${res.status})`);
+    }
+
+    const data = await res.json();
+    return data.url;
+  };
+
+  // Create or Update Album Folder (100% CLOUDFLARE R2 + SUPABASE DB)
   const handleSaveAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!albumTitle.trim() || !albumArtist.trim()) {
@@ -403,22 +434,11 @@ export default function AdminPage() {
       let finalCoverUrl = coverUrlInput.trim();
 
       if (coverFile) {
+        setStatusMsg({ type: 'success', text: `⚡ Đang tải ảnh bìa "${coverFile.name}" lên Cloudflare R2...` });
         try {
-          const fileExt = coverFile.name.split('.').pop();
-          const fileName = `cover_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-          const { data: storageData, error: storageErr } = await supabase.storage
-            .from('cover-arts')
-            .upload(fileName, coverFile, { upsert: true });
-
-          if (!storageErr && storageData) {
-            const { data: publicUrlData } = supabase.storage
-              .from('cover-arts')
-              .getPublicUrl(fileName);
-            finalCoverUrl = publicUrlData.publicUrl;
-          } else {
-            finalCoverUrl = await fileToBase64(coverFile);
-          }
-        } catch {
+          finalCoverUrl = await uploadFileToCloudflareR2(coverFile, 'covers');
+        } catch (r2Err: any) {
+          console.warn('R2 cover upload fallback:', r2Err);
           finalCoverUrl = await fileToBase64(coverFile);
         }
       }
@@ -515,7 +535,7 @@ export default function AdminPage() {
     setMediaUrlInput(val);
   };
 
-  // Helper to upload media file directly to Supabase Storage with automatic bucket resolution & creation
+  // Helper to upload media file directly to Cloudflare R2 (with Supabase fallback)
   const uploadTrackFileToStorage = async (
     supabase: ReturnType<typeof createClient>,
     file: File,
@@ -523,8 +543,20 @@ export default function AdminPage() {
     onStatus?: (msg: string) => void
   ): Promise<{ audioUrl: string; videoUrl: string }> => {
     const uploadFile = file;
-    if (onStatus) onStatus(`⚡ Đang tải "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB) trực tiếp lên Supabase...`);
+    if (onStatus) onStatus(`⚡ Đang tải "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB) lên Cloudflare R2...`);
 
+    // 1. Primary: Upload to Cloudflare R2
+    try {
+      const r2Url = await uploadFileToCloudflareR2(uploadFile, 'audio');
+      return {
+        audioUrl: r2Url,
+        videoUrl: '',
+      };
+    } catch (r2Err: any) {
+      console.warn('R2 upload failed, trying fallback to Supabase:', r2Err);
+    }
+
+    // 2. Fallback: Supabase Storage
     const candidateBuckets = ['audio-files', 'audio'];
     let lastStorageErr: any = null;
 
@@ -542,31 +574,12 @@ export default function AdminPage() {
 
     for (const bName of candidateBuckets) {
       try {
-        // Attempt 1: Direct Upload
         let { data: storageData, error: storageErr } = await supabase.storage
           .from(bName)
           .upload(fileName, uploadFile, {
             upsert: true,
             contentType,
           });
-
-        // If bucket not found, attempt auto-creating the bucket as public
-        if (storageErr && (storageErr.message?.toLowerCase().includes('not found') || (storageErr as any).statusCode === '404')) {
-          console.warn(`Bucket "${bName}" missing. Attempting auto creation...`);
-          try {
-            await supabase.storage.createBucket(bName, { public: true });
-            const retryRes = await supabase.storage
-              .from(bName)
-              .upload(fileName, uploadFile, {
-                upsert: true,
-                contentType,
-              });
-            storageData = retryRes.data;
-            storageErr = retryRes.error;
-          } catch (createErr) {
-            console.warn(`Failed to auto create bucket ${bName}:`, createErr);
-          }
-        }
 
         if (!storageErr && storageData) {
           const { data: publicUrlData } = supabase.storage
@@ -575,8 +588,8 @@ export default function AdminPage() {
 
           if (publicUrlData?.publicUrl) {
             return {
-              audioUrl: type === 'audio' ? publicUrlData.publicUrl : '',
-              videoUrl: type === 'video' ? publicUrlData.publicUrl : '',
+              audioUrl: publicUrlData.publicUrl,
+              videoUrl: '',
             };
           }
         } else {
@@ -587,14 +600,7 @@ export default function AdminPage() {
       }
     }
 
-    // If candidate buckets failed, throw clear actionable message
-    console.error(`Supabase storage error [buckets: ${candidateBuckets.join('/')}]:`, lastStorageErr);
-    const errMessage = lastStorageErr?.message || 'Bucket not found';
-    throw new Error(
-      `Lỗi Supabase Storage: Bucket "${candidateBuckets[0]}" chưa tồn tại trên Supabase. ` +
-      `Vui lòng vào Supabase Dashboard > Storage > New Bucket > Tạo bucket tên "${candidateBuckets[0]}" (chế độ Public). ` +
-      `(Mã lỗi gốc: ${errMessage})`
-    );
+    throw new Error(`Lỗi tải lên tệp: ${lastStorageErr?.message || 'Không thể lưu trữ tệp tin'}`);
   };
 
   // Resilient helpers to handle both 'audio_url' and 'url' column schemas in Supabase tracks table
@@ -1450,6 +1456,11 @@ export default function AdminPage() {
 
         {/* Top Header Mode Tabs & Actions */}
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-950/50 border border-orange-500/40 text-orange-300 font-mono text-[10px] font-bold shadow-md">
+            <Cloud className="w-3.5 h-3.5 text-orange-400" />
+            <span>CLOUDFLARE R2 CDN (0 EGRESS)</span>
+          </div>
+
           <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-900 border border-white/20">
             <button
               onClick={() => {
