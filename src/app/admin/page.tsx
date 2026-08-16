@@ -156,14 +156,16 @@ export default function AdminPage() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (albumsError) throw albumsError;
+      if (albumsError) throw new Error(`Lỗi tải Albums: ${albumsError.message}`);
 
       const { data: tracksData, error: tracksError } = await supabase
         .from('tracks')
         .select('*')
         .order('created_at', { ascending: true });
 
-      if (tracksError) throw tracksError;
+      if (tracksError) {
+        console.warn('Tracks fetch warning:', tracksError);
+      }
 
       const fullAlbums: Album[] = (albumsData || []).map((album) => ({
         ...album,
@@ -171,9 +173,35 @@ export default function AdminPage() {
       }));
 
       setAlbums(fullAlbums);
+      setStatusMsg(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Lỗi kết nối Supabase.';
       console.error('Error fetching Supabase data:', err);
+      setStatusMsg({ type: 'error', text: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reset & Clear all albums and tracks from Supabase
+  const handleResetDatabase = async () => {
+    if (!confirm('⚠️ CẢNH BÁO:\nBạn có chắc chắn muốn XÓA SẠCH TOÀN BỘ Albums & Bài Hát cũ trên Supabase để bắt đầu mới không?')) {
+      return;
+    }
+
+    setLoading(true);
+    setStatusMsg(null);
+    try {
+      const supabase = createClient();
+      await supabase.from('tracks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('album_comments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('albums').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      setAlbums([]);
+      setOpenedAlbumId(null);
+      setStatusMsg({ type: 'success', text: '✅ Đã xóa sạch toàn bộ dữ liệu Albums cũ trên Supabase! Bạn có thể tạo Album mới ngay.' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không thể xóa dữ liệu trên Supabase.';
       setStatusMsg({ type: 'error', text: msg });
     } finally {
       setLoading(false);
@@ -1499,15 +1527,34 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Global Action: Create New Album (Only in albums tab) */}
+          {/* Global Action: Create New Album & Tools (Only in albums tab) */}
           {adminTab === 'albums' && !openedAlbumId && (
-            <button
-              onClick={openCreateAlbumModal}
-              className="px-3.5 py-2 rounded-xl bg-white text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:bg-slate-200 transition-all flex items-center gap-1.5 font-mono"
-            >
-              <FolderPlus className="w-4 h-4" />
-              <span>+ NEW ALBUM</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={openCreateAlbumModal}
+                className="px-3.5 py-2 rounded-xl bg-white text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:bg-slate-200 transition-all flex items-center gap-1.5 font-mono"
+              >
+                <FolderPlus className="w-4 h-4" />
+                <span>+ NEW ALBUM</span>
+              </button>
+
+              <button
+                onClick={fetchSupabaseData}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black border border-white/20 transition-all"
+                title="Làm mới danh sách Album"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+
+              <button
+                onClick={handleResetDatabase}
+                className="px-2.5 py-2 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-400 hover:text-white border border-red-500/30 transition-all flex items-center gap-1 font-mono text-xs font-bold"
+                title="Xóa sạch toàn bộ Albums cũ trên Supabase để làm lại từ đầu"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">RESET DATA</span>
+              </button>
+            </div>
           )}
 
           {adminTab === 'feedbacks' && (
