@@ -79,13 +79,19 @@ async function decodeAudioArrayBufferToPCM(
  * Extract mono PCM samples from Video (File, Blob, or URL) using Headless HTMLVideoElement + Web Audio API
  */
 async function extractAudioPCMFromVideo(
-  videoInput: File | Blob | string,
+  videoInput: File | Blob | ArrayBuffer | string,
   targetSampleRate: number = 8000,
   maxDuration: number = 45,
   onProgress?: (msg: string) => void
 ): Promise<Float32Array> {
   // Strategy 1: Try direct arrayBuffer decodeAudioData (if browser demuxer supports container)
-  if (videoInput instanceof File || videoInput instanceof Blob) {
+  if (videoInput instanceof ArrayBuffer) {
+    try {
+      return await decodeAudioArrayBufferToPCM(videoInput, targetSampleRate, maxDuration);
+    } catch {
+      videoInput = new Blob([videoInput], { type: 'video/mp4' });
+    }
+  } else if (videoInput instanceof File || videoInput instanceof Blob) {
     try {
       const buffer = await videoInput.arrayBuffer();
       return await decodeAudioArrayBufferToPCM(buffer, targetSampleRate, maxDuration);
