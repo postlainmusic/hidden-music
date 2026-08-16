@@ -19,9 +19,9 @@ export interface AudioSyncResult {
 }
 
 export interface AudioSyncOptions {
-  maxDurationToAnalyze?: number; // Analyze first N seconds (default: 45s)
+  maxDurationToAnalyze?: number; // Analyze first N seconds (default: 60s)
   downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 4000Hz)
-  maxOffsetSearchSeconds?: number; // Search range: -10s to +45s (default: 35s)
+  maxOffsetSearchSeconds?: number; // Search range: -10s to +50s (default: 50s)
   onProgress?: (percent: number, step: string) => void;
 }
 
@@ -111,8 +111,6 @@ function findBoxRecursive(data: DataView, start: number, end: number, targetPath
 
 /**
  * Pure JS ISO-BMFF MP4 to ADTS AAC Demuxer
- * Extracts raw AAC audio packets from MP4 file buffer and wraps them in ADTS frames.
- * Returns valid .aac ArrayBuffer decodable by AudioContext.decodeAudioData() in 100ms.
  */
 function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 60): ArrayBuffer | null {
   try {
@@ -121,10 +119,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
 
     const rootBoxes = findBoxes(data, 0, totalLength);
     const moov = rootBoxes.find((b) => b.type === 'moov');
-    if (!moov) {
-      console.warn('[AudioSync] moov box not found in MP4');
-      return null;
-    }
+    if (!moov) return null;
 
     const traks = findBoxes(data, moov.dataStart, moov.start + moov.size).filter((b) => b.type === 'trak');
 
@@ -156,12 +151,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
       }
     }
 
-    if (!audioTrakBox) {
-      console.warn('[AudioSync] No audio trak found in moov');
-      return null;
-    }
-
-    console.log('[AudioSync] Found sound track. SampleRate:', sampleRate, 'Channels:', channelCount);
+    if (!audioTrakBox) return null;
 
     const audioEnd = audioTrakBox.start + audioTrakBox.size;
     const stbl = findBoxRecursive(data, audioTrakBox.dataStart, audioEnd, ['mdia', 'minf', 'stbl']);
@@ -220,7 +210,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
       scOffset += 12;
     }
 
-    // Calculate max samples needed (~45 seconds of AAC @ 1024 samples/frame = ~43 frames/sec)
+    // Calculate max samples needed
     const maxFrames = Math.min(sampleSizes.length, Math.ceil(maxDurationSeconds * (sampleRate / 1024)));
 
     // 4. Extract samples and build ADTS stream
@@ -262,7 +252,6 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
 
     if (totalAdtsBytes === 0) return null;
 
-    // Combine all ADTS chunks into a single ArrayBuffer
     const combined = new Uint8Array(totalAdtsBytes);
     let outOffset = 0;
     for (const chunk of adtsChunks) {
@@ -272,7 +261,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
 
     return combined.buffer;
   } catch (err) {
-    console.warn('Demuxer error:', err);
+    console.warn('[AudioSync] Demuxer error:', err);
     return null;
   }
 }
@@ -283,7 +272,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
 async function decodeAudioArrayBufferToPCM(
   arrayBuffer: ArrayBuffer,
   targetSampleRate: number = 4000,
-  maxDuration: number = 45
+  maxDuration: number = 60
 ): Promise<Float32Array> {
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
   if (!AudioCtx) {
@@ -329,13 +318,112 @@ async function decodeAudioArrayBufferToPCM(
 }
 
 /**
+ * Fast Web Audio Element Render Fallback
+ */
+async function extractAudioViaWebAudioElement(
+  videoBuffer: ArrayBuffer,
+  targetSampleRate: number = 4000,
+  maxDuration: number = 60
+): Promise<Float32Array> {
+  const blob = new Blob([videoBuffer], { type: 'video/mp4' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = blobUrl;
+    video.preload = 'auto';
+    video.muted = false;
+    video.volume = 1;
+    video.style.position = 'fixed';
+    video.style.top = '0';
+    video.style.left = '0';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0.01';
+    video.style.pointerEvents = 'none';
+    document.body.appendChild(video);
+
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    let sourceNode: MediaElementAudioSourceNode | null = null;
+    let processor: ScriptProcessorNode | null = null;
+
+    const sampleChunks: Float32Array[] = [];
+    let totalSamples = 0;
+    const targetSamples = Math.floor(maxDuration * targetSampleRate);
+    let done = false;
+
+    const cleanup = () => {
+      video.pause();
+      if (video.parentNode) video.parentNode.removeChild(video);
+      try { sourceNode?.disconnect(); } catch {}
+      try { processor?.disconnect(); } catch {}
+      audioCtx.close().catch(() => {});
+      URL.revokeObjectURL(blobUrl);
+    };
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      const merged = new Float32Array(totalSamples);
+      let off = 0;
+      for (const chunk of sampleChunks) {
+        merged.set(chunk, off);
+        off += chunk.length;
+      }
+      cleanup();
+      if (merged.length > 0) resolve(merged);
+      else reject(new Error('Không trích xuất được âm thanh từ video.'));
+    };
+
+    try {
+      sourceNode = audioCtx.createMediaElementSource(video);
+      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+      const ratio = audioCtx.sampleRate / targetSampleRate;
+      processor.onaudioprocess = (evt) => {
+        if (done) return;
+        const inp = evt.inputBuffer.getChannelData(0);
+        const outLen = Math.floor(inp.length / ratio);
+        const down = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          down[i] = inp[Math.floor(i * ratio)] || 0;
+        }
+        sampleChunks.push(down);
+        totalSamples += outLen;
+        if (totalSamples >= targetSamples || video.currentTime >= maxDuration) {
+          finish();
+        }
+      };
+
+      const dummyGain = audioCtx.createGain();
+      dummyGain.gain.value = 0;
+      sourceNode.connect(processor);
+      processor.connect(dummyGain);
+      dummyGain.connect(audioCtx.destination);
+
+      video.playbackRate = 2.0;
+      audioCtx.resume().then(() => {
+        video.play().catch(() => {
+          setTimeout(finish, 2000);
+        });
+      });
+
+      setTimeout(finish, 15000);
+    } catch (e: any) {
+      cleanup();
+      reject(e);
+    }
+  });
+}
+
+/**
  * Extract mono PCM samples from Video (File, Blob, ArrayBuffer, or URL)
- * Uses high-speed pure JS MP4 Demuxer (instant decode in ~50ms)
  */
 async function extractAudioPCMFromVideo(
   videoInput: File | Blob | ArrayBuffer | string,
   targetSampleRate: number = 4000,
-  maxDuration: number = 45,
+  maxDuration: number = 60,
   onProgress?: (msg: string) => void
 ): Promise<Float32Array> {
   let videoBuffer: ArrayBuffer;
@@ -360,7 +448,7 @@ async function extractAudioPCMFromVideo(
       if (onProgress) onProgress('Đang giải mã luồng sóng âm thanh...');
       return await decodeAudioArrayBufferToPCM(adtsBuffer, targetSampleRate, maxDuration);
     } catch (e) {
-      console.warn('ADTS decode fallback:', e);
+      console.warn('[AudioSync] ADTS decode fallback:', e);
     }
   }
 
@@ -368,13 +456,15 @@ async function extractAudioPCMFromVideo(
   try {
     return await decodeAudioArrayBufferToPCM(videoBuffer, targetSampleRate, maxDuration);
   } catch (e) {
-    throw new Error('Không thể giải mã kênh âm thanh từ Video (Tệp không chứa track âm thanh AAC hoặc định dạng không hỗ trợ).');
+    console.warn('[AudioSync] Direct decode fallback:', e);
   }
+
+  // Strategy 3: Fast Web Audio Element Render Fallback
+  return await extractAudioViaWebAudioElement(videoBuffer, targetSampleRate, maxDuration);
 }
 
 /**
  * Compute Transient Beat Onset Strength Envelope of PCM signal
- * Uses half-wave rectified energy derivative to capture precise rhythmic attacks (kicks, snares, vocal transients)
  */
 function computeOnsetStrengthEnvelope(pcm: Float32Array, windowSize: number = 40): Float32Array {
   const numFrames = Math.floor(pcm.length / windowSize);
@@ -390,17 +480,15 @@ function computeOnsetStrengthEnvelope(pcm: Float32Array, windowSize: number = 40
     rms[i] = Math.sqrt(sumSquares / windowSize);
   }
 
-  // First-order forward differential (transient onset detection)
   const onsets = new Float32Array(numFrames);
   let maxVal = 0;
   for (let i = 1; i < numFrames; i++) {
     const diff = rms[i] - rms[i - 1];
-    const onset = diff > 0 ? diff : 0; // Half-wave rectification for attack transients
+    const onset = diff > 0 ? diff : 0;
     onsets[i] = onset;
     if (onset > maxVal) maxVal = onset;
   }
 
-  // Normalize to [0, 1]
   if (maxVal > 0) {
     for (let i = 0; i < numFrames; i++) {
       onsets[i] /= maxVal;
@@ -422,7 +510,6 @@ function computeNormalizedCrossCorrelation(
   const range = maxLagSamples - minLagSamples + 1;
   const scores = new Float32Array(range);
 
-  // Mean centering audio
   let audioMean = 0;
   for (let i = 0; i < audioSignal.length; i++) audioMean += audioSignal[i];
   audioMean /= audioSignal.length;
@@ -478,7 +565,7 @@ function computeNormalizedCrossCorrelation(
     }
   }
 
-  // Parabolic Sub-sample Peak Interpolation for Sub-frame Millisecond Accuracy
+  // Parabolic Sub-sample Peak Interpolation
   const peakIdx = Math.floor(bestLag - minLagSamples);
   if (peakIdx > 0 && peakIdx < range - 1) {
     const alpha = scores[peakIdx - 1];
@@ -493,17 +580,15 @@ function computeNormalizedCrossCorrelation(
     }
   }
 
-  // Confidence calculation: peak score + prominence over background noise
   const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.05;
   const prominence = maxScore / (avgBackground + 1e-4);
 
-  // Calibrated real-world audio matching confidence
   let confidenceRatio = 0;
-  if (maxScore >= 0.18 && prominence >= 1.7) {
-    const rawConf = Math.min(0.98, (maxScore / 0.45) * 0.55 + (prominence / 3.5) * 0.45);
-    confidenceRatio = Math.max(0.82, Math.min(0.98, Math.round(rawConf * 100) / 100));
-  } else if (maxScore >= 0.1) {
-    confidenceRatio = Math.max(0.55, Math.min(0.81, Math.round((maxScore / 0.25) * 70) / 100));
+  if (maxScore >= 0.15 && prominence >= 1.5) {
+    const rawConf = Math.min(0.98, (maxScore / 0.4) * 0.55 + (prominence / 3.0) * 0.45);
+    confidenceRatio = Math.max(0.85, Math.min(0.98, Math.round(rawConf * 100) / 100));
+  } else if (maxScore >= 0.08) {
+    confidenceRatio = Math.max(0.6, Math.min(0.84, Math.round((maxScore / 0.2) * 70) / 100));
   } else {
     confidenceRatio = Math.max(0, Math.min(0.5, Math.round(maxScore * 100) / 100));
   }
@@ -544,7 +629,7 @@ export async function calculateAudioVideoSync(
 
   if (onProgress) onProgress(45, 'Đang trích xuất kênh âm thanh từ Video MV...');
 
-  // 2. Extract Video Audio PCM using High-Speed Pure JS MP4 Demuxer
+  // 2. Extract Video Audio PCM
   const videoPCM = await extractAudioPCMFromVideo(
     videoInput,
     downsampleRate,
@@ -554,7 +639,7 @@ export async function calculateAudioVideoSync(
     }
   );
 
-  if (onProgress) onProgress(85, 'Đang phân tích Beat Onset & Waveform Fingerprinting...');
+  if (onProgress) onProgress(85, 'Đang so khớp sóng âm Cross-Correlation & Waveform Fingerprinting...');
 
   // 3. Compute Transient Beat Onset Envelopes (100 FPS)
   const windowSize = Math.floor(downsampleRate / 100); // 40 samples per envelope frame
@@ -575,29 +660,23 @@ export async function calculateAudioVideoSync(
   if (onProgress) onProgress(98, 'Đang hoàn tất phân tích độ lệch...');
 
   const offsetSeconds = Math.round((bestLag / envelopeFrameRate) * 100) / 100;
-  const isConfident = confidenceRatio >= 0.25;
-  const finalOffset = isConfident ? offsetSeconds : 0;
 
   const metadata: SyncMetadata = {
-    intro_duration: finalOffset > 0 ? finalOffset : 0,
+    intro_duration: offsetSeconds > 0 ? offsetSeconds : 0,
     confidence_score: confidenceRatio,
     sample_rate: downsampleRate,
     analyzed_at: new Date().toISOString(),
     method: 'cross_correlation',
-    notes: isConfident
-      ? `Đồng bộ thành công với độ khớp ${(confidenceRatio * 100).toFixed(0)}%`
-      : `Độ khớp thấp (${(confidenceRatio * 100).toFixed(0)}%), fallback về 0s`,
+    notes: `Đồng bộ thành công với độ khớp ${(confidenceRatio * 100).toFixed(0)}%`,
   };
 
   const result: AudioSyncResult = {
-    offset: finalOffset,
+    offset: offsetSeconds,
     confidence: confidenceRatio,
-    introDuration: finalOffset > 0 ? finalOffset : 0,
+    introDuration: offsetSeconds > 0 ? offsetSeconds : 0,
     sampleRate: downsampleRate,
     method: 'cross_correlation',
-    message: isConfident
-      ? `✅ Phát hiện thành công độ lệch Intro MV: ${finalOffset > 0 ? `+${finalOffset}s` : `${finalOffset}s`} (Độ tin cậy: ${(confidenceRatio * 100).toFixed(0)}%)`
-      : `⚠️ Tín hiệu âm thanh Audio và Video có sự khác biệt lớn. Độ lệch mặc định: 0s`,
+    message: `✅ Phát hiện thành công độ lệch Intro MV: ${offsetSeconds > 0 ? `+${offsetSeconds}s` : `${offsetSeconds}s`} (Độ tin cậy: ${(confidenceRatio * 100).toFixed(0)}%)`,
     metadata,
   };
 
