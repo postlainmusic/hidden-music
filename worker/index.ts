@@ -9,6 +9,31 @@
  * 5. Full CORS headers supporting Web Audio API & MediaElement.
  */
 
+// Ambient Cloudflare Worker & R2 Types for zero-dependency compilation
+type R2Object = {
+  key: string;
+  size: number;
+  httpEtag: string;
+  httpMetadata?: { contentType?: string };
+  customMetadata?: Record<string, string>;
+};
+
+type R2ObjectBody = R2Object & {
+  body: ReadableStream;
+};
+
+type R2Bucket = {
+  head(key: string): Promise<R2Object | null>;
+  get(key: string, options?: any): Promise<R2ObjectBody | R2Object | null>;
+  put(key: string, value: any, options?: any): Promise<R2Object>;
+  delete(keys: string | string[]): Promise<void>;
+};
+
+type ExecutionContext = {
+  waitUntil(promise: Promise<any>): void;
+  passThroughOnException(): void;
+};
+
 export interface Env {
   BUCKET: R2Bucket;
   STREAM_SECRET_KEY?: string;
