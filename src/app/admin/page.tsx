@@ -1923,7 +1923,8 @@ export default function AdminPage() {
                     <input
                       type="file"
                       accept="video/*,.mp4,.webm,.mkv,.mov"
-                      onChange={(e) => handleSelectMediaFile(e.target.files?.[0] || null)}
+                      multiple
+                      onChange={(e) => handleSelectMediaFiles(e.target.files)}
                       className="w-full text-slate-400 text-xs file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer"
                     />
                     <input
