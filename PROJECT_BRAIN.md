@@ -1,6 +1,10 @@
 # 🧠 HIDDEN MUSIC VAULT - PROJECT BRAIN & ARCHITECTURE SPECIFICATION
 
-> **Document Purpose**: Đây là file tài liệu kiến trúc toàn diện của dự án **Hidden Music Vault**. Mỗi phiên làm việc mới của AI/Developer CHỈ CẦN đọc file này là hiểu 100% dự án, luồng dữ liệu, cách vận hành 3D, Supabase, Player đa định dạng, phím tắt, font chữ và quy trình đăng bài.
+> **Document Purpose**: Đây là file tài liệu kiến trúc toàn diện của dự án **Hidden Music Vault**. Mỗi phiên làm việc mới của AI/Developer CHỈ CẦN đọc file này và file [CURRENT_CHECKPOINT.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/CURRENT_CHECKPOINT.md) là nắm 100% tiến độ và các bước làm tiếp theo!
+
+---
+
+## 📌 TIẾP TỤC DỰ ÁN TỪ CHECKPOINT: Đọc [CURRENT_CHECKPOINT.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/CURRENT_CHECKPOINT.md)
 
 ---
 
