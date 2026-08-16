@@ -20,8 +20,8 @@ export interface AudioSyncResult {
 
 export interface AudioSyncOptions {
   maxDurationToAnalyze?: number; // Analyze first N seconds (default: 45s)
-  downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 8000Hz)
-  maxOffsetSearchSeconds?: number; // Search range: -10s to +45s (default: 40s)
+  downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 4000Hz)
+  maxOffsetSearchSeconds?: number; // Search range: -10s to +45s (default: 35s)
   onProgress?: (percent: number, step: string) => void;
 }
 
@@ -30,7 +30,7 @@ export interface AudioSyncOptions {
  */
 async function decodeAudioArrayBufferToPCM(
   arrayBuffer: ArrayBuffer,
-  targetSampleRate: number = 8000,
+  targetSampleRate: number = 4000,
   maxDuration: number = 45
 ): Promise<Float32Array> {
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -40,6 +40,7 @@ async function decodeAudioArrayBufferToPCM(
 
   const audioCtx = new AudioCtx();
   try {
+    await audioCtx.resume();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     const duration = Math.min(audioBuffer.duration, maxDuration);
     const totalOutputSamples = Math.floor(duration * targetSampleRate);
@@ -80,30 +81,43 @@ async function decodeAudioArrayBufferToPCM(
  */
 async function extractAudioPCMFromVideo(
   videoInput: File | Blob | ArrayBuffer | string,
-  targetSampleRate: number = 8000,
+  targetSampleRate: number = 4000,
   maxDuration: number = 45,
   onProgress?: (msg: string) => void
 ): Promise<Float32Array> {
-  // Strategy 1: Try direct arrayBuffer decodeAudioData (if browser demuxer supports container)
+  // Strategy 1: Try direct arrayBuffer decodeAudioData (if browser supports container)
   if (videoInput instanceof ArrayBuffer) {
     try {
       return await decodeAudioArrayBufferToPCM(videoInput, targetSampleRate, maxDuration);
     } catch {
-      videoInput = new Blob([videoInput], { type: 'video/mp4' });
+      // Fallback below
     }
   } else if (videoInput instanceof File || videoInput instanceof Blob) {
     try {
       const buffer = await videoInput.arrayBuffer();
       return await decodeAudioArrayBufferToPCM(buffer, targetSampleRate, maxDuration);
     } catch {
-      // Fallback to Headless HTMLVideoElement Audio Capture below
+      // Fallback below
     }
   }
 
-  // Strategy 2: Fast Headless HTMLVideoElement Audio Capture with 8x High-Speed Buffer Stream
+  // Strategy 2: Same-Origin Blob + Headless HTMLVideoElement Audio Capture
+  let videoBlob: Blob;
+  if (typeof videoInput === 'string') {
+    if (onProgress) onProgress('Đang tải dữ liệu tệp Video để giải mã âm thanh...');
+    const res = await fetch(videoInput);
+    if (!res.ok) throw new Error(`Không thể tải video từ URL (${res.status}): ${res.statusText}`);
+    videoBlob = await res.blob();
+  } else if (videoInput instanceof Blob) {
+    videoBlob = videoInput;
+  } else if (videoInput instanceof ArrayBuffer) {
+    videoBlob = new Blob([videoInput], { type: 'video/mp4' });
+  } else {
+    videoBlob = videoInput;
+  }
+
   return new Promise((resolve, reject) => {
-    let videoUrl = '';
-    let isCreatedBlobUrl = false;
+    const localBlobUrl = URL.createObjectURL(videoBlob);
     let timeoutId: any = null;
     let sourceNode: MediaElementAudioSourceNode | null = null;
     let processorNode: ScriptProcessorNode | null = null;
@@ -111,14 +125,8 @@ async function extractAudioPCMFromVideo(
     let isFinished = false;
     const sampleChunks: Float32Array[] = [];
     let totalSamplesCollected = 0;
+    let nonZeroSampleCount = 0;
     const targetTotalSamples = Math.floor(maxDuration * targetSampleRate);
-
-    if (typeof videoInput === 'string') {
-      videoUrl = videoInput;
-    } else {
-      videoUrl = URL.createObjectURL(videoInput);
-      isCreatedBlobUrl = true;
-    }
 
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -141,21 +149,15 @@ async function extractAudioPCMFromVideo(
         }
       }
       if (sourceNode) {
-        try {
-          sourceNode.disconnect();
-        } catch {}
+        try { sourceNode.disconnect(); } catch {}
       }
       if (processorNode) {
-        try {
-          processorNode.disconnect();
-        } catch {}
+        try { processorNode.disconnect(); } catch {}
       }
       if (audioCtx && audioCtx.state !== 'closed') {
         audioCtx.close().catch(() => {});
       }
-      if (isCreatedBlobUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
+      URL.revokeObjectURL(localBlobUrl);
     };
 
     const finish = () => {
@@ -171,10 +173,10 @@ async function extractAudioPCMFromVideo(
 
       cleanup();
 
-      if (merged.length === 0) {
+      if (merged.length === 0 || nonZeroSampleCount < 50) {
         reject(
           new Error(
-            'Không thể trích xuất kênh âm thanh từ video (video không có âm thanh hoặc bị chặn CORS).'
+            'Không thể trích xuất kênh âm thanh từ video (video không có tiếng hoặc bị tắt âm).'
           )
         );
       } else {
@@ -182,41 +184,41 @@ async function extractAudioPCMFromVideo(
       }
     };
 
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) {
-      cleanup();
-      reject(new Error('Web Audio API không được hỗ trợ trên trình duyệt này.'));
-      return;
-    }
-
-    audioCtx = new AudioCtx();
-
-    // Timeout safety (14s max)
+    // Timeout safety (20s max)
     timeoutId = setTimeout(() => {
       if (totalSamplesCollected > targetSampleRate * 8) {
-        // Captured sufficient audio samples (>= 8s), proceed to correlation
         finish();
       } else {
         cleanup();
         reject(new Error('Quá thời gian trích xuất âm thanh từ Video (Timeout).'));
       }
-    }, 14000);
+    }, 20000);
 
     video.onerror = () => {
       cleanup();
       reject(
         new Error(
-          `Lỗi phát Video: ${video.error?.message || 'Không thể giải mã định dạng video hoặc bị chặn CORS'}`
+          `Lỗi phát Video: ${video.error?.message || 'Không thể giải mã định dạng video'}`
         )
       );
     };
 
-    video.onloadedmetadata = () => {
+    video.onloadedmetadata = async () => {
       try {
-        if (onProgress) onProgress('Đang thu thập âm thanh tốc độ cao từ Video MV...');
+        if (onProgress) onProgress('Đang bắt đầu trích xuất âm thanh từ Video MV...');
 
-        // 8x high speed extraction (captures 45s of video audio in ~5 seconds)
-        video.playbackRate = 8.0;
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) {
+          cleanup();
+          reject(new Error('Web Audio API không được hỗ trợ trên trình duyệt này.'));
+          return;
+        }
+
+        audioCtx = new AudioCtx();
+        await audioCtx.resume();
+
+        // 2x safe playback rate without dropping audio packets
+        video.playbackRate = 2.0;
 
         sourceNode = audioCtx.createMediaElementSource(video);
         processorNode = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -233,14 +235,18 @@ async function extractAudioPCMFromVideo(
 
           for (let i = 0; i < outputLength; i++) {
             const srcIdx = Math.floor(i * downsampleRatio);
-            downsampled[i] = inputData[srcIdx] || 0;
+            const val = inputData[srcIdx] || 0;
+            downsampled[i] = val;
+            if (Math.abs(val) > 0.001) {
+              nonZeroSampleCount++;
+            }
           }
 
           sampleChunks.push(downsampled);
           totalSamplesCollected += outputLength;
 
           const secondsCollected = Math.min(maxDuration, Math.round(totalSamplesCollected / targetSampleRate));
-          if (onProgress && secondsCollected % 4 === 0) {
+          if (onProgress && secondsCollected % 5 === 0) {
             onProgress(`Đang trích xuất kênh âm thanh Video: ${secondsCollected}s / ${maxDuration}s...`);
           }
 
@@ -249,7 +255,7 @@ async function extractAudioPCMFromVideo(
           }
         };
 
-        // Mute to destination (user won't hear high-speed audio)
+        // Mute to speakers (user won't hear sound during analysis)
         const dummyGain = audioCtx.createGain();
         dummyGain.gain.value = 0;
 
@@ -257,21 +263,14 @@ async function extractAudioPCMFromVideo(
         processorNode.connect(dummyGain);
         dummyGain.connect(audioCtx.destination);
 
-        video.play().catch(() => {
-          audioCtx.resume().then(() => {
-            video.play().catch((playErr) => {
-              cleanup();
-              reject(new Error(`Trình duyệt chặn giải mã audio từ video: ${playErr.message}`));
-            });
-          });
-        });
+        await video.play();
       } catch (err: any) {
         cleanup();
         reject(new Error(`Lỗi kết nối Web Audio API từ Video: ${err.message}`));
       }
     };
 
-    video.src = videoUrl;
+    video.src = localBlobUrl;
   });
 }
 
@@ -375,7 +374,7 @@ function computeNormalizedCrossCorrelation(
   }
 
   // Parabolic Sub-sample Peak Interpolation for Sub-frame Millisecond Accuracy
-  const peakIdx = bestLag - minLagSamples;
+  const peakIdx = Math.floor(bestLag - minLagSamples);
   if (peakIdx > 0 && peakIdx < range - 1) {
     const alpha = scores[peakIdx - 1];
     const beta = scores[peakIdx];
@@ -389,10 +388,13 @@ function computeNormalizedCrossCorrelation(
     }
   }
 
-  // Confidence calculation: peak prominence vs background noise
+  // Confidence calculation: peak score + prominence over background
   const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.1;
   const prominence = maxScore / (avgBackground + 1e-4);
-  const confidenceRatio = Math.max(0, Math.min(1, Math.round((maxScore * 0.6 + Math.min(1, prominence / 3) * 0.4) * 100) / 100));
+  const confidenceRatio = Math.max(
+    0,
+    Math.min(1, Math.round((Math.max(0, maxScore) * 0.7 + Math.min(1, prominence / 2.5) * 0.3) * 100) / 100)
+  );
 
   return { bestLag, maxScore, confidenceRatio };
 }
@@ -406,13 +408,13 @@ export async function calculateAudioVideoSync(
   options: AudioSyncOptions = {}
 ): Promise<AudioSyncResult> {
   const {
-    maxDurationToAnalyze = 45,
-    downsampleRate = 8000,
-    maxOffsetSearchSeconds = 40,
+    maxDurationToAnalyze = 40,
+    downsampleRate = 4000,
+    maxOffsetSearchSeconds = 35,
     onProgress,
   } = options;
 
-  if (onProgress) onProgress(15, 'Đang giải mã tín hiệu Audio...');
+  if (onProgress) onProgress(15, 'Đang tải và giải mã tín hiệu Audio...');
 
   // 1. Load and Decode Audio PCM
   let audioArrayBuffer: ArrayBuffer;
@@ -430,26 +432,26 @@ export async function calculateAudioVideoSync(
 
   if (onProgress) onProgress(45, 'Đang trích xuất kênh âm thanh từ Video MV...');
 
-  // 2. Extract Video Audio PCM using Headless Video Processor
+  // 2. Extract Video Audio PCM using Same-Origin Blob Video Processor
   const videoPCM = await extractAudioPCMFromVideo(
     videoInput,
     downsampleRate,
     maxDurationToAnalyze + maxOffsetSearchSeconds,
     (msg) => {
-      if (onProgress) onProgress(60, msg);
+      if (onProgress) onProgress(65, msg);
     }
   );
 
-  if (onProgress) onProgress(80, 'Đang so khớp sóng âm Cross-Correlation & Waveform Fingerprinting...');
+  if (onProgress) onProgress(85, 'Đang so khớp sóng âm Cross-Correlation & Waveform Fingerprinting...');
 
-  // 3. Compute Energy Envelopes (200 FPS)
-  const windowSize = Math.floor(downsampleRate / 200); // 40 samples per envelope frame
+  // 3. Compute Energy Envelopes (100 FPS)
+  const windowSize = Math.floor(downsampleRate / 100); // 40 samples per envelope frame
   const audioEnvelope = computeEnergyEnvelope(audioPCM, windowSize);
   const videoEnvelope = computeEnergyEnvelope(videoPCM, windowSize);
 
-  const envelopeFrameRate = 200; // 200 frames/sec (5ms precision)
+  const envelopeFrameRate = 100; // 100 frames/sec (10ms precision)
   const minLag = Math.floor(-5 * envelopeFrameRate); // -5s search
-  const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +40s search
+  const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +35s search
 
   const { bestLag, confidenceRatio } = computeNormalizedCrossCorrelation(
     audioEnvelope,
@@ -458,10 +460,10 @@ export async function calculateAudioVideoSync(
     maxLag
   );
 
-  if (onProgress) onProgress(95, 'Đang hoàn tất phân tích độ lệch...');
+  if (onProgress) onProgress(98, 'Đang hoàn tất phân tích độ lệch...');
 
   const offsetSeconds = Math.round((bestLag / envelopeFrameRate) * 100) / 100;
-  const isConfident = confidenceRatio >= 0.4;
+  const isConfident = confidenceRatio >= 0.35;
   const finalOffset = isConfident ? offsetSeconds : 0;
 
   const metadata: SyncMetadata = {
@@ -471,8 +473,8 @@ export async function calculateAudioVideoSync(
     analyzed_at: new Date().toISOString(),
     method: 'cross_correlation',
     notes: isConfident
-      ? `Đồng bộ thành công với độ khớp ${(confidenceRatio * 100).toFixed(1)}%`
-      : `Độ khớp thấp (${(confidenceRatio * 100).toFixed(1)}%), fallback về 0s`,
+      ? `Đồng bộ thành công với độ khớp ${(confidenceRatio * 100).toFixed(0)}%`
+      : `Độ khớp thấp (${(confidenceRatio * 100).toFixed(0)}%), fallback về 0s`,
   };
 
   const result: AudioSyncResult = {
