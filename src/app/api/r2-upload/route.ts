@@ -2,8 +2,6 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToR2, getPresignedPutUrl } from '@/lib/r2';
 
-export const runtime = 'nodejs';
-
 /**
  * Handle Presigned PUT URL generation (GET or POST JSON)
  */
