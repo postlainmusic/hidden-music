@@ -256,80 +256,32 @@ export async function readMediaFileMetadata(file: File): Promise<MediaMetadata> 
     // Ignore buffer read errors
   }
 
-  // Load via HTML5 Media element to get exact duration & resolution
+  // Load via HTML5 Audio element to get exact duration
   const objectUrl = URL.createObjectURL(file);
 
   return new Promise((resolve) => {
-    if (category === 'video') {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
+    const audio = new Audio();
+    audio.preload = 'metadata';
 
-      video.onloadedmetadata = () => {
-        const duration = video.duration || 0;
-        const width = video.videoWidth || 0;
-        const height = video.videoHeight || 0;
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration || 0;
+      const bitrateKbps = duration > 0 ? Math.round((file.size * 8) / (duration * 1024)) : undefined;
 
-        let resName = `${width}x${height}`;
-        if (height >= 2160) resName += ' (4K Ultra HD)';
-        else if (height >= 1440) resName += ' (2K QHD)';
-        else if (height >= 1080) resName += ' (1080p Full HD)';
-        else if (height >= 720) resName += ' (720p HD)';
-        else if (height > 0) resName += ' (SD)';
+      URL.revokeObjectURL(objectUrl);
+      resolve({
+        ...baseMetadata,
+        duration,
+        durationFormatted: formatDuration(duration),
+        bitrateKbps,
+      });
+    };
 
-        // Calculate aspect ratio
-        let gcdVal = 1;
-        if (width > 0 && height > 0) {
-          const calcGcd = (a: number, b: number): number => (b === 0 ? a : calcGcd(b, a % b));
-          gcdVal = calcGcd(width, height);
-        }
-        const aspect = width > 0 && height > 0 ? `${width / gcdVal}:${height / gcdVal}` : undefined;
+    audio.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(baseMetadata);
+    };
 
-        // Estimated bitrate
-        const bitrateKbps = duration > 0 ? Math.round((file.size * 8) / (duration * 1024)) : undefined;
-
-        URL.revokeObjectURL(objectUrl);
-        resolve({
-          ...baseMetadata,
-          duration,
-          durationFormatted: formatDuration(duration),
-          width,
-          height,
-          resolution: resName,
-          aspectRatio: aspect,
-          bitrateKbps,
-        });
-      };
-
-      video.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(baseMetadata);
-      };
-
-      video.src = objectUrl;
-    } else {
-      const audio = new Audio();
-      audio.preload = 'metadata';
-
-      audio.onloadedmetadata = () => {
-        const duration = audio.duration || 0;
-        const bitrateKbps = duration > 0 ? Math.round((file.size * 8) / (duration * 1024)) : undefined;
-
-        URL.revokeObjectURL(objectUrl);
-        resolve({
-          ...baseMetadata,
-          duration,
-          durationFormatted: formatDuration(duration),
-          bitrateKbps,
-        });
-      };
-
-      audio.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(baseMetadata);
-      };
-
-      audio.src = objectUrl;
-    }
+    audio.src = objectUrl;
   });
 }
 

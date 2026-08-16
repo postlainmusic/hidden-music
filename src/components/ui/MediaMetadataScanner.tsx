@@ -116,11 +116,11 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-white animate-pulse" />
             <h2 className="text-lg md:text-xl font-extrabold tracking-wider uppercase text-white">
-              ĐỌC & CHỈNH SỬA METADATA FILE NHẠC / VIDEO
+              ĐỌC & CHỈNH SỬA METADATA FILE NHẠC (AUDIO)
             </h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Tải tệp (.mp3/.wav/.flac/.mp4) hoặc dán đường link YouTube để đọc metadata & xuất file (.json/.txt/.csv)
+            Tải tệp (.mp3/.wav/.flac/.m4a) để đọc metadata ID3 & xuất file (.json/.txt/.csv)
           </p>
         </div>
 
@@ -135,7 +135,7 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
         )}
       </div>
 
-      {/* STEP 1: Upload Dropzone & YouTube Link Input */}
+      {/* STEP 1: Upload Dropzone */}
       {!metadata && !isReading && (
         <div className="space-y-6">
           {/* File Upload Area */}
@@ -147,7 +147,7 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
             <input
               type="file"
               id="media-metadata-input"
-              accept="audio/*,video/*,.mp3,.wav,.flac,.m4a,.aac,.mp4,.webm,.mkv,.mov"
+              accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.wma,.opus"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -157,22 +157,20 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
               </div>
               <div>
                 <p className="text-sm font-extrabold uppercase text-white tracking-widest">
-                  1. KÉO THẢ TỆP ÂM THANH / VIDEO VÀO ĐÂY
+                  1. KÉO THẢ TỆP ÂM THANH VÀO ĐÂY
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Hoặc nhấp để chọn tệp từ máy tính (.mp3, .wav, .flac, .mp4, .webm,...)
+                  Hoặc nhấp để chọn tệp từ máy tính (.mp3, .wav, .flac, .m4a,...)
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-400 flex items-center gap-1">
-                  <Music className="w-3 h-3" /> AUDIO (MP3/WAV/FLAC)
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-400 flex items-center gap-1">
-                  <Tv className="w-3 h-3" /> VIDEO (MP4/WEBM/MKV)
+                  <Music className="w-3 h-3" /> AUDIO (MP3/WAV/FLAC/M4A)
                 </span>
               </div>
             </label>
-          </div>        </div>
+          </div>
+        </div>
       )}
 
       {/* Loading State */}
@@ -180,7 +178,7 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
         <div className="py-12 text-center space-y-3">
           <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
           <p className="text-xs font-bold text-slate-300 animate-pulse">
-            ⚡ ĐANG PHÂN TÍCH VÀ ĐỌC THÔNG TIN METADATA CỦA FILE / LINK YOUTUBE THẦN TỐC...
+            ⚡ ĐANG PHÂN TÍCH VÀ ĐỌC THÔNG TIN METADATA CỦA FILE ÂM THANH THẦN TỐC...
           </p>
         </div>
       )}
@@ -192,7 +190,7 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-950 p-4 rounded-2xl border border-white/20 items-center">
             <div className="md:col-span-4 flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white flex-shrink-0">
-                {metadata.mediaCategory === 'video' ? <FileVideo className="w-6 h-6" /> : <FileAudio className="w-6 h-6" />}
+                <FileAudio className="w-6 h-6" />
               </div>
               <div className="overflow-hidden">
                 <h3 className="text-sm font-extrabold text-white truncate" title={metadata.fileName}>
@@ -207,14 +205,10 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
               </div>
             </div>
 
-            {/* Inline Audio / Video Player */}
+            {/* Inline Audio Player */}
             <div className="md:col-span-8 flex flex-col justify-center">
               {mediaUrl && (
-                metadata.mediaCategory === 'video' ? (
-                  <video src={mediaUrl} controls className="w-full max-h-40 rounded-xl bg-black border border-slate-800" />
-                ) : (
-                  <audio src={mediaUrl} controls className="w-full rounded-xl bg-slate-900" />
-                )
+                <audio src={mediaUrl} controls className="w-full rounded-xl bg-slate-900" />
               )}
             </div>
           </div>

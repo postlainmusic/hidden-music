@@ -509,12 +509,6 @@ export default function VaultScene({
                         </div>
 
                         <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
-                          {track.video_url && (
-                            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
-                              MV
-                            </span>
-                          )}
-
                           <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
                             isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
                           }`}>
@@ -613,11 +607,6 @@ export default function VaultScene({
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {track.video_url && (
-                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
-                            MV
-                          </span>
-                        )}
                         <span className="text-[10px] font-mono text-slate-500">
                           {formatDuration(track.duration)}
                         </span>

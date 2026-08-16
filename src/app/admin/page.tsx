@@ -1774,7 +1774,7 @@ export default function AdminPage() {
 
                   <div className="p-4 rounded-2xl bg-black border border-white/20 space-y-3">
                     <label className="block text-white font-bold flex items-center gap-1.5 uppercase text-xs">
-                      <FileAudio className="w-4 h-4 text-emerald-400" /> TỆP ÂM THANH / URL AUDIO (.MP3 / .FLAC)
+                      <FileAudio className="w-4 h-4 text-emerald-400" /> TỆP ÂM THANH / URL AUDIO (.MP3 / .FLAC / .WAV)
                     </label>
                     <input
                       type="file"
@@ -1785,26 +1785,13 @@ export default function AdminPage() {
                     />
                     <input
                       type="url"
-                      placeholder="URL Audio MP3 từ Supabase..."
+                      placeholder="URL Audio MP3 từ Supabase hoặc Google Drive..."
                       value={audioUrlInput || mediaUrlInput}
                       onChange={(e) => {
                         setAudioUrlInput(e.target.value);
                         setMediaUrlInput(e.target.value);
                       }}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
-                    />
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-black border border-cyan-500/30 space-y-2 font-mono">
-                    <label className="block text-cyan-300 font-bold flex items-center gap-1.5 uppercase text-xs">
-                      <Film className="w-4 h-4 text-cyan-400" /> TỆP VIDEO / URL MV (.MP4 TỪ SUPABASE)
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="URL Video MP4 (Supabase Storage)..."
-                      value={videoUrlInput}
-                      onChange={(e) => setVideoUrlInput(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-cyan-200 text-xs placeholder-slate-600 focus:outline-none focus:border-cyan-400 font-mono"
                     />
                   </div>
 
@@ -1816,7 +1803,6 @@ export default function AdminPage() {
                       </div>
                       <div className="text-slate-300">
                         Thời lượng: <strong className="text-white">{autoMetadata.durationFormatted}</strong>
-                        {autoMetadata.resolution && <> | Độ phân giải: <strong className="text-white">{autoMetadata.resolution}</strong></>}
                         {autoMetadata.bitrateKbps && <> | Bitrate: <strong className="text-white">~{autoMetadata.bitrateKbps} kbps</strong></>}
                       </div>
                     </div>
@@ -1848,25 +1834,6 @@ export default function AdminPage() {
                       onChange={(e) => setLyrics(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-white font-mono text-[11px]"
                     />
-                  </div>
-
-                  {/* Video Intro / Music Start Time Offset Input */}
-                  <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl space-y-1.5 font-mono">
-                    <label className="block text-amber-300 font-bold uppercase text-[11px] flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Film className="w-3.5 h-3.5 text-amber-400" /> MỐC BẮT ĐẦU NHẠC TRONG MV (OFFSET)
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="vd: 01:30 hoặc 90 (để trống nếu bài nhạc bắt đầu từ 0:00)"
-                      value={videoOffsetInput}
-                      onChange={(e) => setVideoOffsetInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-amber-500/40 rounded-lg px-3 py-2 text-amber-200 placeholder-slate-600 focus:outline-none focus:border-amber-400 text-xs"
-                    />
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      💡 <em>Nếu video MV có đoạn hội thoại / Intro dài trước khi vào nhạc, nhập mốc thời gian nhạc cất lên (vd: <code>01:30</code>) để Lời bài hát tự động đồng bộ chính xác 100%.</em>
-                    </p>
                   </div>
 
                   <button
@@ -1909,18 +1876,6 @@ export default function AdminPage() {
                     />
                   </label>
 
-                  <label className="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 font-extrabold text-[10px] uppercase border border-cyan-400/50 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
-                    <Film className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>🎬 TẢI VIDEO .MP4 HÀNG LOẠT</span>
-                    <input
-                      type="file"
-                      accept="video/*,.mp4,.webm"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleBatchFileUpload(e.target.files, 'video')}
-                    />
-                  </label>
-
                   <label className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-extrabold text-[10px] uppercase border border-white/20 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
                     <UploadCloud className="w-3.5 h-3.5" />
                     <span>FILE .LRC</span>
@@ -1937,7 +1892,7 @@ export default function AdminPage() {
 
               {(!activeAlbum.tracks || activeAlbum.tracks.length === 0) ? (
                 <div className="text-center py-16 text-xs text-slate-500">
-                  Album này chưa có bài hát/MV nào. Hãy điền form bên trái để thêm bài hát đầu tiên!
+                  Album này chưa có bài hát nào. Hãy điền form bên trái để thêm bài hát đầu tiên!
                 </div>
               ) : (
                 <div className="space-y-3 font-mono text-xs">
@@ -1965,11 +1920,6 @@ export default function AdminPage() {
                             <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
                               <Music className="w-2.5 h-2.5" /> AUDIO
                             </span>
-                            {t.video_url && (
-                              <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-400/50 flex items-center gap-1">
-                                <Film className="w-2.5 h-2.5" /> MV VIDEO
-                              </span>
-                            )}
                             {t.lyrics ? (
                               <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-white/10 text-white border border-white/20">
                                 📜 CÓ LRC
@@ -1977,11 +1927,6 @@ export default function AdminPage() {
                             ) : (
                               <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-slate-900 text-slate-500 border border-slate-800">
                                 📜 CHƯA CÓ LRC
-                              </span>
-                            )}
-                            {t.lyrics && extractVideoOffset(t.lyrics) > 0 && (
-                              <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40">
-                                🎬 MV BẮT ĐẦU: {formatOffsetString(extractVideoOffset(t.lyrics))}
                               </span>
                             )}
                           </div>
