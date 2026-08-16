@@ -66,7 +66,8 @@ export default function GlobalPlayerBar() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenControls, setShowFullscreenControls] = useState(true);
 
-  const activeLineRef = useRef<HTMLDivElement | null>(null);
+  const mobileLyricsScrollRef = useRef<HTMLDivElement | null>(null);
+  const desktopLyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
   const barContainerRef = useRef<HTMLDivElement | null>(null);
@@ -453,14 +454,24 @@ export default function GlobalPlayerBar() {
     return getActiveLyricIndex(parsedLyrics, currentTime);
   }, [parsedLyrics, currentTime]);
 
-  // Auto-scroll active lyric line in lyrics stage
+  // Auto-scroll active lyric line in lyrics stage smoothly
   useEffect(() => {
-    if (showLyrics && activeLineRef.current) {
-      activeLineRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    }
+    if (!showLyrics) return;
+
+    const scrollToActive = (container: HTMLDivElement | null) => {
+      if (!container) return;
+      const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
+      if (activeEl) {
+        const targetScrollTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
+        container.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth',
+        });
+      }
+    };
+
+    scrollToActive(mobileLyricsScrollRef.current);
+    scrollToActive(desktopLyricsScrollRef.current);
   }, [activeLyricIdx, showLyrics]);
 
   // Volume hover UX handlers with continuous bridge
@@ -535,7 +546,7 @@ export default function GlobalPlayerBar() {
 
   const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
-  const renderDrawerContent = () => (
+  const renderDrawerContent = (isMobile = false) => (
     <>
       {/* 1. DIRECT SUPABASE NATIVE VIDEO PLAYER (MV STAGE) */}
       {showVideo && currentTrack?.video_url && (
@@ -588,17 +599,29 @@ export default function GlobalPlayerBar() {
               <span className="hidden sm:inline">{isFullscreen ? 'EXIT FULL' : 'FULLSCREEN'}</span>
             </button>
 
-            {/* Subtitle Overlay with Live Beat Sync (20% Black Glass & Cinema Font) */}
+            {/* Subtitle Overlay with Live Beat Sync (Compact Cinema Subtitles - Reduced Font Size) */}
             {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
               <div
-                className={`absolute left-4 right-4 sm:left-8 sm:right-8 z-40 flex justify-center pointer-events-none select-none transition-all duration-200 ${
+                className={`absolute left-3 right-3 sm:left-6 sm:right-6 md:left-8 md:right-8 z-40 flex justify-center pointer-events-none select-none transition-all duration-200 ${
                   isFullscreen
                     ? (showFullscreenControls ? 'bottom-20 sm:bottom-24' : 'bottom-6 sm:bottom-8')
-                    : 'bottom-3 sm:bottom-5'
+                    : 'bottom-2.5 sm:bottom-3.5'
                 }`}
               >
-                <div className="bg-black/25 backdrop-blur-md px-4 py-2 sm:px-6 sm:py-2.5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] max-w-2xl text-center">
-                  <p className="text-white font-medium text-sm sm:text-base md:text-lg lg:text-xl leading-relaxed tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+                <div
+                  className={`bg-black/45 backdrop-blur-md border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] text-center transition-all ${
+                    isFullscreen
+                      ? 'px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-xl max-w-xl'
+                      : 'px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg sm:rounded-xl max-w-lg'
+                  }`}
+                >
+                  <p
+                    className={`text-white font-medium leading-relaxed tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] transition-all ${
+                      isFullscreen
+                        ? 'text-xs sm:text-[13px] md:text-sm lg:text-[14px]'
+                        : 'text-[10px] sm:text-[11px] md:text-xs lg:text-[12px]'
+                    }`}
+                  >
                     {parsedLyrics[activeLyricIdx].text}
                   </p>
                 </div>
@@ -709,26 +732,30 @@ export default function GlobalPlayerBar() {
       {/* 2. GOTHIC LYRICS PANEL */}
       {showLyrics && (
         <div className="w-full flex-1 flex flex-col justify-between text-white font-sans min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto no-scrollbar my-auto px-2 py-4 sm:py-8 space-y-3 sm:space-y-4 text-center scroll-smooth relative z-10" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div
+            ref={isMobile ? mobileLyricsScrollRef : desktopLyricsScrollRef}
+            className="flex-1 overflow-y-auto no-scrollbar px-3 py-6 sm:py-8 space-y-2.5 sm:space-y-3.5 text-center scroll-smooth relative z-10"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {parsedLyrics.length > 0 ? (
               parsedLyrics.map((line, idx) => {
                 const isActive = idx === activeLyricIdx;
                 return (
                   <div
                     key={`${line.time}_${idx}`}
-                    ref={isActive ? activeLineRef : null}
+                    data-active-lyric={isActive ? 'true' : undefined}
                     onClick={() => handleSeek(line.time)}
                     className={`cursor-pointer transition-all duration-300 py-1 px-2 sm:px-4 ${
                       isActive
-                        ? 'scale-105 opacity-100'
+                        ? 'scale-[1.03] opacity-100'
                         : 'opacity-35 hover:opacity-75'
                     }`}
                   >
                     <p
-                      className={`transition-all duration-200 ${
+                      className={`transition-all duration-200 leading-relaxed ${
                         isActive
-                          ? 'text-white font-extrabold text-sm sm:text-lg md:text-xl tracking-wide font-cyber'
-                          : 'text-zinc-400 font-medium text-xs sm:text-sm font-sans'
+                          ? 'text-white font-extrabold text-[13px] sm:text-base md:text-lg tracking-wide font-cyber'
+                          : 'text-zinc-400 font-medium text-[11px] sm:text-xs md:text-sm font-sans'
                       }`}
                     >
                       {line.text}
@@ -802,7 +829,7 @@ export default function GlobalPlayerBar() {
       <div
         className={`md:hidden w-full max-w-5xl mx-auto mb-2 rounded-2xl border border-white/20 bg-[#0c0c10]/95 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col transition-all duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
           hasDrawerOpen
-            ? 'h-[280px] xs:h-[320px] sm:h-[360px] opacity-100 p-3 pointer-events-auto'
+            ? 'h-[320px] xs:h-[360px] sm:h-[400px] max-h-[60vh] opacity-100 p-3 pointer-events-auto'
             : 'h-0 opacity-0 p-0 border-0 pointer-events-none'
         }`}
       >
@@ -830,7 +857,7 @@ export default function GlobalPlayerBar() {
         </div>
 
         {/* Mobile Drawer Body */}
-        {hasDrawerOpen && renderDrawerContent()}
+        {hasDrawerOpen && renderDrawerContent(true)}
       </div>
 
       {/* ========================================================================= */}
@@ -877,7 +904,7 @@ export default function GlobalPlayerBar() {
 
           {/* Desktop Drawer Body with Smooth Cross-Tab Motion */}
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
-            {renderDrawerContent()}
+            {renderDrawerContent(false)}
           </div>
         </div>
 
