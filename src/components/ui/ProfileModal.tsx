@@ -248,9 +248,9 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
   };
 
   const handleSignOut = async () => {
+    clearAllStoredSessions();
     if (onLogout) {
       onLogout();
-      return;
     }
     await performLogout();
   };
