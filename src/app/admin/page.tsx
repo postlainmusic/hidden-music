@@ -426,8 +426,41 @@ export default function AdminPage() {
     setIsAlbumModalOpen(false);
   };
 
-  // Helper to upload files directly to Cloudflare R2 Object Storage
+  // Helper to upload files directly to Cloudflare R2 Object Storage (Presigned Direct URL + Server Fallback)
   const uploadFileToCloudflareR2 = async (file: File, folder: 'audio' | 'covers' = 'audio'): Promise<string> => {
+    // 1. Try Direct Presigned PUT upload (Bypasses Vercel 4.5MB limit, supports unlimited file sizes)
+    try {
+      const presignedRes = await fetch('/api/r2-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          folder,
+        }),
+      });
+
+      if (presignedRes.ok) {
+        const { presignedUrl, publicUrl } = await presignedRes.json();
+        if (presignedUrl && publicUrl) {
+          const directPutRes = await fetch(presignedUrl, {
+            method: 'PUT',
+            body: file,
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream',
+            },
+          });
+
+          if (directPutRes.ok) {
+            return publicUrl;
+          }
+          console.warn('Direct Presigned PUT failed, trying multipart route...', directPutRes.status);
+        }
+      }
+    } catch (directErr) {
+      console.warn('Presigned upload error, falling back to multipart API route:', directErr);
+    }
+
+    // 2. Fallback: Standard multipart upload through server route
     const formData = new FormData();
     formData.append('file', file);
     formData.append('folder', folder);

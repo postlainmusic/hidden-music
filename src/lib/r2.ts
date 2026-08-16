@@ -15,6 +15,54 @@ function getSignatureKey(key: string, dateStamp: string, regionName: string, ser
 }
 
 /**
+ * Generate an AWS S3 Signature V4 Presigned PUT URL for direct client-to-R2 upload.
+ * This completely bypasses Vercel/Next.js 4.5MB serverless limits, allowing seamless uploads of high-res audio/video files.
+ */
+export function getPresignedPutUrl(
+  key: string,
+  expiresInSeconds: number = 3600
+): { presignedUrl: string; publicUrl: string; key: string } {
+  const cleanKey = key.replace(/^\/+/, '');
+  const host = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const region = 'auto';
+  const service = 's3';
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.substring(0, 8);
+
+  const algorithm = 'AWS4-HMAC-SHA256';
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const credentialParam = `${R2_ACCESS_KEY_ID}/${credentialScope}`;
+  const signedHeaders = 'host';
+
+  const queryParams = [
+    `X-Amz-Algorithm=${encodeURIComponent(algorithm)}`,
+    `X-Amz-Credential=${encodeURIComponent(credentialParam)}`,
+    `X-Amz-Date=${encodeURIComponent(amzDate)}`,
+    `X-Amz-Expires=${expiresInSeconds}`,
+    `X-Amz-SignedHeaders=${encodeURIComponent(signedHeaders)}`,
+  ].sort().join('&');
+
+  const canonicalUri = `/${R2_BUCKET_NAME}/${encodeURI(cleanKey).replace(/\+/g, '%20')}`;
+  const canonicalHeaders = `host:${host}\n`;
+  const payloadHash = 'UNSIGNED-PAYLOAD';
+
+  const canonicalRequest = `PUT\n${canonicalUri}\n${queryParams}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+  const canonicalRequestHash = crypto.createHash('sha256').update(canonicalRequest).digest('hex');
+
+  const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
+
+  const signingKey = getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
+  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+
+  const presignedUrl = `https://${host}${canonicalUri}?${queryParams}&X-Amz-Signature=${signature}`;
+  const publicUrl = `${R2_PUBLIC_URL}/${cleanKey}`;
+
+  return { presignedUrl, publicUrl, key: cleanKey };
+}
+
+/**
  * Upload a binary buffer directly to Cloudflare R2 bucket using AWS S3 Signature V4
  */
 export async function uploadToR2(
