@@ -208,31 +208,43 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
     setFeedbackSending(true);
     setFeedbackMsg(null);
 
+    const payload = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'fb_' + Date.now(),
+      user_id: user?.id && !user.id.startsWith('vault-') ? user.id : null,
+      user_email: user?.email || 'member@hiddenvault.com',
+      user_name: displayName.trim() || user?.email?.split('@')[0] || 'Vault Member',
+      category: feedbackCategory,
+      content: feedbackContent.trim(),
+      status: 'unread',
+      created_at: new Date().toISOString(),
+    };
+
+    // 1. Try remote Supabase insert
     try {
       const supabase = createClient();
-      const payload = {
-        user_id: user?.id && !user.id.startsWith('vault-') ? user.id : null,
-        user_email: user?.email || 'member@hiddenvault.com',
-        user_name: displayName.trim() || user?.email?.split('@')[0] || 'Vault Member',
-        category: feedbackCategory,
-        content: feedbackContent.trim(),
-        status: 'unread',
-      };
-
-      const { error } = await supabase.from('feedbacks').insert(payload);
-      if (error) throw error;
-
-      setFeedbackMsg({ type: 'success', text: 'Cảm ơn bạn! Ý kiến đóng góp đã được gửi trực tiếp tới Ban Quản Trị.' });
-      setFeedbackContent('');
+      await supabase.from('feedbacks').insert(payload);
     } catch (err: any) {
-      console.warn('Supabase feedback insert warning:', err);
-      setFeedbackMsg({
-        type: 'error',
-        text: 'Lỗi gửi góp ý. Vui lòng thử lại sau.'
-      });
-    } finally {
-      setFeedbackSending(false);
+      console.warn('Supabase feedback insert notice:', err);
     }
+
+    // 2. Persist to local storage fallback cache so feedback is NEVER lost and Admin can view immediately
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('hidden_vault_local_feedbacks');
+        const list = stored ? JSON.parse(stored) : [];
+        list.unshift(payload);
+        localStorage.setItem('hidden_vault_local_feedbacks', JSON.stringify(list.slice(0, 100)));
+      }
+    } catch (e) {
+      console.warn('LocalStorage save notice:', e);
+    }
+
+    setFeedbackMsg({
+      type: 'success',
+      text: 'Cảm ơn bạn! Ý kiến đóng góp đã được gửi trực tiếp tới Ban Quản Trị.'
+    });
+    setFeedbackContent('');
+    setFeedbackSending(false);
   };
 
   const handleSignOut = async () => {

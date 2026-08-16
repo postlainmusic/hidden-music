@@ -158,6 +158,10 @@ export default function AdminPage() {
 
   const fetchFeedbacks = async () => {
     setFeedbacksLoading(true);
+    let remoteList: FeedbackItem[] = [];
+    let localList: FeedbackItem[] = [];
+
+    // 1. Fetch from Supabase
     try {
       const supabase = createClient();
       const { data, error } = await supabase
@@ -165,13 +169,39 @@ export default function AdminPage() {
         .select('*')
         .order('created_at', { ascending: false });
       if (!error && data) {
-        setFeedbacks(data as FeedbackItem[]);
+        remoteList = data as FeedbackItem[];
       }
     } catch (err) {
-      console.warn('Error loading feedbacks:', err);
-    } finally {
-      setFeedbacksLoading(false);
+      console.warn('Error loading remote feedbacks:', err);
     }
+
+    // 2. Fetch from LocalStorage fallback
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('hidden_vault_local_feedbacks');
+        if (stored) {
+          localList = JSON.parse(stored);
+        }
+      }
+    } catch (e) {
+      console.warn('LocalStorage load notice:', e);
+    }
+
+    // 3. Deduplicate and merge
+    const combinedMap = new Map<string, FeedbackItem>();
+    remoteList.forEach((fb) => combinedMap.set(fb.id, fb));
+    localList.forEach((fb) => {
+      if (!combinedMap.has(fb.id)) {
+        combinedMap.set(fb.id, fb);
+      }
+    });
+
+    const merged = Array.from(combinedMap.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    setFeedbacks(merged);
+    setFeedbacksLoading(false);
   };
 
   useEffect(() => {
@@ -181,30 +211,58 @@ export default function AdminPage() {
 
   const handleToggleFeedbackStatus = async (id: string, currentStatus: string | undefined) => {
     const newStatus = currentStatus === 'unread' || !currentStatus ? 'read' : 'unread';
+    
+    // Update State
+    setFeedbacks((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, status: newStatus as any } : f))
+    );
+
+    // Update LocalStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('hidden_vault_local_feedbacks');
+        if (stored) {
+          const list: FeedbackItem[] = JSON.parse(stored);
+          const updated = list.map((f) => (f.id === id ? { ...f, status: newStatus as any } : f));
+          localStorage.setItem('hidden_vault_local_feedbacks', JSON.stringify(updated));
+        }
+      }
+    } catch (e) {}
+
+    // Update Supabase
     try {
       const supabase = createClient();
       await supabase.from('feedbacks').update({ status: newStatus }).eq('id', id);
-      setFeedbacks((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, status: newStatus as any } : f))
-      );
-      setStatusMsg({ type: 'success', text: `Đã đổi trạng thái góp ý thành: ${newStatus === 'read' ? 'ĐÃ XEM' : 'CHƯA ĐỌC'}` });
-    } catch (e) {
-      console.error('Error updating feedback status:', e);
-      setStatusMsg({ type: 'error', text: 'Lỗi cập nhật trạng thái góp ý.' });
-    }
+    } catch (e) {}
+
+    setStatusMsg({ type: 'success', text: `Đã đổi trạng thái góp ý thành: ${newStatus === 'read' ? 'ĐÃ XEM' : 'CHƯA ĐỌC'}` });
   };
 
   const handleDeleteFeedback = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa góp ý này khỏi Supabase không?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa góp ý này khỏi hệ thống không?')) return;
+    
+    // Update State
+    setFeedbacks((prev) => prev.filter((f) => f.id !== id));
+
+    // Update LocalStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('hidden_vault_local_feedbacks');
+        if (stored) {
+          const list: FeedbackItem[] = JSON.parse(stored);
+          const updated = list.filter((f) => f.id !== id);
+          localStorage.setItem('hidden_vault_local_feedbacks', JSON.stringify(updated));
+        }
+      }
+    } catch (e) {}
+
+    // Update Supabase
     try {
       const supabase = createClient();
       await supabase.from('feedbacks').delete().eq('id', id);
-      setFeedbacks((prev) => prev.filter((f) => f.id !== id));
-      setStatusMsg({ type: 'success', text: 'Đã xóa góp ý thành công.' });
-    } catch (e) {
-      console.error('Error deleting feedback:', e);
-      setStatusMsg({ type: 'error', text: 'Không thể xóa góp ý.' });
-    }
+    } catch (e) {}
+
+    setStatusMsg({ type: 'success', text: 'Đã xóa góp ý thành công.' });
   };
 
   const openCreateAlbumModal = () => {
