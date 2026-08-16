@@ -1,7 +1,7 @@
 /**
  * =========================================================================
  * HIDDEN MUSIC VAULT - AUDIO-VIDEO TIMELINE SYNCHRONIZATION SERVICE
- * Fast Pure-JS MP4 AAC Demuxer & Log-Compressed Acoustic Fingerprinting
+ * Fast HTTP Range Streaming & Log-Compressed Acoustic Fingerprinting
  * =========================================================================
  */
 
@@ -19,246 +19,10 @@ export interface AudioSyncResult {
 }
 
 export interface AudioSyncOptions {
-  maxDurationToAnalyze?: number; // Analyze first N seconds (default: 60s)
+  maxDurationToAnalyze?: number; // Analyze first N seconds (default: 45s)
   downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 2000Hz)
   maxOffsetSearchSeconds?: number; // Search range: -10s to +50s (default: 50s)
   onProgress?: (percent: number, step: string) => void;
-}
-
-// Sampling frequency map for ADTS AAC headers
-const AAC_SAMPLE_RATES = [
-  96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350,
-];
-
-function getSampleRateIndex(rate: number): number {
-  const idx = AAC_SAMPLE_RATES.indexOf(rate);
-  return idx !== -1 ? idx : 4; // Default to 44100Hz (index 4)
-}
-
-function createAdtsHeader(dataLength: number, sampleRateIndex: number, channelConfig: number): Uint8Array {
-  const frameLength = dataLength + 7;
-  const header = new Uint8Array(7);
-  header[0] = 0xff; // Syncword (12 bits)
-  header[1] = 0xf1; // Syncword (4 bits) + MPEG-4 (1 bit) + Layer 00 (2 bits) + No CRC (1 bit)
-  header[2] = ((1 /* AAC LC */ << 6) | (sampleRateIndex << 2) | ((channelConfig >> 2) & 1)) & 0xff;
-  header[3] = (((channelConfig & 3) << 6) | ((frameLength >> 11) & 3)) & 0xff;
-  header[4] = ((frameLength >> 3) & 0xff) & 0xff;
-  header[5] = (((frameLength & 7) << 5) | 0x1f) & 0xff;
-  header[6] = 0xfc;
-  return header;
-}
-
-interface MP4Box {
-  type: string;
-  start: number;
-  size: number;
-  dataStart: number;
-}
-
-function findBoxes(data: DataView, start: number, end: number): MP4Box[] {
-  const boxes: MP4Box[] = [];
-  let offset = start;
-
-  while (offset + 8 <= end) {
-    let size = data.getUint32(offset);
-    const type = String.fromCharCode(
-      data.getUint8(offset + 4),
-      data.getUint8(offset + 5),
-      data.getUint8(offset + 6),
-      data.getUint8(offset + 7)
-    );
-
-    let dataStart = offset + 8;
-    if (size === 1) {
-      if (offset + 16 > end) break;
-      size = Number(data.getBigUint64(offset + 8));
-      dataStart = offset + 16;
-    } else if (size === 0) {
-      size = end - offset;
-    }
-
-    if (size < 8 || offset + size > end) {
-      boxes.push({ type, start: offset, size: end - offset, dataStart });
-      break;
-    }
-
-    boxes.push({ type, start: offset, size, dataStart });
-    offset += size;
-  }
-
-  return boxes;
-}
-
-function findBoxRecursive(data: DataView, start: number, end: number, targetPath: string[]): MP4Box | null {
-  if (targetPath.length === 0) return null;
-  const currentTarget = targetPath[0];
-  const boxes = findBoxes(data, start, end);
-
-  for (const box of boxes) {
-    if (box.type === currentTarget) {
-      if (targetPath.length === 1) {
-        return box;
-      }
-      // stsd has 8 bytes of FullBox header (version + flags (4) + entry_count (4))
-      const childStart = box.type === 'stsd' ? box.dataStart + 8 : box.dataStart;
-      const found = findBoxRecursive(data, childStart, box.start + box.size, targetPath.slice(1));
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Pure JS ISO-BMFF MP4 to ADTS AAC Demuxer
- */
-function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 60): ArrayBuffer | null {
-  try {
-    const data = new DataView(mp4Buffer);
-    const totalLength = mp4Buffer.byteLength;
-
-    const rootBoxes = findBoxes(data, 0, totalLength);
-    const moov = rootBoxes.find((b) => b.type === 'moov');
-    if (!moov) return null;
-
-    const traks = findBoxes(data, moov.dataStart, moov.start + moov.size).filter((b) => b.type === 'trak');
-
-    let audioTrakBox: MP4Box | null = null;
-    let sampleRate = 44100;
-    let channelCount = 2;
-
-    for (const trak of traks) {
-      const trakEnd = trak.start + trak.size;
-      const hdlr = findBoxRecursive(data, trak.dataStart, trakEnd, ['mdia', 'hdlr']);
-      if (hdlr) {
-        const hdlrType = String.fromCharCode(
-          data.getUint8(hdlr.dataStart + 8),
-          data.getUint8(hdlr.dataStart + 9),
-          data.getUint8(hdlr.dataStart + 10),
-          data.getUint8(hdlr.dataStart + 11)
-        );
-        if (hdlrType === 'soun') {
-          audioTrakBox = trak;
-
-          // Parse audio sample description in stsd
-          const mp4a = findBoxRecursive(data, trak.dataStart, trakEnd, ['mdia', 'minf', 'stbl', 'stsd', 'mp4a']);
-          if (mp4a) {
-            channelCount = data.getUint16(mp4a.dataStart + 16) || 2;
-            sampleRate = data.getUint16(mp4a.dataStart + 24) || 44100;
-          }
-          break;
-        }
-      }
-    }
-
-    if (!audioTrakBox) return null;
-
-    const audioEnd = audioTrakBox.start + audioTrakBox.size;
-    const stbl = findBoxRecursive(data, audioTrakBox.dataStart, audioEnd, ['mdia', 'minf', 'stbl']);
-    if (!stbl) return null;
-
-    const stblEnd = stbl.start + stbl.size;
-    const stszBox = findBoxRecursive(data, stbl.dataStart, stblEnd, ['stsz']);
-    const stscBox = findBoxRecursive(data, stbl.dataStart, stblEnd, ['stsc']);
-    const stcoBox = findBoxRecursive(data, stbl.dataStart, stblEnd, ['stco']);
-    const co64Box = findBoxRecursive(data, stbl.dataStart, stblEnd, ['co64']);
-
-    if (!stszBox || (!stcoBox && !co64Box) || !stscBox) return null;
-
-    const defaultSampleSize = data.getUint32(stszBox.dataStart + 4);
-    const sampleCount = data.getUint32(stszBox.dataStart + 8);
-    const sampleSizes: number[] = [];
-
-    if (defaultSampleSize > 0) {
-      for (let i = 0; i < sampleCount; i++) sampleSizes.push(defaultSampleSize);
-    } else {
-      let szOffset = stszBox.dataStart + 12;
-      for (let i = 0; i < sampleCount; i++) {
-        sampleSizes.push(data.getUint32(szOffset));
-        szOffset += 4;
-      }
-    }
-
-    const chunkOffsets: number[] = [];
-    if (stcoBox) {
-      const chunkCount = data.getUint32(stcoBox.dataStart + 4);
-      let coOffset = stcoBox.dataStart + 8;
-      for (let i = 0; i < chunkCount; i++) {
-        chunkOffsets.push(data.getUint32(coOffset));
-        coOffset += 4;
-      }
-    } else if (co64Box) {
-      const chunkCount = data.getUint32(co64Box.dataStart + 4);
-      let coOffset = co64Box.dataStart + 8;
-      for (let i = 0; i < chunkCount; i++) {
-        chunkOffsets.push(Number(data.getBigUint64(coOffset)));
-        coOffset += 8;
-      }
-    }
-
-    const stscEntryCount = data.getUint32(stscBox.dataStart + 4);
-    const stscEntries: { firstChunk: number; samplesPerChunk: number }[] = [];
-    let scOffset = stscBox.dataStart + 8;
-    for (let i = 0; i < stscEntryCount; i++) {
-      stscEntries.push({
-        firstChunk: data.getUint32(scOffset),
-        samplesPerChunk: data.getUint32(scOffset + 4),
-      });
-      scOffset += 12;
-    }
-
-    const maxFrames = Math.min(sampleSizes.length, Math.ceil(maxDurationSeconds * (sampleRate / 1024)));
-
-    const sampleRateIdx = getSampleRateIndex(sampleRate);
-    const adtsChunks: Uint8Array[] = [];
-    let totalAdtsBytes = 0;
-
-    let sampleIdx = 0;
-    let stscIdx = 0;
-
-    const rawBytes = new Uint8Array(mp4Buffer);
-
-    for (let chunkIdx = 0; chunkIdx < chunkOffsets.length && sampleIdx < maxFrames; chunkIdx++) {
-      const currentChunkNum = chunkIdx + 1;
-
-      if (stscIdx + 1 < stscEntries.length && currentChunkNum >= stscEntries[stscIdx + 1].firstChunk) {
-        stscIdx++;
-      }
-
-      const samplesInThisChunk = stscEntries[stscIdx]?.samplesPerChunk || 1;
-      let filePos = chunkOffsets[chunkIdx];
-
-      for (let s = 0; s < samplesInThisChunk && sampleIdx < maxFrames; s++) {
-        const sSize = sampleSizes[sampleIdx];
-        if (sSize > 0 && filePos + sSize <= totalLength) {
-          const adtsHeader = createAdtsHeader(sSize, sampleRateIdx, channelCount);
-          adtsChunks.push(adtsHeader);
-          totalAdtsBytes += 7;
-
-          const packetData = rawBytes.subarray(filePos, filePos + sSize);
-          adtsChunks.push(packetData);
-          totalAdtsBytes += sSize;
-
-          filePos += sSize;
-        }
-        sampleIdx++;
-      }
-    }
-
-    if (totalAdtsBytes === 0) return null;
-
-    const combined = new Uint8Array(totalAdtsBytes);
-    let outOffset = 0;
-    for (const chunk of adtsChunks) {
-      combined.set(chunk, outOffset);
-      outOffset += chunk.length;
-    }
-
-    return combined.buffer;
-  } catch (err) {
-    console.warn('[AudioSync] Demuxer error:', err);
-    return null;
-  }
 }
 
 /**
@@ -267,7 +31,7 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
 async function decodeAudioArrayBufferToPCM(
   arrayBuffer: ArrayBuffer,
   targetSampleRate: number = 2000,
-  maxDuration: number = 60
+  maxDuration: number = 45
 ): Promise<Float32Array> {
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
   if (!AudioCtx) {
@@ -313,52 +77,178 @@ async function decodeAudioArrayBufferToPCM(
 }
 
 /**
- * Extract mono PCM samples from Video (File, Blob, ArrayBuffer, or URL)
+ * Stream and capture audio directly from Video URL/File via Native Media Pipeline (MKV, WebM, MP4)
+ * Uses HTTP Range requests to avoid downloading 700MB video into RAM!
  */
-async function extractAudioPCMFromVideo(
+async function extractAudioFromStreamingVideo(
   videoInput: File | Blob | ArrayBuffer | string,
   targetSampleRate: number = 2000,
-  maxDuration: number = 60,
-  onProgress?: (msg: string) => void
+  maxDuration: number = 45,
+  onProgress?: (percent: number, msg: string) => void
 ): Promise<Float32Array> {
-  let videoBuffer: ArrayBuffer;
+  return new Promise((resolve, reject) => {
+    let videoUrl = '';
+    let isCreatedBlobUrl = false;
 
-  if (typeof videoInput === 'string') {
-    if (onProgress) onProgress('Đang tải dữ liệu tệp Video để giải mã âm thanh...');
-    const res = await fetch(videoInput);
-    if (!res.ok) throw new Error(`Không thể tải video từ URL (${res.status}): ${res.statusText}`);
-    videoBuffer = await res.arrayBuffer();
-  } else if (videoInput instanceof ArrayBuffer) {
-    videoBuffer = videoInput;
-  } else {
-    videoBuffer = await videoInput.arrayBuffer();
-  }
-
-  if (onProgress) onProgress('Đang trích xuất kênh âm thanh AAC từ Video MP4...');
-
-  // Strategy 1: High-Speed Pure JS MP4 to ADTS AAC Demuxer
-  const adtsBuffer = demuxMp4ToAdtsAAC(videoBuffer, maxDuration);
-  if (adtsBuffer) {
-    try {
-      if (onProgress) onProgress('Đang giải mã luồng sóng âm thanh...');
-      return await decodeAudioArrayBufferToPCM(adtsBuffer, targetSampleRate, maxDuration);
-    } catch (e) {
-      console.warn('[AudioSync] ADTS decode fallback:', e);
+    if (typeof videoInput === 'string') {
+      videoUrl = videoInput;
+    } else if (videoInput instanceof ArrayBuffer) {
+      const blob = new Blob([videoInput], { type: 'video/mp4' });
+      videoUrl = URL.createObjectURL(blob);
+      isCreatedBlobUrl = true;
+    } else {
+      videoUrl = URL.createObjectURL(videoInput);
+      isCreatedBlobUrl = true;
     }
-  }
 
-  // Strategy 2: Direct decodeAudioData fallback
-  try {
-    return await decodeAudioArrayBufferToPCM(videoBuffer, targetSampleRate, maxDuration);
-  } catch (e) {
-    console.warn('[AudioSync] Direct decode fallback:', e);
-  }
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
+    video.muted = false;
+    video.volume = 1;
+    video.style.position = 'fixed';
+    video.style.top = '0';
+    video.style.left = '0';
+    video.style.width = '2px';
+    video.style.height = '2px';
+    video.style.opacity = '0.01';
+    video.style.pointerEvents = 'none';
+    document.body.appendChild(video);
 
-  throw new Error('Không thể giải mã kênh âm thanh từ Video (Tệp không chứa track âm thanh AAC hoặc định dạng không hỗ trợ).');
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) {
+      cleanup();
+      reject(new Error('Web Audio API không được hỗ trợ trên trình duyệt này.'));
+      return;
+    }
+
+    const audioCtx = new AudioCtx();
+    let sourceNode: MediaElementAudioSourceNode | null = null;
+    let processorNode: ScriptProcessorNode | null = null;
+
+    const sampleChunks: Float32Array[] = [];
+    let totalSamplesCollected = 0;
+    let nonZeroCount = 0;
+    const targetTotalSamples = Math.floor(maxDuration * targetSampleRate);
+    let isFinished = false;
+    let timeoutId: any = null;
+
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      video.pause();
+      if (video.parentNode) video.parentNode.removeChild(video);
+      try {
+        sourceNode?.disconnect();
+      } catch {}
+      try {
+        processorNode?.disconnect();
+      } catch {}
+      if (audioCtx.state !== 'closed') audioCtx.close().catch(() => {});
+      if (isCreatedBlobUrl) URL.revokeObjectURL(videoUrl);
+    };
+
+    const finish = () => {
+      if (isFinished) return;
+      isFinished = true;
+
+      const merged = new Float32Array(totalSamplesCollected);
+      let offset = 0;
+      for (const chunk of sampleChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      cleanup();
+
+      if (merged.length === 0 || nonZeroCount < 30) {
+        reject(
+          new Error(
+            'Không thể trích xuất kênh âm thanh từ video (video không có âm thanh hoặc bị chặn giải mã).'
+          )
+        );
+      } else {
+        resolve(merged);
+      }
+    };
+
+    // Timeout safety (30 seconds)
+    timeoutId = setTimeout(() => {
+      if (totalSamplesCollected > targetSampleRate * 8) {
+        finish();
+      } else {
+        cleanup();
+        reject(new Error('Quá thời gian trích xuất âm thanh từ Video (Timeout).'));
+      }
+    }, 30000);
+
+    video.onerror = () => {
+      cleanup();
+      reject(new Error(`Lỗi tải video (${video.error?.message || 'Không thể phát định dạng video'}).`));
+    };
+
+    video.onloadedmetadata = async () => {
+      try {
+        await audioCtx.resume();
+
+        // 2x high-speed stream capture (captures 45s of audio in ~22 seconds)
+        video.playbackRate = 2.0;
+
+        sourceNode = audioCtx.createMediaElementSource(video);
+        processorNode = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        const srcSampleRate = audioCtx.sampleRate;
+        const downsampleRatio = srcSampleRate / targetSampleRate;
+
+        processorNode.onaudioprocess = (audioEvt) => {
+          if (isFinished) return;
+
+          const inputData = audioEvt.inputBuffer.getChannelData(0);
+          const outputLength = Math.floor(inputData.length / downsampleRatio);
+          const downsampled = new Float32Array(outputLength);
+
+          for (let i = 0; i < outputLength; i++) {
+            const srcIdx = Math.floor(i * downsampleRatio);
+            const val = inputData[srcIdx] || 0;
+            downsampled[i] = val;
+            if (Math.abs(val) > 0.001) {
+              nonZeroCount++;
+            }
+          }
+
+          sampleChunks.push(downsampled);
+          totalSamplesCollected += outputLength;
+
+          const secondsCollected = Math.min(maxDuration, Math.round(totalSamplesCollected / targetSampleRate));
+          const percent = 25 + Math.round((secondsCollected / maxDuration) * 60);
+          if (onProgress) {
+            onProgress(percent, `Đang trích xuất luồng âm thanh Video (${secondsCollected}s / ${maxDuration}s)...`);
+          }
+
+          if (totalSamplesCollected >= targetTotalSamples || video.currentTime >= maxDuration) {
+            finish();
+          }
+        };
+
+        const dummyGain = audioCtx.createGain();
+        dummyGain.gain.value = 0; // Muted to user
+
+        sourceNode.connect(processorNode);
+        processorNode.connect(dummyGain);
+        dummyGain.connect(audioCtx.destination);
+
+        await video.play();
+      } catch (err: any) {
+        cleanup();
+        reject(new Error(`Lỗi kết nối Web Audio API từ Video: ${err.message}`));
+      }
+    };
+
+    video.src = videoUrl;
+  });
 }
 
 /**
- * Compute Log-Compressed Envelope with Moving Average DC Subtraction (Fingerprint Signal)
+ * Compute Log-Compressed Acoustic Fingerprint with Moving Average DC Subtraction
  */
 function computeAcousticFingerprint(pcm: Float32Array, windowSize: number = 40): Float32Array {
   const numFrames = Math.floor(pcm.length / windowSize);
@@ -376,9 +266,9 @@ function computeAcousticFingerprint(pcm: Float32Array, windowSize: number = 40):
     logEnergy[i] = Math.log(1 + 25 * rms);
   }
 
-  // 2. Local Moving Average Baseline Subtraction (High-pass filter / DC removal over ~1.5s window)
+  // 2. Local Moving Average Baseline Subtraction (High-pass filter over ~1.4s window)
   const smoothed = new Float32Array(numFrames);
-  const halfWindow = 35; // 35 frames = 0.7s on each side (total 1.4s window)
+  const halfWindow = 35; // 35 frames = 0.7s on each side
 
   for (let i = 0; i < numFrames; i++) {
     let sum = 0;
@@ -408,7 +298,6 @@ function computeNormalizedCrossCorrelation(
   const range = maxLagSamples - minLagSamples + 1;
   const scores = new Float32Array(range);
 
-  // Mean & Std of audio
   let audioMean = 0;
   for (let i = 0; i < audioSignal.length; i++) audioMean += audioSignal[i];
   audioMean /= audioSignal.length;
@@ -479,11 +368,9 @@ function computeNormalizedCrossCorrelation(
     }
   }
 
-  // Calculate Peak Prominence over Background Baseline
   const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.05;
   const prominence = maxScore / (avgBackground + 1e-4);
 
-  // Calibrated real-world acoustic match confidence (0.80 -> 0.99 for clean matches)
   let confidenceRatio = 0;
   if (maxScore >= 0.35 && prominence >= 2.0) {
     confidenceRatio = Math.min(0.99, Math.round((0.85 + (maxScore - 0.35) * 0.25) * 100) / 100);
@@ -507,13 +394,13 @@ export async function calculateAudioVideoSync(
   options: AudioSyncOptions = {}
 ): Promise<AudioSyncResult> {
   const {
-    maxDurationToAnalyze = 60,
+    maxDurationToAnalyze = 45,
     downsampleRate = 2000,
-    maxOffsetSearchSeconds = 50,
+    maxOffsetSearchSeconds = 45,
     onProgress,
   } = options;
 
-  if (onProgress) onProgress(15, 'Đang tải và giải mã tín hiệu Audio...');
+  if (onProgress) onProgress(10, 'Đang tải và giải mã tín hiệu Audio...');
 
   // 1. Load and Decode Audio PCM
   let audioArrayBuffer: ArrayBuffer;
@@ -529,28 +416,26 @@ export async function calculateAudioVideoSync(
 
   const audioPCM = await decodeAudioArrayBufferToPCM(audioArrayBuffer, downsampleRate, maxDurationToAnalyze);
 
-  if (onProgress) onProgress(45, 'Đang trích xuất kênh âm thanh từ Video MV...');
+  if (onProgress) onProgress(25, 'Đang kết nối luồng Video MV qua HTTP Range...');
 
-  // 2. Extract Video Audio PCM
-  const videoPCM = await extractAudioPCMFromVideo(
+  // 2. Stream and Extract Video Audio PCM without downloading 700MB video into RAM!
+  const videoPCM = await extractAudioFromStreamingVideo(
     videoInput,
     downsampleRate,
     maxDurationToAnalyze + maxOffsetSearchSeconds,
-    (msg) => {
-      if (onProgress) onProgress(65, msg);
-    }
+    onProgress
   );
 
-  if (onProgress) onProgress(85, 'Đang so khớp sóng âm Acoustic Fingerprinting...');
+  if (onProgress) onProgress(90, 'Đang so khớp sóng âm Acoustic Fingerprinting...');
 
   // 3. Compute Log Acoustic Fingerprint Envelopes (50 FPS = 20ms precision)
-  const windowSize = Math.floor(downsampleRate / 50); // 40 samples per envelope frame @ 2000Hz
+  const windowSize = Math.floor(downsampleRate / 50); // 40 samples per frame @ 2000Hz
   const audioEnvelope = computeAcousticFingerprint(audioPCM, windowSize);
   const videoEnvelope = computeAcousticFingerprint(videoPCM, windowSize);
 
   const envelopeFrameRate = 50; // 50 frames/sec (20ms precision)
   const minLag = Math.floor(-5 * envelopeFrameRate); // -5s search
-  const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +50s search
+  const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +45s search
 
   const { bestLag, confidenceRatio } = computeNormalizedCrossCorrelation(
     audioEnvelope,
