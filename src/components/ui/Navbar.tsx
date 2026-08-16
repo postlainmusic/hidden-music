@@ -131,9 +131,12 @@ export default function Navbar({
   const userLabel = displayName || (internalEmail ? internalEmail.split('@')[0].toUpperCase() : 'VAULT MEMBER');
 
   const handleLogout = async () => {
+    setInternalEmail(null);
+    setDisplayName(null);
     if (propOnLogout) {
-      propOnLogout();
-      return;
+      try {
+        await propOnLogout();
+      } catch {}
     }
     await performLogout();
   };

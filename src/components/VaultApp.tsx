@@ -132,6 +132,12 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
           if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
             window.history.replaceState({}, document.title, window.location.pathname);
           }
+        } else {
+          // If no active session, ensure userSession is null
+          const stored = getStoredUserSession();
+          if (!stored) {
+            setUserSession(null);
+          }
         }
       } catch (err) {
         console.warn('Auth session check error:', err);

@@ -18,7 +18,7 @@ export function getStoredUserSession(): VaultUserSession | null {
   try {
     const customName = localStorage.getItem('hidden_vault_custom_name');
 
-    // 1. Try localStorage
+    // 1. Check direct user session in localStorage
     const local = localStorage.getItem(USER_SESSION_KEY);
     if (local) {
       const parsed = JSON.parse(local);
@@ -28,19 +28,8 @@ export function getStoredUserSession(): VaultUserSession | null {
       }
     }
 
-    // 2. Try sessionStorage
-    const session = sessionStorage.getItem(USER_SESSION_KEY);
-    if (session) {
-      const parsed = JSON.parse(session);
-      if (parsed && (parsed.id || parsed.email)) {
-        if (customName) parsed.display_name = customName;
-        localStorage.setItem(USER_SESSION_KEY, session);
-        return parsed;
-      }
-    }
-
-    // 3. Try admin session fallback
-    if (getStoredAdminSession()) {
+    // 2. Check direct admin session in localStorage ONLY
+    if (localStorage.getItem(ADMIN_SESSION_KEY) === 'true') {
       return {
         id: 'admin-master-id',
         email: 'admin@hiddenvault.com',
@@ -83,7 +72,6 @@ export function setStoredUserSession(user: any) {
     const str = JSON.stringify(sessionData);
     localStorage.setItem(USER_SESSION_KEY, str);
     sessionStorage.setItem(USER_SESSION_KEY, str);
-    document.cookie = `hidden_vault_session=true; path=/; max-age=2592000; SameSite=Lax`;
     window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: sessionData }));
     window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: sessionData }));
   } catch (err) {
@@ -94,10 +82,7 @@ export function setStoredUserSession(user: any) {
 export function getStoredAdminSession(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    const hasLocal = localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
-    const hasSession = sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
-    const hasCookie = document.cookie.split(';').some((c) => c.trim().startsWith('hidden_vault_admin=true'));
-    return hasLocal || hasSession || hasCookie;
+    return localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
   } catch {
     return false;
   }
@@ -109,7 +94,6 @@ export function setStoredAdminSession(isAdmin: boolean) {
     if (isAdmin) {
       localStorage.setItem(ADMIN_SESSION_KEY, 'true');
       sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-      document.cookie = `hidden_vault_admin=true; path=/; max-age=2592000; SameSite=Lax`;
       setStoredUserSession({
         id: 'admin-master-id',
         email: 'admin@hiddenvault.com',
@@ -119,9 +103,10 @@ export function setStoredAdminSession(isAdmin: boolean) {
     } else {
       localStorage.removeItem(ADMIN_SESSION_KEY);
       sessionStorage.removeItem(ADMIN_SESSION_KEY);
-      document.cookie = 'hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      localStorage.removeItem(USER_SESSION_KEY);
+      sessionStorage.removeItem(USER_SESSION_KEY);
     }
-    window.dispatchEvent(new Event('vault_auth_change'));
+    window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: null }));
   } catch (err) {
     console.warn('Error saving admin session:', err);
   }
@@ -129,7 +114,7 @@ export function setStoredAdminSession(isAdmin: boolean) {
 
 export function hasActiveSession(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(getStoredUserSession() || getStoredAdminSession());
+  return Boolean(getStoredUserSession());
 }
 
 export function clearAllStoredSessions() {
@@ -158,38 +143,17 @@ export function clearAllStoredSessions() {
     // 2. Clear sessionStorage completely
     sessionStorage.clear();
 
-    // 3. Clear all cookies with every combination of path and domain
-    const host = window.location.hostname;
-    const domains = ['', host, '.' + host];
-    const paths = ['/', ''];
-
-    const cookieNames = [
-      'hidden_vault_session',
-      'hidden_vault_admin',
-      'sb-access-token',
-      'sb-refresh-token',
-      'hidden_vault_custom_name',
-    ];
-
+    // 3. Force kill all cookies with max-age=0
     document.cookie.split(';').forEach((c) => {
       const name = c.trim().split('=')[0];
-      if (name && !cookieNames.includes(name)) {
-        cookieNames.push(name);
+      if (name) {
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax`;
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0`;
       }
     });
 
-    cookieNames.forEach((name) => {
-      domains.forEach((dom) => {
-        paths.forEach((p) => {
-          const domStr = dom ? ` domain=${dom};` : '';
-          const pathStr = p ? ` path=${p};` : '';
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;${pathStr}${domStr} SameSite=Lax`;
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;${pathStr}${domStr}`;
-        });
-      });
-    });
-
-    // 4. Fire event
+    // 4. Fire events to instantly re-render UI to VaultGate
     window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: null }));
     window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: null }));
   } catch (err) {
@@ -200,10 +164,13 @@ export function clearAllStoredSessions() {
 // Global Clean Unified Logout
 export async function performLogout() {
   try {
-    // 1. Call server-side cookie cleanup
+    // 1. Clear local state synchronously first
+    clearAllStoredSessions();
+
+    // 2. Call server-side cookie cleanup endpoint
     fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
 
-    // 2. Supabase signOut
+    // 3. Supabase signOut
     const supabase = createClient();
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
@@ -212,7 +179,7 @@ export async function performLogout() {
   } finally {
     clearAllStoredSessions();
     if (typeof window !== 'undefined') {
-      window.location.replace('/');
+      window.location.href = '/';
     }
   }
 }
@@ -230,7 +197,7 @@ if (typeof window !== 'undefined') {
       clearAllStoredSessions();
       localStorage.clear();
       sessionStorage.clear();
-      window.location.replace('/');
+      window.location.href = '/';
     }
   });
 }
