@@ -150,7 +150,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: false,
       error: msg,
-      logs: log,
       ...results,
     }, { status: 500 });
   }
