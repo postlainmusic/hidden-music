@@ -1,12 +1,16 @@
 import crypto from 'crypto';
-
-export * from './r2Storage';
+import { createClient } from '@/lib/supabase/client';
+import { TrackItem } from '@/types/database';
 
 const R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '5da953b3d1c0e1c733cf2285f8e7ab39';
 const R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '57456fede976516aa1adecf2cd2b24e3';
 const R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '4cb6fa310e4a74e524dd8217bb0bae7072b5f0fdd21c350d8591a65f29fd4ee4';
 const R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'hidden-music-vault';
 const R2_PUBLIC_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-1d0bee5762b4432cbce8cd4c1c010fa4.r2.dev').replace(/\/$/, '');
+
+// Worker Gateway URL for Enhanced Range Requests & Streaming
+const R2_WORKER_GATEWAY_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_URL || R2_PUBLIC_URL).replace(/\/$/, '');
+const STREAM_SECRET_KEY = process.env.STREAM_SECRET_KEY || 'vault-stream-secret-key-prod-2026';
 
 function getSignatureKey(key: string, dateStamp: string, regionName: string, serviceName: string) {
   const kDate = crypto.createHmac('sha256', 'AWS4' + key).update(dateStamp).digest();
@@ -17,8 +21,96 @@ function getSignatureKey(key: string, dateStamp: string, regionName: string, ser
 }
 
 /**
- * Generate an AWS S3 Signature V4 Presigned PUT URL for direct client-to-R2 upload.
- * This completely bypasses Vercel/Next.js 4.5MB serverless limits, allowing seamless uploads of high-res audio/video files.
+ * Extract clean storage key from an absolute URL or path
+ */
+export function extractCleanKey(keyOrUrl: string): string {
+  if (!keyOrUrl) return '';
+  let clean = keyOrUrl.trim();
+  // Remove public dev URL prefix
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    try {
+      const parsed = new URL(clean);
+      clean = parsed.pathname;
+    } catch {}
+  }
+  return clean.replace(/^\/+/, '');
+}
+
+/**
+ * Generate an HMAC-SHA256 signed stream token for private / protected tracks
+ */
+export function generateSignedStreamUrl(
+  keyOrUrl: string,
+  expiresInSeconds: number = 7200
+): string {
+  const cleanKey = extractCleanKey(keyOrUrl);
+  if (!cleanKey) return '';
+
+  const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const dataToSign = `${cleanKey}:${expiresAt}`;
+  const token = crypto
+    .createHmac('sha256', STREAM_SECRET_KEY)
+    .update(dataToSign)
+    .digest('hex');
+
+  const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
+  return `${baseGateway}/${cleanKey}?token=${token}&expires=${expiresAt}`;
+}
+
+/**
+ * Get the CDN URL for audio streaming (supports Range requests and optional signed token)
+ */
+export function getMediaCdnUrl(
+  keyOrUrl: string,
+  options?: { secure?: boolean; expiresInSeconds?: number }
+): string {
+  const cleanKey = extractCleanKey(keyOrUrl);
+  if (!cleanKey) return '';
+
+  // If already an external third-party streaming URL (e.g. YouTube or external audio)
+  if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
+    if (!keyOrUrl.includes('r2.dev') && !keyOrUrl.includes('cloudflarestorage.com') && !keyOrUrl.includes('workers.dev')) {
+      return keyOrUrl;
+    }
+  }
+
+  if (options?.secure) {
+    return generateSignedStreamUrl(cleanKey, options.expiresInSeconds);
+  }
+
+  const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
+  return `${baseGateway}/${cleanKey}`;
+}
+
+/**
+ * Get dynamic transformed Cover Art CDN URL (WebP/AVIF auto-negotiation, dynamic width & quality)
+ */
+export function getCoverCdnUrl(
+  keyOrUrl: string,
+  options?: { width?: number; quality?: number; format?: 'webp' | 'avif' | 'jpeg' }
+): string {
+  const cleanKey = extractCleanKey(keyOrUrl);
+  if (!cleanKey) return '/icon.svg';
+
+  if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
+    if (!keyOrUrl.includes('r2.dev') && !keyOrUrl.includes('cloudflarestorage.com') && !keyOrUrl.includes('workers.dev')) {
+      return keyOrUrl;
+    }
+  }
+
+  const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
+  const queryParts: string[] = [];
+
+  if (options?.width) queryParts.push(`w=${options.width}`);
+  if (options?.quality) queryParts.push(`q=${options.quality}`);
+  if (options?.format) queryParts.push(`fmt=${options.format}`);
+
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+  return `${baseGateway}/${cleanKey}${queryString}`;
+}
+
+/**
+ * Generate AWS S3 SigV4 Presigned PUT URL for direct client-to-R2 upload (unlimited file sizes)
  */
 export function getPresignedPutUrl(
   key: string,
@@ -186,4 +278,53 @@ export async function deleteFromR2(key: string): Promise<boolean> {
   });
 
   return res.ok;
+}
+
+/**
+ * Synchronize newly uploaded track metadata to database
+ */
+export async function syncTrackRecord(trackData: {
+  album_id: string;
+  title: string;
+  artist?: string;
+  audio_url: string;
+  cover_url?: string;
+  lyrics?: string;
+  duration?: number;
+  media_type?: 'audio' | 'video';
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const supabase = createClient();
+    const payload = {
+      album_id: trackData.album_id,
+      title: trackData.title.trim(),
+      artist: trackData.artist?.trim() || '',
+      media_type: trackData.media_type || 'audio',
+      audio_url: trackData.audio_url,
+      video_url: '',
+      cover_url: trackData.cover_url || '',
+      lyrics: trackData.lyrics || '',
+      duration: Math.round(trackData.duration || 0),
+    };
+
+    let { data, error } = await supabase.from('tracks').insert([payload]).select();
+
+    if (error && (error.message?.includes('audio_url') || error.message?.includes('schema cache'))) {
+      const fallbackPayload: Record<string, any> = { ...payload };
+      fallbackPayload.url = fallbackPayload.audio_url;
+      delete fallbackPayload.audio_url;
+      const retry = await supabase.from('tracks').insert([fallbackPayload]).select();
+      error = retry.error;
+      data = retry.data;
+    }
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data?.[0] };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: msg };
+  }
 }

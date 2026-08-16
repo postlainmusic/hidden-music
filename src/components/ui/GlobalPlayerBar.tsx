@@ -20,6 +20,7 @@ import {
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
 import { hasActiveSession } from '@/lib/authSession';
+import { getCoverCdnUrl } from '@/lib/r2Storage';
 
 export default function GlobalPlayerBar() {
   const {
@@ -591,7 +592,7 @@ export default function GlobalPlayerBar() {
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
                 <img
-                  src={currentAlbum?.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                  src={getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 120, quality: 85 }) || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
                   alt={currentTrack.title}
                   className={`w-full h-full object-cover ${isPlaying ? 'animate-spin-slow' : ''}`}
                 />
@@ -720,7 +721,7 @@ export default function GlobalPlayerBar() {
           <div className="flex items-center gap-3 min-w-0 flex-shrink-0 max-w-[260px]">
             <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
               <img
-                src={currentAlbum?.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                src={getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 160, quality: 85 }) || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
                 alt={currentTrack.title}
                 className={`w-full h-full object-cover ${isPlaying ? 'animate-spin-slow' : ''}`}
               />
