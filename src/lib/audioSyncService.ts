@@ -117,7 +117,8 @@ async function extractAudioFromStreamingVideo(
 
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) {
-      cleanup();
+      if (video.parentNode) video.parentNode.removeChild(video);
+      if (isCreatedBlobUrl) URL.revokeObjectURL(videoUrl);
       reject(new Error('Web Audio API không được hỗ trợ trên trình duyệt này.'));
       return;
     }
