@@ -2019,42 +2019,9 @@ export default function AdminPage() {
                   <Disc3 className="w-4 h-4 text-white" />
                   BÀI HÁT TRONG ALBUM ({activeAlbum.tracks?.length || 0})
                 </h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <label className="px-3 py-1.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 font-extrabold text-[10px] uppercase border border-emerald-400/50 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
-                    <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>📤 TẢI NHẠC .MP3 HÀNG LOẠT</span>
-                    <input
-                      type="file"
-                      accept="audio/*,.mp3,.wav,.flac,.m4a"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleBatchFileUpload(e.target.files, 'audio')}
-                    />
-                  </label>
-
-                  <label className="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 font-extrabold text-[10px] uppercase border border-cyan-400/50 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
-                    <Film className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>🎬 TẢI VIDEO .MP4 HÀNG LOẠT</span>
-                    <input
-                      type="file"
-                      accept="video/*,.mp4,.webm,.mkv,.mov"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleBatchFileUpload(e.target.files, 'video')}
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => openBatchLinkModal('video')}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-cyan-950 text-cyan-300 font-extrabold text-[10px] uppercase border border-cyan-500/40 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg font-mono"
-                  >
-                    <Link2 className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>🔗 LINK VIDEO MV HÀNG LOẠT</span>
-                  </button>
-
+                <div className="flex items-center gap-2">
                   <label className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-extrabold text-[10px] uppercase border border-white/20 cursor-pointer flex items-center gap-1.5 transition-all shadow-lg">
-                    <UploadCloud className="w-3.5 h-3.5" />
+                    <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
                     <span>FILE .LRC</span>
                     <input
                       type="file"
