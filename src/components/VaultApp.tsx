@@ -34,6 +34,32 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<TrackItem | null>(null);
 
+  // Dynamic Maintenance Estimated Time (+2 hours from viewing)
+  const [maintenanceTime, setMaintenanceTime] = useState<{ timeStr: string; fullStr: string }>({
+    timeStr: '',
+    fullStr: '',
+  });
+
+  useEffect(() => {
+    const updateMaintenanceTarget = () => {
+      const target = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const hours = String(target.getHours()).padStart(2, '0');
+      const minutes = String(target.getMinutes()).padStart(2, '0');
+      const day = String(target.getDate()).padStart(2, '0');
+      const month = String(target.getMonth() + 1).padStart(2, '0');
+      const year = target.getFullYear();
+
+      setMaintenanceTime({
+        timeStr: `${hours}:${minutes}`,
+        fullStr: `${hours}:${minutes} (${day}/${month}/${year})`,
+      });
+    };
+
+    updateMaintenanceTarget();
+    const interval = setInterval(updateMaintenanceTarget, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const {
     currentTrack,
     isPlaying,
@@ -364,18 +390,27 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
         </div>
       )}
 
-      {/* Secure Empty State ONLY when fetch completed and no albums exist */}
+      {/* Secure Empty State / Maintenance Mode when no albums exist */}
       {!isLoadingAlbums && albums.length === 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-4 z-10 text-center font-mono select-none">
-          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center mb-4">
-            <ShieldAlert className="w-8 h-8 text-slate-400" />
+          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+            <ShieldAlert className="w-8 h-8 text-white/80 animate-pulse" />
           </div>
-          <h2 className="text-lg sm:text-xl font-extrabold text-white uppercase tracking-widest mb-2 font-cyber">
-            KHO LƯU TRỮ CHƯA CÓ BẢN GHI
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] text-slate-300 font-bold uppercase tracking-widest mb-3">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            HỆ THỐNG ĐANG BẢO TRÌ
+          </div>
+          <h2 className="text-base sm:text-xl font-extrabold text-white uppercase tracking-wider mb-2 font-cyber max-w-lg">
+            HỆ THỐNG ĐANG BẢO TRÌ VÀ NÂNG CẤP DỮ LIỆU
           </h2>
-          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-            Hệ thống đang bảo mật các bản ghi âm nhạc. Vui lòng quay lại sau.
+          <p className="text-xs sm:text-sm text-slate-300 max-w-md leading-relaxed">
+            Hệ thống sẽ bảo trì đến khoảng <span className="text-white font-bold tracking-wide underline underline-offset-4">{maintenanceTime.fullStr || '2 tiếng nữa'}</span>, vui lòng quay lại sau <span className="text-white font-bold tracking-wide underline underline-offset-4">{maintenanceTime.timeStr || '2 tiếng nữa'}</span>.
           </p>
+          <div className="mt-6 flex items-center gap-2 text-[11px] text-slate-500 font-cyber">
+            <span>SECURE VAULT GATEWAY</span>
+            <span>•</span>
+            <span>MAINTENANCE WINDOW ACTIVE</span>
+          </div>
         </div>
       )}
 
