@@ -43,6 +43,7 @@ export default function GlobalPlayerBar() {
     snareAnalyserRef,
     kickTimestampsRef,
     snareTimestampsRef,
+    isPCMReadyRef,
     playTrack,
     togglePlay,
     nextTrack,
@@ -279,25 +280,27 @@ export default function GlobalPlayerBar() {
       // =========================================================================
       // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING (MATHEMATICALLY ACCURATE)
       // =========================================================================
+      const isPCMReady = isPCMReadyRef?.current ?? false;
       const kickStamps = kickTimestampsRef?.current || [];
-      const hasPCMBeatMap = kickStamps.length > 0;
+      const snareStamps = snareTimestampsRef?.current || [];
 
-      if (hasPCMBeatMap) {
-        // Kick Detection from PCM
-        for (let i = 0; i < kickStamps.length; i++) {
-          const diff = liveCurrentTime - kickStamps[i];
-          if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
-            lastFiredKickIndexRef.current = i;
-            // Alternate heavy/light based on step or detect peak
-            isHeavyKick = true;
-            lastKickTimeRef.current = now;
-            break;
+      if (isPCMReady) {
+        // Track has been analyzed with PCM. If kickStamps/snareStamps are empty,
+        // it means this track is purely instrumental/acoustic/ambient without drums!
+        // We DO NOT trigger false kicks on guitar sounds!
+        if (kickStamps.length > 0) {
+          for (let i = 0; i < kickStamps.length; i++) {
+            const diff = liveCurrentTime - kickStamps[i];
+            if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
+              lastFiredKickIndexRef.current = i;
+              isHeavyKick = true;
+              lastKickTimeRef.current = now;
+              break;
+            }
           }
         }
 
-        // Snare Detection from PCM
-        const snareStamps = snareTimestampsRef?.current || [];
-        if (!isHeavyKick) {
+        if (!isHeavyKick && snareStamps.length > 0) {
           for (let i = 0; i < snareStamps.length; i++) {
             const diff = liveCurrentTime - snareStamps[i];
             if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredSnareIndexRef.current) {
@@ -310,21 +313,33 @@ export default function GlobalPlayerBar() {
         }
       } else {
         // =========================================================================
-        // [2] DEDICATED 58Hz HARDWARE BIQUAD FILTER DETECTION (ZERO MASTER SPILL)
+        // [2] DEDICATED HARDWARE BIQUAD FILTER DETECTION (ZERO MASTER SPILL FALLBACK)
+        // Used ONLY when PCM is loading or unavailable
         // =========================================================================
+        let masterMidEnergy = 0;
+        if (analyserRef?.current) {
+          try {
+            const masterArr = new Uint8Array(analyserRef.current.frequencyBinCount);
+            analyserRef.current.getByteFrequencyData(masterArr);
+            // Mid range ~350Hz to 1.5kHz (bins 2-8 in 256 FFT @ 44.1kHz)
+            masterMidEnergy = (masterArr[2] + masterArr[3] + masterArr[4] + masterArr[5] + masterArr[6]) / 5;
+          } catch {}
+        }
+
         if (kickAnalyserRef?.current) {
           try {
             const arr = new Uint8Array(kickAnalyserRef.current.frequencyBinCount);
             kickAnalyserRef.current.getByteFrequencyData(arr);
-            const kickSub = (arr[0] + arr[1] + arr[2]) / 3;
+            const kickSub = (arr[0] + arr[1]) / 2;
 
             const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
             prevKickPunchRef.current = kickSub;
             smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.80 + deltaKick * 0.20;
-            const kickThreshold = Math.max(9.0, smoothedKickPunchRef.current * 1.45);
+            const kickThreshold = Math.max(16.0, smoothedKickPunchRef.current * 1.5);
 
-            if (deltaKick > kickThreshold && kickSub > 32 && (now - lastKickTimeRef.current > 150)) {
-              if (kickSub > 70 || deltaKick > 22) {
+            // True kick requires substantial sub punch (kickSub >= 80) and must not be drowned out by guitar mid chords
+            if (deltaKick > kickThreshold && kickSub >= 80 && kickSub >= masterMidEnergy * 0.85 && (now - lastKickTimeRef.current > 160)) {
+              if (kickSub > 120 || deltaKick > 28) {
                 isHeavyKick = true;
               } else {
                 isLightKick = true;
@@ -334,19 +349,19 @@ export default function GlobalPlayerBar() {
           } catch {}
         }
 
-        // Dedicated 350Hz Snare Filter
+        // Dedicated 3200Hz Snare Filter
         if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
           try {
             const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
             snareAnalyserRef.current.getByteFrequencyData(arr);
-            const snareMid = (arr[1] + arr[2] + arr[3]) / 3;
+            const snareHigh = (arr[1] + arr[2] + arr[3]) / 3;
 
-            const deltaSnare = Math.max(0, snareMid - prevSnarePunchRef.current);
-            prevSnarePunchRef.current = snareMid;
+            const deltaSnare = Math.max(0, snareHigh - prevSnarePunchRef.current);
+            prevSnarePunchRef.current = snareHigh;
             smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.80 + deltaSnare * 0.20;
-            const snareThreshold = Math.max(10.0, smoothedSnarePunchRef.current * 1.5);
+            const snareThreshold = Math.max(18.0, smoothedSnarePunchRef.current * 1.6);
 
-            if (deltaSnare > snareThreshold && snareMid > 35 && (now - lastSnareTimeRef.current > 170)) {
+            if (deltaSnare > snareThreshold && snareHigh >= 85 && (now - lastSnareTimeRef.current > 170) && (now - lastKickTimeRef.current > 120)) {
               isSnare = true;
               lastSnareTimeRef.current = now;
             }
@@ -426,7 +441,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTime, audioRef, videoOffset]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, isPCMReadyRef, currentTime, audioRef, videoOffset]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
