@@ -116,11 +116,11 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-white animate-pulse" />
             <h2 className="text-lg md:text-xl font-extrabold tracking-wider uppercase text-white">
-              ĐỌC & CHỈNH SỬA METADATA FILE NHẠC (AUDIO)
+              ĐỌC & CHỈNH SỬA METADATA FILE MEDIA (AUDIO & VIDEO MV)
             </h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Tải tệp (.mp3/.wav/.flac/.m4a) để đọc metadata ID3 & xuất file (.json/.txt/.csv)
+            Tải tệp (.mp3/.wav/.flac/.mp4/.webm) để đọc metadata & xuất file (.json/.txt/.csv)
           </p>
         </div>
 
@@ -147,7 +147,7 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
             <input
               type="file"
               id="media-metadata-input"
-              accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.wma,.opus"
+              accept="audio/*,video/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.mp4,.webm,.mkv,.mov"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -157,15 +157,18 @@ export default function MediaMetadataScanner({ onApplyToForm }: MediaMetadataSca
               </div>
               <div>
                 <p className="text-sm font-extrabold uppercase text-white tracking-widest">
-                  1. KÉO THẢ TỆP ÂM THANH VÀO ĐÂY
+                  1. KÉO THẢ TỆP ÂM THANH HOẶC VIDEO MV VÀO ĐÂY
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Hoặc nhấp để chọn tệp từ máy tính (.mp3, .wav, .flac, .m4a,...)
+                  Hỗ trợ cả Video MP4/WEBM và Audio MP3/FLAC/WAV
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                 <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-400 flex items-center gap-1">
-                  <Music className="w-3 h-3" /> AUDIO (MP3/WAV/FLAC/M4A)
+                  <Music className="w-3 h-3" /> AUDIO (MP3/WAV/FLAC)
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-400 flex items-center gap-1">
+                  <FileVideo className="w-3 h-3" /> VIDEO MV (MP4/WEBM)
                 </span>
               </div>
             </label>

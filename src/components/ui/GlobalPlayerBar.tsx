@@ -15,10 +15,13 @@ import {
   Disc3,
   Music,
   Mic2,
-  X
+  Film,
+  Maximize2,
+  Minimize2,
+  X,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
-import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
+import { parseLrc, getActiveLyricIndex, extractVideoOffset } from '@/lib/lrcParser';
 import { hasActiveSession } from '@/lib/authSession';
 import { getCoverCdnUrl } from '@/lib/r2Storage';
 
@@ -33,6 +36,7 @@ export default function GlobalPlayerBar() {
     volume,
     shuffleMode,
     repeatMode,
+    isCinematicFxEnabled,
     audioRef,
     analyserRef,
     kickAnalyserRef,
@@ -45,6 +49,9 @@ export default function GlobalPlayerBar() {
     nextTrack,
     prevTrack,
     seekTo,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
     setVolume,
     toggleShuffle,
     toggleRepeat,
@@ -54,13 +61,19 @@ export default function GlobalPlayerBar() {
   const [isAuth, setIsAuth] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenControls, setShowFullscreenControls] = useState(true);
 
   const mobileLyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const desktopLyricsScrollRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
   const barContainerRef = useRef<HTMLDivElement | null>(null);
   const volumeContainerRef = useRef<HTMLDivElement | null>(null);
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
+  const fullscreenControlsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dedicated Kick Detection Refs for Player Bar
   const fireOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -88,6 +101,24 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
+  // Track Fullscreen state accurately
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setIsFullscreen(isFs);
+      if (isFs) {
+        setShowFullscreenControls(true);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
   // Reset fired indices on track change
   useEffect(() => {
     lastFiredKickIndexRef.current = -1;
@@ -100,6 +131,7 @@ export default function GlobalPlayerBar() {
       if (playerRootRef.current && !playerRootRef.current.contains(e.target as Node)) {
         setShowLyrics(false);
         setShowQueue(false);
+        setShowVideo(false);
         setShowVolumeSlider(false);
       }
     };
@@ -112,14 +144,99 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Master Play/Pause toggler (Controls master Audio)
+  const handleFullscreenActivity = () => {
+    setShowFullscreenControls(true);
+    if (fullscreenControlsTimerRef.current) {
+      clearTimeout(fullscreenControlsTimerRef.current);
+    }
+    fullscreenControlsTimerRef.current = setTimeout(() => {
+      if (isPlaying) {
+        setShowFullscreenControls(false);
+      }
+    }, 3500);
+  };
+
+  const toggleFullscreen = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const el = videoContainerRef.current || videoRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if ((el as any).webkitRequestFullscreen) {
+        (el as any).webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+    }
+  };
+
+  const videoOffset = useMemo(() => {
+    return extractVideoOffset(currentTrack?.lyrics || '');
+  }, [currentTrack?.lyrics]);
+
+  const songDuration = useMemo(() => {
+    return currentTrack?.duration && currentTrack.duration > 0 ? currentTrack.duration : 180;
+  }, [currentTrack?.duration]);
+
+  // Master Play/Pause toggler
   const handleTogglePlay = () => {
     togglePlay();
   };
 
-  // Handle seek for audio
+  // Video is purely visual; Audio is 100% master audio source and master clock
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+
+    // Always mute video completely to prevent echo
+    vid.muted = true;
+    vid.volume = 0;
+
+    if (showVideo) {
+      const targetVidTime = Math.max(0, currentTime + videoOffset);
+      if (Math.abs(vid.currentTime - targetVidTime) > 0.3) {
+        vid.currentTime = targetVidTime;
+      }
+      if (isPlaying) {
+        vid.play().catch(() => {});
+      } else {
+        vid.pause();
+      }
+    } else {
+      vid.pause();
+    }
+  }, [showVideo, isPlaying, videoOffset, currentTrack?.id, currentTime]);
+
+  // Periodic accurate sub-frame sync from Audio Clock to Video
+  useEffect(() => {
+    if (!showVideo || !isPlaying) return;
+    const syncInterval = setInterval(() => {
+      const vid = videoRef.current;
+      const audio = audioRef?.current;
+      if (vid && audio && !vid.seeking) {
+        const targetVidTime = Math.max(0, audio.currentTime + videoOffset);
+        if (Math.abs(vid.currentTime - targetVidTime) > 0.25) {
+          vid.currentTime = targetVidTime;
+        }
+      }
+    }, 400);
+    return () => clearInterval(syncInterval);
+  }, [showVideo, isPlaying, videoOffset, audioRef]);
+
+  // Handle seek for both audio and video
   const handleSeek = (newTime: number) => {
     seekTo(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(0, newTime + videoOffset);
+    }
   };
 
   // Monochromatic White Lighting & Transient Tracking Refs
@@ -131,11 +248,7 @@ export default function GlobalPlayerBar() {
   const prevSnarePunchRef = useRef<number>(0);
   const smoothedSnarePunchRef = useRef<number>(0);
 
-  // Real-Time Playbar Monochromatic Beat Engine:
-  // - HEAVY KICK: Nảy cực mạnh (scale 1.055) + Chớp trắng sáng rực rỡ
-  // - LIGHT KICK: Nảy nhẹ (scale 1.025) + Chớp trắng mờ tinh tế
-  // - SNARE: Chỉ chớp trắng mờ (scale 1.0 không nảy)
-  // - Album: 100% tĩnh
+  // Real-Time Playbar Monochromatic Beat Engine
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -153,11 +266,13 @@ export default function GlobalPlayerBar() {
       let isLightKick = false;
       let isSnare = false;
       const now = performance.now();
-      const liveCurrentTime = audioRef?.current ? audioRef.current.currentTime : currentTime;
+      const liveCurrentTime =
+        showVideo && videoRef.current
+          ? Math.max(0, videoRef.current.currentTime - videoOffset)
+          : audioRef?.current
+          ? audioRef.current.currentTime
+          : currentTime;
 
-      // =========================================================================
-      // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING (MATHEMATICALLY ACCURATE)
-      // =========================================================================
       const isPCMReady = isPCMReadyRef?.current ?? false;
       const kickStamps = kickTimestampsRef?.current || [];
       const snareStamps = snareTimestampsRef?.current || [];
@@ -187,15 +302,13 @@ export default function GlobalPlayerBar() {
           }
         }
       } else {
-        // =========================================================================
-        // [2] DEDICATED HARDWARE BIQUAD FILTER DETECTION (ZERO MASTER SPILL FALLBACK)
-        // =========================================================================
         let masterMidEnergy = 0;
         if (analyserRef?.current) {
           try {
             const masterArr = new Uint8Array(analyserRef.current.frequencyBinCount);
             analyserRef.current.getByteFrequencyData(masterArr);
-            masterMidEnergy = (masterArr[2] + masterArr[3] + masterArr[4] + masterArr[5] + masterArr[6]) / 5;
+            masterMidEnergy =
+              (masterArr[2] + masterArr[3] + masterArr[4] + masterArr[5] + masterArr[6]) / 5;
           } catch {}
         }
 
@@ -207,10 +320,15 @@ export default function GlobalPlayerBar() {
 
             const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
             prevKickPunchRef.current = kickSub;
-            smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.80 + deltaKick * 0.20;
+            smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.8 + deltaKick * 0.2;
             const kickThreshold = Math.max(16.0, smoothedKickPunchRef.current * 1.5);
 
-            if (deltaKick > kickThreshold && kickSub >= 80 && kickSub >= masterMidEnergy * 0.85 && (now - lastKickTimeRef.current > 160)) {
+            if (
+              deltaKick > kickThreshold &&
+              kickSub >= 80 &&
+              kickSub >= masterMidEnergy * 0.85 &&
+              now - lastKickTimeRef.current > 160
+            ) {
               if (kickSub > 120 || deltaKick > 28) {
                 isHeavyKick = true;
               } else {
@@ -221,7 +339,6 @@ export default function GlobalPlayerBar() {
           } catch {}
         }
 
-        // Dedicated 3200Hz Snare Filter
         if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
           try {
             const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
@@ -230,10 +347,15 @@ export default function GlobalPlayerBar() {
 
             const deltaSnare = Math.max(0, snareHigh - prevSnarePunchRef.current);
             prevSnarePunchRef.current = snareHigh;
-            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.80 + deltaSnare * 0.20;
+            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.8 + deltaSnare * 0.2;
             const snareThreshold = Math.max(18.0, smoothedSnarePunchRef.current * 1.6);
 
-            if (deltaSnare > snareThreshold && snareHigh >= 85 && (now - lastSnareTimeRef.current > 170) && (now - lastKickTimeRef.current > 120)) {
+            if (
+              deltaSnare > snareThreshold &&
+              snareHigh >= 85 &&
+              now - lastSnareTimeRef.current > 170 &&
+              now - lastKickTimeRef.current > 120
+            ) {
               isSnare = true;
               lastSnareTimeRef.current = now;
             }
@@ -241,31 +363,28 @@ export default function GlobalPlayerBar() {
         }
       }
 
-      // =========================================================================
-      // [3] APPLY CLEAN MONOCHROME WHITE LIGHTING (LIGHT KICK vs HEAVY KICK)
-      // =========================================================================
       if (isHeavyKick) {
         isHeavyKickRef.current = true;
         barScaleRef.current = 1.055;
         barFlashIntensityRef.current = 1.0;
-
         if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
+          fireOverlayRef.current.style.background =
+            'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
         }
       } else if (isLightKick) {
         isHeavyKickRef.current = false;
         barScaleRef.current = 1.026;
         barFlashIntensityRef.current = 0.55;
-
         if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25))';
+          fireOverlayRef.current.style.background =
+            'linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25))';
         }
       } else if (isSnare) {
         isHeavyKickRef.current = false;
         barFlashIntensityRef.current = 0.45;
-
         if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15))';
+          fireOverlayRef.current.style.background =
+            'linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15))';
         }
       } else {
         barFlashIntensityRef.current *= 0.65;
@@ -275,9 +394,8 @@ export default function GlobalPlayerBar() {
       if (barFlashIntensityRef.current < 0.01) barFlashIntensityRef.current = 0;
       if (Math.abs(barScaleRef.current - 1.0) < 0.001) barScaleRef.current = 1.0;
 
-      // Update Playbar styling
       if (barContainerRef.current) {
-        const scaleVal = showLyrics ? 1.0 : barScaleRef.current;
+        const scaleVal = showLyrics || showVideo ? 1.0 : barScaleRef.current;
         barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
 
         if (barFlashIntensityRef.current > 0.06) {
@@ -285,11 +403,19 @@ export default function GlobalPlayerBar() {
           const isHeavy = isHeavyKickRef.current;
 
           if (isHeavy) {
-            barContainerRef.current.style.boxShadow = `0 16px 45px rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)}), inset 0 0 25px rgba(255, 255, 255, ${(alpha * 0.30).toFixed(2)})`;
-            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.85).toFixed(2)})`;
+            barContainerRef.current.style.boxShadow = `0 16px 45px rgba(255, 255, 255, ${(
+              alpha * 0.45
+            ).toFixed(2)}), inset 0 0 25px rgba(255, 255, 255, ${(alpha * 0.3).toFixed(2)})`;
+            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(
+              alpha * 0.85
+            ).toFixed(2)})`;
           } else {
-            barContainerRef.current.style.boxShadow = `0 10px 30px rgba(255, 255, 255, ${(alpha * 0.22).toFixed(2)}), inset 0 0 15px rgba(255, 255, 255, ${(alpha * 0.12).toFixed(2)})`;
-            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)})`;
+            barContainerRef.current.style.boxShadow = `0 10px 30px rgba(255, 255, 255, ${(
+              alpha * 0.22
+            ).toFixed(2)}), inset 0 0 15px rgba(255, 255, 255, ${(alpha * 0.12).toFixed(2)})`;
+            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(
+              alpha * 0.45
+            ).toFixed(2)})`;
           }
         } else {
           barContainerRef.current.style.boxShadow = '';
@@ -309,7 +435,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showLyrics, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, isPCMReadyRef, currentTime, audioRef]);
+  }, [isPlaying, showVideo, showLyrics, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, isPCMReadyRef, currentTime, audioRef, videoOffset]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -329,7 +455,8 @@ export default function GlobalPlayerBar() {
       if (!container) return;
       const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
       if (activeEl) {
-        const targetScrollTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
+        const targetScrollTop =
+          activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
         container.scrollTo({
           top: Math.max(0, targetScrollTop),
           behavior: 'smooth',
@@ -341,7 +468,7 @@ export default function GlobalPlayerBar() {
     scrollToActive(desktopLyricsScrollRef.current);
   }, [activeLyricIdx, showLyrics]);
 
-  // Volume hover UX handlers with continuous bridge
+  // Volume hover UX handlers
   const handleVolumeMouseEnter = () => {
     if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
     setShowVolumeSlider(true);
@@ -381,10 +508,19 @@ export default function GlobalPlayerBar() {
         e.preventDefault();
         setShowLyrics((prev) => !prev);
         setShowQueue(false);
+        setShowVideo(false);
       } else if (key === 'q') {
         e.preventDefault();
         setShowQueue((prev) => !prev);
         setShowLyrics(false);
+        setShowVideo(false);
+      } else if (key === 'v') {
+        if (currentTrack?.video_url) {
+          e.preventDefault();
+          setShowVideo((prev) => !prev);
+          setShowLyrics(false);
+          setShowQueue(false);
+        }
       } else if (key === 's') {
         e.preventDefault();
         toggleShuffle();
@@ -396,7 +532,7 @@ export default function GlobalPlayerBar() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, nextTrack, prevTrack, toggleShuffle, toggleRepeat]);
+  }, [togglePlay, nextTrack, prevTrack, toggleShuffle, toggleRepeat, currentTrack?.video_url]);
 
   if (!mounted || !currentTrack || !isAuth) return null;
 
@@ -409,11 +545,209 @@ export default function GlobalPlayerBar() {
     return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
-  const hasDrawerOpen = showLyrics || showQueue;
+  const hasDrawerOpen = showVideo || showLyrics || showQueue;
 
   const renderDrawerContent = (isMobile = false) => (
     <>
-      {/* 1. GOTHIC LYRICS PANEL */}
+      {/* 1. NATIVE VIDEO PLAYER (MV STAGE) */}
+      {showVideo && currentTrack?.video_url && (
+        <div className="w-full flex-1 flex flex-col justify-between text-white font-mono min-h-0 relative">
+          <div
+            ref={videoContainerRef}
+            onMouseMove={handleFullscreenActivity}
+            onTouchStart={handleFullscreenActivity}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+            }}
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleFullscreen();
+            }}
+            className="flex-1 rounded-2xl overflow-hidden border border-white/20 relative bg-black flex items-center justify-center shadow-2xl z-30 select-none pointer-events-auto min-h-[220px] sm:min-h-[300px] group/video"
+          >
+            {/* HIDDEN MUSIC Watermark */}
+            <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-40 flex items-center gap-1.5 bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white shadow-2xl select-none pointer-events-none">
+              <Disc3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white animate-spin-slow" />
+              <span className="font-cyber font-extrabold text-[10px] sm:text-[11px] tracking-wider text-white">
+                HIDDEN MUSIC MV
+              </span>
+            </div>
+
+            {/* Central Play/Pause Watermark Button for Double Tap/Click */}
+            {(!isPlaying || (isFullscreen && showFullscreenControls)) && (
+              <div
+                onClick={handleTogglePlay}
+                className="absolute inset-0 z-40 flex items-center justify-center bg-black/35 cursor-pointer pointer-events-auto transition-opacity"
+              >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-black/80 border border-white/50 backdrop-blur-md flex items-center justify-center text-white shadow-2xl transition-transform hover:scale-110 active:scale-95">
+                  {isPlaying ? (
+                    <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-current" />
+                  ) : (
+                    <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-current ml-0.5 sm:ml-1" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Fullscreen Trigger / Exit Button */}
+            <button
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Thu nhỏ video' : 'Toàn màn hình'}
+              className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-40 p-2 rounded-xl bg-black/80 hover:bg-white hover:text-black border border-white/20 text-white shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 text-[10px] font-bold font-mono"
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{isFullscreen ? 'EXIT FULL' : 'FULLSCREEN'}</span>
+            </button>
+
+            {/* Subtitle Overlay with Live Beat Sync */}
+            {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (
+              <div
+                className={`absolute left-3 right-3 sm:left-6 sm:right-6 md:left-8 md:right-8 z-40 flex justify-center pointer-events-none select-none transition-all duration-200 ${
+                  isFullscreen
+                    ? showFullscreenControls
+                      ? 'bottom-20 sm:bottom-24'
+                      : 'bottom-6 sm:bottom-8'
+                    : 'bottom-2.5 sm:bottom-3.5'
+                }`}
+              >
+                <div
+                  className={`bg-black/45 backdrop-blur-md border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] text-center transition-all ${
+                    isFullscreen
+                      ? 'px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-xl max-w-xl'
+                      : 'px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg sm:rounded-xl max-w-lg'
+                  }`}
+                >
+                  <p
+                    className={`text-white font-medium leading-relaxed tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] transition-all ${
+                      isFullscreen
+                        ? 'text-xs sm:text-[13px] md:text-sm lg:text-[14px]'
+                        : 'text-[10px] sm:text-[11px] md:text-xs lg:text-[12px]'
+                    }`}
+                  >
+                    {parsedLyrics[activeLyricIdx].text}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* FULLSCREEN HUD TIMELINE & CONTROLS BAR (SHOWN IN FULLSCREEN) */}
+            {isFullscreen && showFullscreenControls && (
+              <div className="absolute bottom-0 left-0 right-0 z-50 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-2 transition-opacity animate-fadeIn">
+                {/* Timeline Scrubber */}
+                <div className="flex items-center gap-2.5 w-full">
+                  <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-300 flex-shrink-0">
+                    {formatTime(currentTime)}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={effectiveDuration || 100}
+                    value={currentTime}
+                    onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                    className="flex-1 h-2 rounded-full appearance-none cursor-pointer border border-white/20 bg-slate-800 shadow-inner"
+                  />
+                  <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 flex-shrink-0">
+                    {formatTime(effectiveDuration)}
+                  </span>
+                </div>
+
+                {/* Bottom Fullscreen Actions */}
+                <div className="grid grid-cols-3 items-center w-full">
+                  {/* Left: Track Info */}
+                  <div className="text-[11px] font-cyber font-bold truncate uppercase justify-self-start pr-2">
+                    {currentTrack.title}{' '}
+                    <span className="text-slate-400 text-[9px] font-mono">({currentAlbum?.artist})</span>
+                  </div>
+
+                  {/* Center: Playback Controls */}
+                  <div className="flex items-center justify-center gap-3 justify-self-center">
+                    <button
+                      onClick={prevTrack}
+                      className="p-1.5 text-slate-300 hover:text-white transition-colors hover:scale-110 active:scale-95"
+                      title="Bài trước"
+                    >
+                      <SkipBack className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                    </button>
+                    <button
+                      onClick={handleTogglePlay}
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"
+                      title={isPlaying ? 'Tạm dừng' : 'Phát'}
+                    >
+                      {isPlaying ? (
+                        <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                      ) : (
+                        <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={nextTrack}
+                      className="p-1.5 text-slate-300 hover:text-white transition-colors hover:scale-110 active:scale-95"
+                      title="Bài kế tiếp"
+                    >
+                      <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                    </button>
+                  </div>
+
+                  {/* Right: Quick Mute & Exit Fullscreen Actions */}
+                  <div className="flex items-center justify-end gap-2.5 justify-self-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setVolume(volume === 0 ? 0.8 : 0);
+                      }}
+                      className="p-1.5 rounded-full text-slate-300 hover:text-white transition-colors"
+                      title={volume === 0 ? 'Bật âm thanh' : 'Tắt tiếng'}
+                    >
+                      {volume === 0 ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+                    </button>
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-1.5 text-slate-300 hover:text-white transition-colors"
+                      title="Thu nhỏ video"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Direct HTML5 Video Player */}
+            <video
+              ref={videoRef}
+              src={currentTrack.video_url}
+              playsInline
+              muted
+              preload="auto"
+              onClick={handleTogglePlay}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              onLoadedMetadata={(e) => {
+                e.currentTarget.muted = true;
+                e.currentTarget.volume = 0;
+                const targetVidTime = Math.max(0, currentTime + videoOffset);
+                e.currentTarget.currentTime = targetVidTime;
+                if (isPlaying) {
+                  e.currentTarget.play().catch(() => {});
+                }
+              }}
+              className={`${
+                isFullscreen
+                  ? 'max-h-[82vh] max-w-[88vw] w-auto h-auto rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.95)] border border-white/10'
+                  : 'w-full h-full'
+              } object-contain select-none cursor-pointer relative z-10 transition-all duration-300`}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 2. GOTHIC LYRICS PANEL */}
       {showLyrics && (
         <div className="w-full flex-1 flex flex-col justify-between text-white font-sans min-h-0 overflow-hidden">
           <div
@@ -430,9 +764,7 @@ export default function GlobalPlayerBar() {
                     data-active-lyric={isActive ? 'true' : undefined}
                     onClick={() => handleSeek(line.time)}
                     className={`cursor-pointer transition-all duration-300 py-1 px-2 sm:px-4 ${
-                      isActive
-                        ? 'scale-[1.03] opacity-100'
-                        : 'opacity-35 hover:opacity-75'
+                      isActive ? 'scale-[1.03] opacity-100' : 'opacity-35 hover:opacity-75'
                     }`}
                   >
                     <p
@@ -461,10 +793,13 @@ export default function GlobalPlayerBar() {
         </div>
       )}
 
-      {/* 2. QUEUE LIST PANEL */}
+      {/* 3. QUEUE LIST PANEL */}
       {showQueue && (
         <div className="w-full flex-1 flex flex-col justify-between text-white font-mono text-xs min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 sm:space-y-1.5 pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div
+            className="flex-1 overflow-y-auto no-scrollbar space-y-1 sm:space-y-1.5 pr-1"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {playlist.map((trk, i) => {
               const isCurrent = currentTrack?.id === trk.id;
               return (
@@ -484,9 +819,15 @@ export default function GlobalPlayerBar() {
                     <span className="text-[10px] opacity-60 w-4 font-mono">{i + 1}.</span>
                     <span className="truncate text-xs font-semibold">{trk.title}</span>
                   </div>
-                  <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/10 text-slate-300 font-mono">
-                    AUDIO
-                  </span>
+                  {trk.video_url ? (
+                    <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/15 text-white border border-white/30 font-mono font-bold">
+                      MV
+                    </span>
+                  ) : (
+                    <span className="text-[8px] uppercase px-1.5 py-0.5 rounded bg-white/5 text-slate-400 font-mono">
+                      AUDIO
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -516,8 +857,13 @@ export default function GlobalPlayerBar() {
           <div className="flex items-center gap-2">
             {showLyrics && <Mic2 className="w-3.5 h-3.5 text-white" />}
             {showQueue && <Disc3 className="w-3.5 h-3.5 text-white animate-spin-slow" />}
+            {showVideo && <Film className="w-3.5 h-3.5 text-white" />}
             <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
-              {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : `DANH SÁCH PHÁT (${playlist.length})`}
+              {showLyrics
+                ? 'LỜI BÀI HÁT (LYRICS)'
+                : showQueue
+                ? `DANH SÁCH PHÁT (${playlist.length})`
+                : 'VIDEO ÂM NHẠC (MV)'}
             </span>
           </div>
           <button
@@ -525,6 +871,7 @@ export default function GlobalPlayerBar() {
               e.stopPropagation();
               setShowLyrics(false);
               setShowQueue(false);
+              setShowVideo(false);
             }}
             className="p-1 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
           >
@@ -559,8 +906,13 @@ export default function GlobalPlayerBar() {
             <div className="flex items-center gap-2">
               {showLyrics && <Mic2 className="w-4 h-4 text-white" />}
               {showQueue && <Disc3 className="w-4 h-4 text-white animate-spin-slow" />}
+              {showVideo && <Film className="w-4 h-4 text-white" />}
               <span className="font-cyber font-bold text-xs uppercase tracking-wider text-white">
-                {showLyrics ? 'LỜI BÀI HÁT (LYRICS)' : `DANH SÁCH PHÁT (${playlist.length})`}
+                {showLyrics
+                  ? 'LỜI BÀI HÁT (LYRICS)'
+                  : showQueue
+                  ? `DANH SÁCH PHÁT (${playlist.length})`
+                  : 'VIDEO ÂM NHẠC (MV)'}
               </span>
             </div>
             <button
@@ -568,6 +920,7 @@ export default function GlobalPlayerBar() {
                 e.stopPropagation();
                 setShowLyrics(false);
                 setShowQueue(false);
+                setShowVideo(false);
               }}
               className="p-1.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
               title="Đóng bảng"
@@ -592,15 +945,41 @@ export default function GlobalPlayerBar() {
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
                 <img
-                  src={getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 120, quality: 85 }) || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                  src={
+                    getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 120, quality: 85 }) ||
+                    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'
+                  }
                   alt={currentTrack.title}
-                  className={`w-full h-full object-cover ${isPlaying ? 'animate-spin-slow' : ''}`}
+                  className={`w-full h-full object-cover ${
+                    isPlaying || showVideo ? 'animate-spin-slow' : ''
+                  }`}
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className="text-[11px] sm:text-xs font-extrabold text-white truncate font-cyber uppercase tracking-wide">
-                  {currentTrack.title}
-                </h4>
+                <div className="flex items-center gap-1 truncate">
+                  <h4 className="text-[11px] sm:text-xs font-extrabold text-white truncate font-cyber uppercase tracking-wide">
+                    {currentTrack.title}
+                  </h4>
+                  {currentTrack.video_url && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowVideo((prev) => !prev);
+                        if (!showVideo) {
+                          setShowLyrics(false);
+                          setShowQueue(false);
+                        }
+                      }}
+                      className={`text-[8px] uppercase px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 flex-shrink-0 transition-all ${
+                        showVideo
+                          ? 'bg-white text-black border border-white font-black scale-105'
+                          : 'bg-white/10 text-slate-300 border border-white/20'
+                      }`}
+                    >
+                      <Film className="w-2 h-2" /> MV
+                    </button>
+                  )}
+                </div>
                 <p className="text-[9px] text-slate-400 truncate uppercase font-mono">
                   {currentAlbum?.artist || 'VAULT ARTIST'}
                 </p>
@@ -616,6 +995,7 @@ export default function GlobalPlayerBar() {
                   setShowLyrics(!showLyrics);
                   if (!showLyrics) {
                     setShowQueue(false);
+                    setShowVideo(false);
                   }
                 }}
                 className={`p-1.5 rounded-full border transition-all ${
@@ -666,6 +1046,7 @@ export default function GlobalPlayerBar() {
                   setShowQueue(!showQueue);
                   if (!showQueue) {
                     setShowLyrics(false);
+                    setShowVideo(false);
                   }
                 }}
                 className={`p-1.5 rounded-full border transition-all ${
@@ -687,7 +1068,11 @@ export default function GlobalPlayerBar() {
                 className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
                 title={volume === 0 ? 'Bật âm thanh' : 'Tắt tiếng (Mute)'}
               >
-                {volume === 0 ? <VolumeX className="w-3.5 h-3.5 text-white" /> : <Volume2 className="w-3.5 h-3.5 text-white" />}
+                {volume === 0 ? (
+                  <VolumeX className="w-3.5 h-3.5 text-white" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5 text-white" />
+                )}
               </button>
             </div>
           </div>
@@ -721,9 +1106,14 @@ export default function GlobalPlayerBar() {
           <div className="flex items-center gap-3 min-w-0 flex-shrink-0 max-w-[260px]">
             <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
               <img
-                src={getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 160, quality: 85 }) || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                src={
+                  getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 160, quality: 85 }) ||
+                  'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'
+                }
                 alt={currentTrack.title}
-                className={`w-full h-full object-cover ${isPlaying ? 'animate-spin-slow' : ''}`}
+                className={`w-full h-full object-cover ${
+                  isPlaying || showVideo ? 'animate-spin-slow' : ''
+                }`}
               />
             </div>
             <div className="min-w-0 flex-1">
@@ -731,9 +1121,29 @@ export default function GlobalPlayerBar() {
                 <h4 className="text-[11px] font-extrabold text-white truncate uppercase tracking-wider font-cyber">
                   {currentTrack.title}
                 </h4>
-                <span className="text-[8px] uppercase px-1.5 py-0.5 rounded-full font-bold bg-white/10 text-white border border-white/20 flex items-center gap-0.5 flex-shrink-0">
-                  <Music className="w-2.5 h-2.5" /> AUDIO
-                </span>
+                {currentTrack.video_url ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowVideo((prev) => !prev);
+                      if (!showVideo) {
+                        setShowLyrics(false);
+                        setShowQueue(false);
+                      }
+                    }}
+                    className={`text-[8px] uppercase px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0 transition-all ${
+                      showVideo
+                        ? 'bg-white text-black border border-white font-black scale-105'
+                        : 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+                    }`}
+                  >
+                    <Film className="w-2.5 h-2.5" /> MV
+                  </button>
+                ) : (
+                  <span className="text-[8px] uppercase px-1.5 py-0.5 rounded-full font-bold bg-white/10 text-white border border-white/20 flex items-center gap-0.5 flex-shrink-0">
+                    <Music className="w-2.5 h-2.5" /> AUDIO
+                  </span>
+                )}
               </div>
               <p className="text-[9px] text-slate-400 truncate uppercase font-mono">
                 {currentAlbum?.artist || 'VAULT ARTIST'}
@@ -753,7 +1163,7 @@ export default function GlobalPlayerBar() {
                 max={effectiveDuration || 100}
                 value={currentTime}
                 onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                className="w-full h-2.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-slate-800 shadow-inner hover:bg-slate-700 transition-all"
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-slate-800 shadow-inner"
               />
             </div>
             <span className="text-[11px] font-bold font-mono flex-shrink-0 text-slate-400">
@@ -761,138 +1171,148 @@ export default function GlobalPlayerBar() {
             </span>
           </div>
 
-          {/* Right Column: PLAYBACK & ACTION CONTROLS */}
-          <div className="flex items-center justify-end gap-2 flex-shrink-0 overflow-visible">
-            {/* LYRICS BUTTON */}
+          {/* Right Column: ALL BUTTONS IN 1 HORIZONTAL ROW */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {/* Lyrics Button */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowLyrics(!showLyrics);
                 if (!showLyrics) {
                   setShowQueue(false);
+                  setShowVideo(false);
                 }
               }}
-              className={`px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
+              className={`p-2 rounded-full border transition-all ${
                 showLyrics
-                  ? 'bg-white text-black border-white shadow-lg'
-                  : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
+                  ? 'bg-white text-black border-white shadow-md'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
               }`}
-              title="Lời bài hát (Gothic Lyrics)"
+              title="Lyrics"
             >
-              <Mic2 className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">LYRICS</span>
+              <Mic2 className="w-4 h-4" />
             </button>
 
+            {/* Shuffle Button */}
             <button
               onClick={toggleShuffle}
-              title={shuffleMode ? 'Shuffle: ON' : 'Shuffle: OFF'}
-              className={`p-1.5 transition-colors ${
-                shuffleMode ? 'text-white' : 'text-slate-500 hover:text-white'
+              className={`p-2 rounded-full border transition-all ${
+                shuffleMode
+                  ? 'bg-white text-black border-white shadow-md'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
               }`}
+              title={shuffleMode ? 'Tắt trộn bài' : 'Bật trộn bài'}
             >
-              <Shuffle className="w-3.5 h-3.5" />
+              <Shuffle className="w-4 h-4" />
             </button>
 
+            {/* Repeat Button */}
+            <button
+              onClick={toggleRepeat}
+              className={`p-2 rounded-full border transition-all ${
+                repeatMode !== 'off'
+                  ? 'bg-white text-black border-white shadow-md'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
+              }`}
+              title={
+                repeatMode === 'all'
+                  ? 'Lặp lại tất cả'
+                  : repeatMode === 'one'
+                  ? 'Lặp lại 1 bài'
+                  : 'Không lặp lại'
+              }
+            >
+              {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
+            </button>
+
+            {/* Prev Track Button */}
             <button
               onClick={prevTrack}
-              className="transition-colors p-1 text-slate-400 hover:text-white"
+              className="p-1.5 text-slate-300 hover:text-white transition-colors hover:scale-110 active:scale-95"
               title="Bài trước"
             >
-              <SkipBack className="w-4 h-4 fill-current" />
+              <SkipBack className="w-5 h-5 fill-current" />
             </button>
 
+            {/* Play/Pause Button */}
             <button
               onClick={handleTogglePlay}
-              className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform flex-shrink-0"
+              className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"
               title={isPlaying ? 'Tạm dừng' : 'Phát'}
             >
               {isPlaying ? (
-                <Pause className="w-4 h-4 fill-current" />
+                <Pause className="w-5 h-5 fill-current" />
               ) : (
-                <Play className="w-4 h-4 fill-current ml-0.5" />
+                <Play className="w-5 h-5 fill-current ml-0.5" />
               )}
             </button>
 
+            {/* Next Track Button */}
             <button
               onClick={nextTrack}
-              className="transition-colors p-1 text-slate-400 hover:text-white"
+              className="p-1.5 text-slate-300 hover:text-white transition-colors hover:scale-110 active:scale-95"
               title="Bài kế tiếp"
             >
-              <SkipForward className="w-4 h-4 fill-current" />
+              <SkipForward className="w-5 h-5 fill-current" />
             </button>
 
-            <button
-              onClick={toggleRepeat}
-              title={`Loop: ${repeatMode.toUpperCase()}`}
-              className={`p-1.5 transition-colors ${
-                repeatMode !== 'off' ? 'text-white' : 'text-slate-500 hover:text-white'
-              }`}
-            >
-              {repeatMode === 'one' ? <Repeat1 className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
-            </button>
-
-            {/* QUEUE BUTTON */}
+            {/* Queue List Button */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowQueue(!showQueue);
                 if (!showQueue) {
                   setShowLyrics(false);
+                  setShowVideo(false);
                 }
               }}
-              className={`px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[10px] font-bold ${
+              className={`p-2 rounded-full border transition-all ${
                 showQueue
-                  ? 'bg-white text-black border-white shadow-lg'
-                  : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20 hover:text-white'
+                  ? 'bg-white text-black border-white shadow-md'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
               }`}
-              title="Hàng chờ"
+              title="Danh sách phát"
             >
-              <ListMusic className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">QUEUE</span>
+              <ListMusic className="w-4 h-4" />
             </button>
 
-            {/* SPEAKER WITH ZERO-GAP HOVER & ABSOLUTE TOP Z-INDEX POPUP */}
+            {/* Volume Control Button & Popover */}
             <div
               ref={volumeContainerRef}
-              className="relative flex items-center justify-center ml-1 z-[100]"
+              className="relative flex items-center"
               onMouseEnter={handleVolumeMouseEnter}
               onMouseLeave={handleVolumeMouseLeave}
             >
               <button
-                onClick={() => setShowVolumeSlider((prev) => !prev)}
-                className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
-                title="Điều chỉnh âm lượng"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setVolume(volume === 0 ? 0.8 : 0);
+                }}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-white transition-colors"
+                title={volume === 0 ? 'Bật âm thanh' : 'Tắt tiếng'}
               >
-                {volume === 0 ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+                {volume === 0 ? (
+                  <VolumeX className="w-4 h-4 text-white" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-white" />
+                )}
               </button>
 
-              {/* Popover Volume Slider */}
+              {/* Volume Slider Popover */}
               {showVolumeSlider && (
-                <div
-                  className="absolute bottom-full pb-3 left-1/2 -translate-x-1/2 z-[999999] pointer-events-auto"
-                  onMouseEnter={handleVolumeMouseEnter}
-                  onMouseLeave={handleVolumeMouseLeave}
-                >
-                  <div
-                    className="p-3 border border-white/25 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.98)] flex flex-col items-center gap-2 animate-fadeIn min-w-[50px]"
-                    style={{
-                      background: 'rgba(12, 12, 16, 0.98)',
-                      backdropFilter: 'blur(28px)',
-                    }}
-                  >
-                    <span className="text-[10px] font-mono text-white font-extrabold">{Math.round(volume * 100)}%</span>
-                    <div className="h-24 flex items-center py-1">
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={volume}
-                        onChange={(e) => setVolume(parseFloat(e.target.value))}
-                        className="h-20 w-2 bg-slate-800 rounded-lg appearance-none cursor-pointer [writing-mode:vertical-lr] [direction:rtl]"
-                      />
-                    </div>
-                  </div>
+                <div className="absolute bottom-full right-0 mb-2 p-2.5 bg-[#0c0c10]/95 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl z-50 flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={volume}
+                    onChange={(e) => setVolume(parseFloat(e.target.value))}
+                    className="w-24 h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-slate-800"
+                  />
+                  <span className="text-[10px] font-mono text-slate-300 w-6 text-right">
+                    {Math.round(volume * 100)}%
+                  </span>
                 </div>
               )}
             </div>
