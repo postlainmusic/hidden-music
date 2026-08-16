@@ -958,9 +958,21 @@ export default function AdminPage() {
       let finalLyrics = lyrics.trim();
       let numericOffset = 0;
       if (videoOffsetInput.trim()) {
+        const rawOffset = videoOffsetInput.trim().replace('+', '');
+        if (rawOffset.includes(':')) {
+          const parts = rawOffset.split(':');
+          if (parts.length === 2) {
+            const mins = parseFloat(parts[0]) || 0;
+            const secs = parseFloat(parts[1]) || 0;
+            numericOffset = mins * 60 + secs;
+          } else {
+            numericOffset = parseFloat(rawOffset) || 0;
+          }
+        } else {
+          numericOffset = parseFloat(rawOffset) || 0;
+        }
         finalLyrics = finalLyrics.replace(/^\[(video_offset|music_start):.*?\]\r?\n?/gim, '').trim();
-        finalLyrics = `[video_offset:${videoOffsetInput.trim()}]\n` + finalLyrics;
-        numericOffset = parseFloat(videoOffsetInput.trim().replace('+', '')) || 0;
+        finalLyrics = `[video_offset:${numericOffset}]\n` + finalLyrics;
       }
 
       const trackPayload: Record<string, any> = {
@@ -2062,7 +2074,7 @@ export default function AdminPage() {
                   </div>
 
                   <div className="p-3.5 rounded-2xl bg-black border border-white/10 space-y-2.5 font-mono">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-1.5">
                       <label className="block text-slate-300 font-bold flex items-center gap-1.5 text-xs uppercase">
                         <Clock className="w-3.5 h-3.5 text-yellow-400" /> LỆCH GIÂY VIDEO (VIDEO OFFSET)
                       </label>
@@ -2071,11 +2083,11 @@ export default function AdminPage() {
                         onClick={handleAutoAnalyzeSync}
                         disabled={analyzingSync || (!audioUrlInput && !mediaFile) || (!videoUrlInput && !mediaFile)}
                         className="px-2.5 py-1 rounded-lg bg-yellow-400/15 hover:bg-yellow-400 text-yellow-300 hover:text-black font-extrabold text-[10px] uppercase border border-yellow-400/40 transition-all flex items-center gap-1 shadow-sm disabled:opacity-40"
-                        title="Tự động so khớp dạng sóng âm thanh PCM giữa bản Audio và MV để tính độ lệch thời gian chính xác"
+                        title="Tự động so khớp dấu vân tay âm thanh Acoustic Fingerprinting giữa bản Audio và MV để tính độ lệch Intro chính xác (hỗ trợ intro lên đến 3 phút)"
                       >
                         {analyzingSync ? (
                           <span className="flex items-center gap-1 text-yellow-300 animate-pulse">
-                            <Loader2 className="w-3 h-3 animate-spin" /> ĐANG TÍNH...
+                            <Loader2 className="w-3 h-3 animate-spin" /> ĐANG PHÂN TÍCH...
                           </span>
                         ) : (
                           <>
@@ -2089,24 +2101,85 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        placeholder="vd: +13.78 hoặc -1.2 (khớp âm thanh và hình ảnh)"
+                        placeholder="vd: 01:45 hoặc +105.5s hoặc -1.2s"
                         value={videoOffsetInput}
                         onChange={(e) => setVideoOffsetInput(e.target.value)}
                         className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
                       />
                       {videoOffsetInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVideoOffsetInput('');
-                            setTrackSyncMetadata(null);
-                            setSyncStatusText(null);
-                          }}
-                          className="text-[10px] text-slate-500 hover:text-white px-2 py-1"
-                        >
-                          Xóa
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const raw = videoOffsetInput.trim().replace('+', '');
+                              let sec = 0;
+                              if (raw.includes(':')) {
+                                const p = raw.split(':');
+                                sec = (parseFloat(p[0]) || 0) * 60 + (parseFloat(p[1]) || 0);
+                              } else {
+                                sec = parseFloat(raw) || 0;
+                              }
+                              const newSec = Math.max(0, Math.round((sec - 0.5) * 10) / 10);
+                              setVideoOffsetInput(`+${newSec}`);
+                            }}
+                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded font-bold"
+                            title="Lùi 0.5s"
+                          >
+                            -0.5s
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const raw = videoOffsetInput.trim().replace('+', '');
+                              let sec = 0;
+                              if (raw.includes(':')) {
+                                const p = raw.split(':');
+                                sec = (parseFloat(p[0]) || 0) * 60 + (parseFloat(p[1]) || 0);
+                              } else {
+                                sec = parseFloat(raw) || 0;
+                              }
+                              const newSec = Math.round((sec + 0.5) * 10) / 10;
+                              setVideoOffsetInput(`+${newSec}`);
+                            }}
+                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded font-bold"
+                            title="Tăng 0.5s"
+                          >
+                            +0.5s
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVideoOffsetInput('');
+                              setTrackSyncMetadata(null);
+                              setSyncStatusText(null);
+                            }}
+                            className="text-[10px] text-slate-500 hover:text-white px-2 py-1"
+                          >
+                            Xóa
+                          </button>
+                        </div>
                       )}
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 flex items-center justify-between flex-wrap gap-1">
+                      <span>💡 Nhập dạng <strong>mm:ss</strong> (vd: <code className="text-yellow-400">01:45</code> = 105s) hoặc số giây (<code className="text-yellow-400">+105</code>)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const videoEl = document.querySelector('video') as HTMLVideoElement;
+                          if (videoEl && !isNaN(videoEl.currentTime) && videoEl.currentTime > 0) {
+                            const curTime = Math.round(videoEl.currentTime * 10) / 10;
+                            setVideoOffsetInput(`+${curTime}`);
+                            setStatusMsg({ type: 'success', text: `📍 Đã lấy mốc thời gian từ Video Player: +${curTime}s` });
+                          } else {
+                            setStatusMsg({ type: 'error', text: 'Chưa có Video đang phát ở thanh Player bên dưới!' });
+                          }
+                        }}
+                        className="text-cyan-400 hover:underline flex items-center gap-1 font-bold"
+                        title="Bật video ở thanh player bên dưới, dừng ở đầu đoạn nhạc và bấm nút này để lấy mốc tự động"
+                      >
+                        📍 LẤY MỐC TỪ PLAYER
+                      </button>
                     </div>
 
                     {syncStatusText && (

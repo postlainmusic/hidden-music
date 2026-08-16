@@ -19,9 +19,9 @@ export interface AudioSyncResult {
 }
 
 export interface AudioSyncOptions {
-  maxDurationToAnalyze?: number; // Analyze first N seconds (default: 45s)
+  maxDurationToAnalyze?: number; // Analyze first N seconds (default: 60s)
   downsampleRate?: number; // Standardize sample rate for fast FFT/correlation (default: 2000Hz)
-  maxOffsetSearchSeconds?: number; // Search range: -10s to +50s (default: 50s)
+  maxOffsetSearchSeconds?: number; // Search range: -10s to +180s (default: 180s)
   onProgress?: (percent: number, step: string) => void;
 }
 
@@ -31,7 +31,7 @@ export interface AudioSyncOptions {
 async function decodeAudioArrayBufferToPCM(
   arrayBuffer: ArrayBuffer,
   targetSampleRate: number = 2000,
-  maxDuration: number = 45
+  maxDuration: number = 60
 ): Promise<Float32Array> {
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
   if (!AudioCtx) {
@@ -395,9 +395,9 @@ export async function calculateAudioVideoSync(
   options: AudioSyncOptions = {}
 ): Promise<AudioSyncResult> {
   const {
-    maxDurationToAnalyze = 45,
+    maxDurationToAnalyze = 60,
     downsampleRate = 2000,
-    maxOffsetSearchSeconds = 45,
+    maxOffsetSearchSeconds = 180,
     onProgress,
   } = options;
 
