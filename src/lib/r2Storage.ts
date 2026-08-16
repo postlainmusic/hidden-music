@@ -22,16 +22,13 @@ const crypto = {
         currentData = merged;
         return this;
       },
-      digest(encoding?: 'hex' | 'binary') {
-        // Simple synchronous SHA256/HMAC fallback for client-side bundle
+      digest(encoding?: string): any {
         let hash = 0;
         for (let i = 0; i < currentData.length; i++) {
           hash = (hash << 5) - hash + currentData[i];
           hash |= 0;
         }
-        const hex = Math.abs(hash).toString(16).padStart(64, '0');
-        if (encoding === 'hex') return hex;
-        return new TextEncoder().encode(hex);
+        return Math.abs(hash).toString(16).padStart(64, '0');
       }
     };
   },
@@ -39,6 +36,7 @@ const crypto = {
     return this.createHmac(algorithm, '');
   }
 };
+
 
 
 const R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '5da953b3d1c0e1c733cf2285f8e7ab39';
