@@ -14,6 +14,7 @@ import {
   getStoredUserSession,
   setStoredUserSession,
   getStoredAdminSession,
+  clearAllStoredSessions,
   performLogout
 } from '@/lib/authSession';
 
