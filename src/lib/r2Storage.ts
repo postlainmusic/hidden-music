@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from ' globalThis.crypto';
 import { createClient } from '@/lib/supabase/client';
 import { TrackItem } from '@/types/database';
 
