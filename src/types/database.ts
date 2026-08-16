@@ -42,3 +42,16 @@ export interface TrackItem {
   created_at: string;
 }
 
+// User Feedback / Bug Reports / Suggestions
+export interface FeedbackItem {
+  id: string;
+  user_id?: string | null;
+  user_email: string;
+  user_name?: string | null;
+  content: string;
+  category?: string;
+  status?: 'unread' | 'read' | 'resolved';
+  created_at: string;
+}
+
+

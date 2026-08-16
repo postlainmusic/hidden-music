@@ -26,10 +26,17 @@ import {
   Check,
   ChevronUp,
   ChevronDown,
-  GripVertical
+  GripVertical,
+  MessageSquare,
+  RefreshCw,
+  Clock,
+  Bug,
+  Flame,
+  Music2,
+  HelpCircle
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { MediaType, Album, TrackItem } from '@/types/database';
+import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
 import { extractVideoOffset, formatOffsetString } from '@/lib/lrcParser';
 
@@ -46,10 +53,16 @@ export interface BatchTrackItem {
 }
 
 export default function AdminPage() {
+  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks'>('albums');
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Feedbacks State
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [feedbacksLoading, setFeedbacksLoading] = useState(false);
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'unread' | 'read'>('all');
 
   // Current Opened Album ID (null = Album List view, string = inside Album view)
   const [openedAlbumId, setOpenedAlbumId] = useState<string | null>(null);
@@ -143,9 +156,56 @@ export default function AdminPage() {
     }
   };
 
+  const fetchFeedbacks = async () => {
+    setFeedbacksLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('feedbacks')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setFeedbacks(data as FeedbackItem[]);
+      }
+    } catch (err) {
+      console.warn('Error loading feedbacks:', err);
+    } finally {
+      setFeedbacksLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchSupabaseData();
+    fetchFeedbacks();
   }, []);
+
+  const handleToggleFeedbackStatus = async (id: string, currentStatus: string | undefined) => {
+    const newStatus = currentStatus === 'unread' || !currentStatus ? 'read' : 'unread';
+    try {
+      const supabase = createClient();
+      await supabase.from('feedbacks').update({ status: newStatus }).eq('id', id);
+      setFeedbacks((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, status: newStatus as any } : f))
+      );
+      setStatusMsg({ type: 'success', text: `Đã đổi trạng thái góp ý thành: ${newStatus === 'read' ? 'ĐÃ XEM' : 'CHƯA ĐỌC'}` });
+    } catch (e) {
+      console.error('Error updating feedback status:', e);
+      setStatusMsg({ type: 'error', text: 'Lỗi cập nhật trạng thái góp ý.' });
+    }
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa góp ý này khỏi Supabase không?')) return;
+    try {
+      const supabase = createClient();
+      await supabase.from('feedbacks').delete().eq('id', id);
+      setFeedbacks((prev) => prev.filter((f) => f.id !== id));
+      setStatusMsg({ type: 'success', text: 'Đã xóa góp ý thành công.' });
+    } catch (e) {
+      console.error('Error deleting feedback:', e);
+      setStatusMsg({ type: 'error', text: 'Không thể xóa góp ý.' });
+    }
+  };
 
   const openCreateAlbumModal = () => {
     cancelEditAlbum();
@@ -1093,13 +1153,19 @@ export default function AdminPage() {
   };
 
   const activeAlbum = albums.find((a) => a.id === openedAlbumId);
+  const unreadFeedbacksCount = feedbacks.filter((f) => f.status === 'unread' || !f.status).length;
+  const filteredFeedbacks = feedbacks.filter((fb) => {
+    if (feedbackFilter === 'unread') return fb.status === 'unread' || !fb.status;
+    if (feedbackFilter === 'read') return fb.status === 'read' || fb.status === 'resolved';
+    return true;
+  });
 
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-8 pb-36 sm:pb-40 font-cyber relative">
       <div className="tv-grain-overlay" />
 
       {/* Top Header Navigation */}
-      <div className="max-w-6xl mx-auto flex items-center justify-between mb-8 pb-4 border-b border-white/20 relative z-10">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-4 border-b border-white/20 relative z-10">
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -1108,46 +1174,105 @@ export default function AdminPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-white uppercase tracking-widest font-mono">
+            <h1 className="text-xl md:text-2xl font-extrabold text-white uppercase tracking-widest font-mono flex items-center gap-2">
               SECURE ADMIN PORTAL
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white text-black">MASTER</span>
             </h1>
             <p className="text-xs text-slate-400 font-mono">
-              {openedAlbumId && activeAlbum
+              {adminTab === 'feedbacks'
+                ? `Hộp thư góp ý & Báo lỗi từ thành viên Vault`
+                : openedAlbumId && activeAlbum
                 ? `Browsing Album Archive: ${activeAlbum.title}`
                 : `Supabase Encrypted Albums List`}
             </p>
           </div>
         </div>
 
-        {/* Global Action: Create New Album */}
-        {!openedAlbumId && (
-          <button
-            onClick={openCreateAlbumModal}
-            className="px-4 py-2.5 rounded-xl bg-white text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:bg-slate-200 transition-all flex items-center gap-2"
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span>CREATE NEW ALBUM</span>
-          </button>
-        )}
-      </div>
-
-        {statusMsg && (
-          <div className="max-w-6xl mx-auto mb-6 relative z-10">
-            <div
-              className={`p-4 rounded-xl text-xs flex items-center gap-2 font-mono ${
-                statusMsg.type === 'success'
-                  ? 'bg-white/15 border border-white/40 text-white'
-                  : 'bg-red-950/50 border border-red-500/40 text-red-300'
+        {/* Top Header Mode Tabs & Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-900 border border-white/20">
+            <button
+              onClick={() => {
+                setAdminTab('albums');
+                setStatusMsg(null);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                adminTab === 'albums'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-              <span>{statusMsg.text}</span>
-            </div>
-          </div>
-        )}
+              <Disc3 className="w-3.5 h-3.5" />
+              <span>KHO ALBUM ({albums.length})</span>
+            </button>
 
-        {/* VIEW 1: ALBUM LIST (OUTSIDE VIEW) */}
-        {!openedAlbumId && (
+            <button
+              onClick={() => {
+                setAdminTab('feedbacks');
+                setStatusMsg(null);
+                fetchFeedbacks();
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5 transition-all relative ${
+                adminTab === 'feedbacks'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>HỘP THƯ GÓP Ý</span>
+              {unreadFeedbacksCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-red-600 text-white animate-pulse">
+                  {unreadFeedbacksCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Global Action: Create New Album (Only in albums tab) */}
+          {adminTab === 'albums' && !openedAlbumId && (
+            <button
+              onClick={openCreateAlbumModal}
+              className="px-3.5 py-2 rounded-xl bg-white text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:bg-slate-200 transition-all flex items-center gap-1.5 font-mono"
+            >
+              <FolderPlus className="w-4 h-4" />
+              <span>+ NEW ALBUM</span>
+            </button>
+          )}
+
+          {adminTab === 'feedbacks' && (
+            <button
+              onClick={fetchFeedbacks}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black border border-white/20 transition-all"
+              title="Làm mới hộp thư"
+            >
+              <RefreshCw className={`w-4 h-4 ${feedbacksLoading ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {statusMsg && (
+        <div className="max-w-6xl mx-auto mb-6 relative z-10">
+          <div
+            className={`p-4 rounded-xl text-xs flex items-center gap-2 font-mono ${
+              statusMsg.type === 'success'
+                ? 'bg-white/15 border border-white/40 text-white'
+                : 'bg-red-950/50 border border-red-500/40 text-red-300'
+            }`}
+          >
+            {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+            <span>{statusMsg.text}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 1 & 2: ALBUMS MANAGEMENT TAB                                         */}
+      {/* ========================================================================= */}
+      {adminTab === 'albums' && (
+        <>
+          {/* VIEW 1: ALBUM LIST (OUTSIDE VIEW) */}
+          {!openedAlbumId && (
           <div className="max-w-6xl mx-auto relative z-10 space-y-6 font-mono">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-sm font-bold text-white uppercase flex items-center gap-2">
@@ -1625,6 +1750,152 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+    </>
+  )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 3: USER FEEDBACKS & SUGGESTIONS INBOX                                */}
+      {/* ========================================================================= */}
+      {adminTab === 'feedbacks' && (
+        <div className="max-w-6xl mx-auto relative z-10 space-y-6 font-mono">
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-white" />
+              <h3 className="text-sm font-bold text-white uppercase">
+                DANH SÁCH Ý KIẾN ĐÓNG GÓP ({feedbacks.length})
+              </h3>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex items-center gap-1.5">
+              {(['all', 'unread', 'read'] as const).map((filterType) => (
+                <button
+                  key={filterType}
+                  onClick={() => setFeedbackFilter(filterType)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold uppercase transition-all ${
+                    feedbackFilter === filterType
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-white/10 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {filterType === 'all'
+                    ? `Tất cả (${feedbacks.length})`
+                    : filterType === 'unread'
+                    ? `Chưa đọc (${unreadFeedbacksCount})`
+                    : `Đã xem (${feedbacks.length - unreadFeedbacksCount})`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Feedback List Items */}
+          {feedbacksLoading ? (
+            <div className="text-center py-16 text-xs text-slate-500 flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Đang tải thư góp ý từ Supabase...</span>
+            </div>
+          ) : filteredFeedbacks.length === 0 ? (
+            <div className="text-center py-16 bg-slate-900/40 rounded-3xl border border-white/10 p-8 space-y-3">
+              <MessageSquare className="w-8 h-8 text-slate-600 mx-auto" />
+              <p className="text-xs text-slate-400">
+                {feedbackFilter === 'unread'
+                  ? 'Tuyệt vời! Không còn góp ý nào chưa đọc.'
+                  : 'Chưa có ý kiến đóng góp nào từ người dùng.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredFeedbacks.map((fb) => {
+                const isUnread = fb.status === 'unread' || !fb.status;
+                const categoryLabels: Record<string, { label: string; icon: any; color: string }> = {
+                  feature: { label: 'Tính năng mới', icon: Flame, color: 'text-amber-400 border-amber-500/30 bg-amber-950/20' },
+                  music_request: { label: 'Yêu cầu nhạc/MV', icon: Music2, color: 'text-sky-400 border-sky-500/30 bg-sky-950/20' },
+                  bug: { label: 'Báo lỗi / Bug', icon: Bug, color: 'text-rose-400 border-rose-500/30 bg-rose-950/20' },
+                  other: { label: 'Ý kiến khác', icon: HelpCircle, color: 'text-slate-300 border-white/20 bg-white/5' },
+                };
+                const catInfo = categoryLabels[fb.category || 'other'] || categoryLabels.other;
+                const CatIcon = catInfo.icon;
+
+                return (
+                  <div
+                    key={fb.id}
+                    className={`bw-panel rounded-3xl p-5 border shadow-xl flex flex-col justify-between space-y-4 transition-all ${
+                      isUnread
+                        ? 'border-white/40 bg-slate-900/90 shadow-[0_0_30px_rgba(255,255,255,0.06)]'
+                        : 'border-white/15 bg-black/70 opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      {/* Top Header of Card */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm text-white truncate font-cyber">
+                              {fb.user_name || 'Vault Member'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1 ${catInfo.color}`}>
+                              <CatIcon className="w-2.5 h-2.5" />
+                              <span>{catInfo.label}</span>
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate">{fb.user_email}</p>
+                        </div>
+
+                        {/* Status Badge */}
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider flex-shrink-0 ${
+                            isUnread
+                              ? 'bg-red-500 text-white shadow-sm'
+                              : 'bg-white/20 text-slate-300'
+                          }`}
+                        >
+                          {isUnread ? 'CHƯA ĐỌC' : 'ĐÃ XEM'}
+                        </span>
+                      </div>
+
+                      {/* Content Box */}
+                      <div className="p-3.5 rounded-2xl bg-black/60 border border-white/10 text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
+                        {fb.content}
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                        <Clock className="w-3 h-3" />
+                        <span>{new Date(fb.created_at).toLocaleString('vi-VN')}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleToggleFeedbackStatus(fb.id, fb.status)}
+                          className={`px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${
+                            isUnread
+                              ? 'bg-white text-black hover:bg-slate-200'
+                              : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                          }`}
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>{isUnread ? 'ĐÁNH DẤU ĐÃ XEM' : 'CHƯA ĐỌC'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteFeedback(fb.id)}
+                          className="p-1.5 rounded-xl bg-red-950/50 hover:bg-red-900 text-red-400 hover:text-white border border-red-500/30 transition-colors"
+                          title="Xóa góp ý"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

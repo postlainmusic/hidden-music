@@ -65,3 +65,20 @@ CREATE POLICY "Open Video Objects" ON storage.objects FOR ALL USING (bucket_id I
 
 DROP POLICY IF EXISTS "Open Cover Arts Objects" ON storage.objects;
 CREATE POLICY "Open Cover Arts Objects" ON storage.objects FOR ALL USING (bucket_id = 'cover-arts') WITH CHECK (bucket_id = 'cover-arts');
+
+-- 5. User Feedback & Suggestions Table
+CREATE TABLE IF NOT EXISTS public.feedbacks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT,
+  user_email TEXT NOT NULL,
+  user_name TEXT,
+  category TEXT DEFAULT 'general',
+  content TEXT NOT NULL,
+  status TEXT DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'resolved')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.feedbacks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Open access feedbacks" ON public.feedbacks;
+CREATE POLICY "Open access feedbacks" ON public.feedbacks FOR ALL USING (true) WITH CHECK (true);
+
