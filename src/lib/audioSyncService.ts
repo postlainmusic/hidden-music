@@ -99,7 +99,9 @@ function findBoxRecursive(data: DataView, start: number, end: number, targetPath
       if (targetPath.length === 1) {
         return box;
       }
-      const found = findBoxRecursive(data, box.dataStart, box.start + box.size, targetPath.slice(1));
+      // stsd has 8 bytes of FullBox header (version + flags (4) + entry_count (4))
+      const childStart = box.type === 'stsd' ? box.dataStart + 8 : box.dataStart;
+      const found = findBoxRecursive(data, childStart, box.start + box.size, targetPath.slice(1));
       if (found) return found;
     }
   }
@@ -112,14 +114,17 @@ function findBoxRecursive(data: DataView, start: number, end: number, targetPath
  * Extracts raw AAC audio packets from MP4 file buffer and wraps them in ADTS frames.
  * Returns valid .aac ArrayBuffer decodable by AudioContext.decodeAudioData() in 100ms.
  */
-function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 45): ArrayBuffer | null {
+function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 60): ArrayBuffer | null {
   try {
     const data = new DataView(mp4Buffer);
     const totalLength = mp4Buffer.byteLength;
 
     const rootBoxes = findBoxes(data, 0, totalLength);
     const moov = rootBoxes.find((b) => b.type === 'moov');
-    if (!moov) return null;
+    if (!moov) {
+      console.warn('[AudioSync] moov box not found in MP4');
+      return null;
+    }
 
     const traks = findBoxes(data, moov.dataStart, moov.start + moov.size).filter((b) => b.type === 'trak');
 
@@ -140,18 +145,23 @@ function demuxMp4ToAdtsAAC(mp4Buffer: ArrayBuffer, maxDurationSeconds: number = 
         if (hdlrType === 'soun') {
           audioTrakBox = trak;
 
-          // Parse audio sample description
+          // Parse audio sample description in stsd
           const mp4a = findBoxRecursive(data, trak.dataStart, trakEnd, ['mdia', 'minf', 'stbl', 'stsd', 'mp4a']);
           if (mp4a) {
             channelCount = data.getUint16(mp4a.dataStart + 16) || 2;
-            sampleRate = data.getUint32(mp4a.dataStart + 24) || 44100;
+            sampleRate = data.getUint16(mp4a.dataStart + 24) || 44100;
           }
           break;
         }
       }
     }
 
-    if (!audioTrakBox) return null;
+    if (!audioTrakBox) {
+      console.warn('[AudioSync] No audio trak found in moov');
+      return null;
+    }
+
+    console.log('[AudioSync] Found sound track. SampleRate:', sampleRate, 'Channels:', channelCount);
 
     const audioEnd = audioTrakBox.start + audioTrakBox.size;
     const stbl = findBoxRecursive(data, audioTrakBox.dataStart, audioEnd, ['mdia', 'minf', 'stbl']);
