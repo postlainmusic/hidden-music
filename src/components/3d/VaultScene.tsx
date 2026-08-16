@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Shuffle, Disc3 } from 'lucide-react';
+import { Play, Pause, Shuffle, Disc3, Music, MessageSquare } from 'lucide-react';
 import { Album, TrackItem } from '@/types/database';
+import AlbumComments from '@/components/ui/AlbumComments';
 
 interface VaultSceneProps {
   albums: Album[];
@@ -48,10 +49,17 @@ export default function VaultScene({
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [mouseOffset, setMouseOffset] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
+  const [albumTab, setAlbumTab] = useState<'tracks' | 'comments'>('tracks');
+  const [commentsCount, setCommentsCount] = useState(0);
   const touchStartY = useRef(0);
   const lastScrollTime = useRef(0);
 
   const isDetail = viewMode === 'album';
+
+  // Reset tab to tracks when changing album
+  useEffect(() => {
+    setAlbumTab('tracks');
+  }, [selectedAlbum?.id, viewMode]);
 
   // Sync index if selectedAlbum is provided externally
   useEffect(() => {
@@ -319,43 +327,58 @@ export default function VaultScene({
 
           {/* Action Buttons Deck (Fades in below album in Detail Mode) */}
           <div
-            className={`w-full max-w-[280px] flex items-center gap-2 mt-1 transition-all duration-500 ease-out ${
+            className={`w-full max-w-[280px] flex flex-col items-center gap-2 mt-1 transition-all duration-500 ease-out ${
               isDetail
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
                 : 'opacity-0 translate-y-4 pointer-events-none'
             }`}
           >
-            <button
-              onClick={() => {
-                if (handlePlayAlbum) handlePlayAlbum();
-              }}
-              className="flex-1 py-2 sm:py-2.5 px-4 rounded-full bg-white hover:bg-slate-100 text-black font-black font-mono text-xs uppercase tracking-wider shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5"
-            >
-              {isCurrentPlayingThisAlbum && isPlaying ? (
-                <>
-                  <Pause className="w-3.5 h-3.5 fill-current" />
-                  <span>PAUSE</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>PLAY ALL</span>
-                </>
-              )}
-            </button>
+            <div className="w-full flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (handlePlayAlbum) handlePlayAlbum();
+                }}
+                className="flex-1 py-2 sm:py-2.5 px-4 rounded-full bg-white hover:bg-slate-100 text-black font-black font-mono text-xs uppercase tracking-wider shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                {isCurrentPlayingThisAlbum && isPlaying ? (
+                  <>
+                    <Pause className="w-3.5 h-3.5 fill-current" />
+                    <span>PAUSE</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>PLAY ALL</span>
+                  </>
+                )}
+              </button>
 
+              <button
+                onClick={() => {
+                  if (handleShufflePlay) handleShufflePlay();
+                }}
+                title={shuffleMode ? 'Tắt trộn bài' : 'Phát ngẫu nhiên'}
+                className={`p-2 sm:p-2.5 rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
+                  shuffleMode
+                    ? 'bg-white text-black border-white shadow-lg'
+                    : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+                }`}
+              >
+                <Shuffle className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Comment Tab Switcher Button */}
             <button
-              onClick={() => {
-                if (handleShufflePlay) handleShufflePlay();
-              }}
-              title={shuffleMode ? 'Tắt trộn bài' : 'Phát ngẫu nhiên'}
-              className={`p-2 sm:p-2.5 rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
-                shuffleMode
-                  ? 'bg-white text-black border-white shadow-lg'
-                  : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+              onClick={() => setAlbumTab((prev) => (prev === 'comments' ? 'tracks' : 'comments'))}
+              className={`w-full py-1.5 px-3 rounded-full text-[11px] font-mono font-bold uppercase transition-all flex items-center justify-center gap-1.5 border shadow-sm ${
+                albumTab === 'comments'
+                  ? 'bg-white text-black border-white shadow-md'
+                  : 'bg-white/5 hover:bg-white/15 text-slate-300 border-white/15'
               }`}
             >
-              <Shuffle className="w-4 h-4" />
+              <MessageSquare className="w-3 h-3" />
+              <span>{albumTab === 'comments' ? 'XEM BÀI HÁT' : `THẢO LUẬN / BÌNH LUẬN ${commentsCount > 0 ? `(${commentsCount})` : ''}`}</span>
             </button>
           </div>
 
@@ -381,7 +404,7 @@ export default function VaultScene({
         </div>
 
         {/* ========================================================================= */}
-        {/* 3. RIGHT COLUMN: PLAYLIST PANEL (DESKTOP ABSOLUTE BALANCED CENTER)        */}
+        {/* 3. RIGHT COLUMN: PLAYLIST & COMMENTS PANEL (DESKTOP)                      */}
         {/* ========================================================================= */}
         <div
           className={`hidden lg:flex absolute z-10 w-[500px] xl:w-[560px] h-[460px] xl:h-[500px] max-h-[70vh] flex-col font-mono transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
@@ -394,16 +417,176 @@ export default function VaultScene({
           }}
         >
           <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl">
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {tracks.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                  <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
-                  <p className="text-xs uppercase tracking-widest font-mono">
-                    NO TRACKS IN THIS ARCHIVE
-                  </p>
-                </div>
-              ) : (
-                tracks.map((track, idx) => {
+            {/* Top Tab Bar: Tracklist vs Comments */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2 px-1 flex-shrink-0">
+              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/60 border border-white/15">
+                <button
+                  onClick={() => setAlbumTab('tracks')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+                    albumTab === 'tracks'
+                      ? 'bg-white text-black shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Music className="w-3 h-3" />
+                  <span>TRACKLIST ({tracks.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setAlbumTab('comments')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${
+                    albumTab === 'comments'
+                      ? 'bg-white text-black shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  <span>BÌNH LUẬN</span>
+                  {commentsCount > 0 && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
+                      albumTab === 'comments' ? 'bg-black text-white' : 'bg-white/20 text-white'
+                    }`}>
+                      {commentsCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Content: Tracklist or Comments */}
+            {albumTab === 'tracks' ? (
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {tracks.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
+                    <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
+                    <p className="text-xs uppercase tracking-widest font-mono">
+                      NO TRACKS IN THIS ARCHIVE
+                    </p>
+                  </div>
+                ) : (
+                  tracks.map((track, idx) => {
+                    const isCurrentPlaying = currentTrack?.id === track.id;
+                    const trackIndex = String(idx + 1).padStart(2, '0');
+
+                    return (
+                      <div
+                        key={track.id}
+                        onClick={() => {
+                          if (setSelectedTrack) setSelectedTrack(track);
+                          if (playTrack) playTrack(track, activeAlbum, tracks);
+                        }}
+                        className={`group relative h-13 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                          isCurrentPlaying
+                            ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
+                            : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-3">
+                          <div className="w-6 flex items-center justify-center flex-shrink-0">
+                            {isCurrentPlaying && isPlaying ? (
+                              <div className="flex items-end gap-[2px] h-3.5">
+                                <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '70%', animationDelay: '0ms' }} />
+                                <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
+                                <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '85%', animationDelay: '300ms' }} />
+                              </div>
+                            ) : (
+                              <>
+                                <span className={`text-xs font-mono font-bold group-hover:hidden ${
+                                  isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
+                                }`}>
+                                  {trackIndex}
+                                </span>
+                                <Play className="w-3.5 h-3.5 fill-white text-white hidden group-hover:block transition-all" />
+                              </>
+                            )}
+                          </div>
+
+                          <span className={`truncate text-xs sm:text-sm font-cyber tracking-wide ${
+                            isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
+                          }`}>
+                            {track.title}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                          {track.video_url && (
+                            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
+                              MV
+                            </span>
+                          )}
+
+                          <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
+                            isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
+                          }`}>
+                            {formatDuration(track.duration)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <AlbumComments
+                  albumId={activeAlbum.id}
+                  albumTitle={activeAlbum.title}
+                  onCommentsCountChange={setCommentsCount}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MOBILE PLAYLIST & COMMENTS (Rendered below on small screens) */}
+        <div
+          className={`lg:hidden w-full max-w-md h-[290px] xs:h-[320px] sm:h-[360px] flex flex-col font-mono transition-all duration-500 will-change-transform z-10 mt-2 ${
+            isDetail
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-6 pointer-events-none hidden'
+          }`}
+        >
+          <div className="dark-neumorph-card p-2 sm:p-3 h-full flex flex-col w-full overflow-hidden shadow-2xl">
+            {/* Mobile Top Tab Bar */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-1.5 px-1 flex-shrink-0">
+              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/60 border border-white/15">
+                <button
+                  onClick={() => setAlbumTab('tracks')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-all flex items-center gap-1 ${
+                    albumTab === 'tracks'
+                      ? 'bg-white text-black shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Music className="w-2.5 h-2.5" />
+                  <span>TRACKLIST ({tracks.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setAlbumTab('comments')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-all flex items-center gap-1 ${
+                    albumTab === 'comments'
+                      ? 'bg-white text-black shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-2.5 h-2.5" />
+                  <span>BÌNH LUẬN</span>
+                  {commentsCount > 0 && (
+                    <span className={`px-1.5 py-0.1 rounded-full text-[8px] font-extrabold ${
+                      albumTab === 'comments' ? 'bg-black text-white' : 'bg-white/20 text-white'
+                    }`}>
+                      {commentsCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Content */}
+            {albumTab === 'tracks' ? (
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {tracks.map((track, idx) => {
                   const isCurrentPlaying = currentTrack?.id === track.id;
                   const trackIndex = String(idx + 1).padStart(2, '0');
 
@@ -414,110 +597,44 @@ export default function VaultScene({
                         if (setSelectedTrack) setSelectedTrack(track);
                         if (playTrack) playTrack(track, activeAlbum, tracks);
                       }}
-                      className={`group relative h-13 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                      className={`group relative h-12 px-3 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
                         isCurrentPlaying
-                          ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
-                          : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
+                          ? 'bg-white/[0.10] border-white/25'
+                          : 'bg-transparent hover:bg-white/[0.04] border-transparent'
                       }`}
                     >
-                      <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-3">
-                        <div className="w-6 flex items-center justify-center flex-shrink-0">
-                          {isCurrentPlaying && isPlaying ? (
-                            <div className="flex items-end gap-[2px] h-3.5">
-                              <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '70%', animationDelay: '0ms' }} />
-                              <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
-                              <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '85%', animationDelay: '300ms' }} />
-                            </div>
-                          ) : (
-                            <>
-                              <span className={`text-xs font-mono font-bold group-hover:hidden ${
-                                isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
-                              }`}>
-                                {trackIndex}
-                              </span>
-                              <Play className="w-3.5 h-3.5 fill-white text-white hidden group-hover:block transition-all" />
-                            </>
-                          )}
-                        </div>
-
-                        <span className={`truncate text-xs sm:text-sm font-cyber tracking-wide ${
-                          isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
-                        }`}>
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <span className={`text-xs font-mono font-bold ${isCurrentPlaying ? 'text-white' : 'text-slate-500'}`}>
+                          {trackIndex}
+                        </span>
+                        <span className={`truncate text-xs font-cyber ${isCurrentPlaying ? 'text-white font-black' : 'text-slate-300'}`}>
                           {track.title}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         {track.video_url && (
-                          <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
+                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
                             MV
                           </span>
                         )}
-
-                        <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
-                          isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
-                        }`}>
+                        <span className="text-[10px] font-mono text-slate-500">
                           {formatDuration(track.duration)}
                         </span>
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* MOBILE PLAYLIST (Rendered below on small screens) */}
-        <div
-          className={`lg:hidden w-full max-w-md h-[260px] xs:h-[300px] sm:h-[340px] flex flex-col font-mono transition-all duration-500 will-change-transform z-10 mt-2 ${
-            isDetail
-              ? 'opacity-100 translate-y-0 pointer-events-auto'
-              : 'opacity-0 translate-y-6 pointer-events-none hidden'
-          }`}
-        >
-          <div className="dark-neumorph-card p-2 sm:p-3 h-full flex flex-col w-full overflow-hidden shadow-2xl">
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {tracks.map((track, idx) => {
-                const isCurrentPlaying = currentTrack?.id === track.id;
-                const trackIndex = String(idx + 1).padStart(2, '0');
-
-                return (
-                  <div
-                    key={track.id}
-                    onClick={() => {
-                      if (setSelectedTrack) setSelectedTrack(track);
-                      if (playTrack) playTrack(track, activeAlbum, tracks);
-                    }}
-                    className={`group relative h-12 px-3 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
-                      isCurrentPlaying
-                        ? 'bg-white/[0.10] border-white/25'
-                        : 'bg-transparent hover:bg-white/[0.04] border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                      <span className={`text-xs font-mono font-bold ${isCurrentPlaying ? 'text-white' : 'text-slate-500'}`}>
-                        {trackIndex}
-                      </span>
-                      <span className={`truncate text-xs font-cyber ${isCurrentPlaying ? 'text-white font-black' : 'text-slate-300'}`}>
-                        {track.title}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {track.video_url && (
-                        <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
-                          MV
-                        </span>
-                      )}
-                      <span className="text-[10px] font-mono text-slate-500">
-                        {formatDuration(track.duration)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                })}
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <AlbumComments
+                  albumId={activeAlbum.id}
+                  albumTitle={activeAlbum.title}
+                  onCommentsCountChange={setCommentsCount}
+                />
+              </div>
+            )}
           </div>
         </div>
 

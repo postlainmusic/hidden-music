@@ -54,4 +54,21 @@ export interface FeedbackItem {
   created_at: string;
 }
 
+// User Album Comments & Discussions
+export interface AlbumCommentItem {
+  id: string;
+  album_id: string;
+  user_id?: string | null;
+  user_email: string;
+  user_name: string;
+  user_avatar?: string | null;
+  content: string;
+  likes_count: number;
+  is_pinned?: boolean;
+  role?: 'admin' | 'user';
+  created_at: string;
+  updated_at?: string;
+}
+
+
 

@@ -82,3 +82,26 @@ ALTER TABLE public.feedbacks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Open access feedbacks" ON public.feedbacks;
 CREATE POLICY "Open access feedbacks" ON public.feedbacks FOR ALL USING (true) WITH CHECK (true);
 
+-- 6. Album Comments & Community Discussions Table
+CREATE TABLE IF NOT EXISTS public.album_comments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  album_id UUID NOT NULL REFERENCES public.albums(id) ON DELETE CASCADE,
+  user_id TEXT,
+  user_email TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  user_avatar TEXT,
+  content TEXT NOT NULL,
+  likes_count INT DEFAULT 0,
+  is_pinned BOOLEAN DEFAULT false,
+  role TEXT DEFAULT 'user',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.album_comments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Open access album_comments" ON public.album_comments;
+CREATE POLICY "Open access album_comments" ON public.album_comments FOR ALL USING (true) WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_album_comments_album_id ON public.album_comments(album_id);
+
+
