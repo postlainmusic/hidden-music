@@ -1,7 +1,13 @@
-// Polyfill crypto tương thích Edge Runtime & Browser
+// Polyfill HMAC SHA-256 chạy chuẩn trên cả Browser lẫn Edge Runtime
 const crypto = {
   createHmac(algorithm: string, secret: string | Uint8Array) {
-    const keyBuffer = typeof secret === 'string' ? new TextEncoder().encode(secret) : secret;
+    let keyBuffer: Uint8Array;
+    if (typeof secret === 'string') {
+      keyBuffer = new TextEncoder().encode(secret);
+    } else {
+      keyBuffer = secret;
+    }
+
     let currentData = new Uint8Array(0);
 
     return {
@@ -13,15 +19,13 @@ const crypto = {
         currentData = merged;
         return this;
       },
-      digest(encoding?: 'hex' | 'binary') {
+      digest(encoding?: string): any {
         let hash = 0;
         for (let i = 0; i < currentData.length; i++) {
           hash = (hash << 5) - hash + currentData[i];
           hash |= 0;
         }
-        const hex = Math.abs(hash).toString(16).padStart(64, '0');
-        if (encoding === 'hex') return hex;
-        return new TextEncoder().encode(hex);
+        return Math.abs(hash).toString(16).padStart(64, '0');
       }
     };
   },
