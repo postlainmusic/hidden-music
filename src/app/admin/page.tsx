@@ -586,17 +586,18 @@ export default function AdminPage() {
     const audioSource =
       mediaFile && (mediaType === 'audio' || mediaFile.type.startsWith('audio/'))
         ? mediaFile
-        : audioUrlInput.trim();
+        : audioUrlInput.trim() || (mediaType === 'audio' ? mediaUrlInput.trim() : '');
     const videoSource =
       mediaFile && (mediaType === 'video' || mediaFile.type.startsWith('video/'))
         ? mediaFile
-        : videoUrlInput.trim();
+        : videoUrlInput.trim() || (mediaType === 'video' ? mediaUrlInput.trim() : '');
 
     if (!audioSource || !videoSource) {
       setStatusMsg({
         type: 'error',
         text: 'Vui lòng cung cấp cả Tệp/URL Audio và Tệp/URL Video trước khi chạy phân tích đồng bộ!',
       });
+      setSyncStatusText('⚠️ Thiếu nguồn Audio hoặc Video.');
       return;
     }
 
@@ -619,15 +620,16 @@ export default function AdminPage() {
         text: `🎉 ${result.message}`,
       });
       setSyncStatusText(
-        `Đã tìm thấy offset: ${formattedOffset}s (Độ tin cậy: ${(result.confidence * 100).toFixed(1)}%)`
+        `✅ Đã tìm thấy offset: ${formattedOffset}s (Độ tin cậy: ${(result.confidence * 100).toFixed(0)}%)`
       );
     } catch (err: any) {
       console.error('Auto sync error:', err);
+      const errMsg = err.message || 'Không thể giải mã luồng âm thanh từ video.';
       setStatusMsg({
         type: 'error',
-        text: `Lỗi phân tích đồng bộ: ${err.message || 'Không thể đọc luồng âm thanh.'}`,
+        text: `Lỗi phân tích đồng bộ: ${errMsg}`,
       });
-      setSyncStatusText(null);
+      setSyncStatusText(`❌ Lỗi phân tích: ${errMsg}`);
     } finally {
       setAnalyzingSync(false);
     }
