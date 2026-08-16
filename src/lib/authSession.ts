@@ -94,11 +94,10 @@ export function setStoredUserSession(user: any) {
 export function getStoredAdminSession(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    return (
-      localStorage.getItem(ADMIN_SESSION_KEY) === 'true' ||
-      sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true' ||
-      document.cookie.includes('hidden_vault_admin=true')
-    );
+    const hasLocal = localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+    const hasSession = sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+    const hasCookie = document.cookie.split(';').some((c) => c.trim().startsWith('hidden_vault_admin=true'));
+    return hasLocal || hasSession || hasCookie;
   } catch {
     return false;
   }
@@ -136,7 +135,7 @@ export function hasActiveSession(): boolean {
 export function clearAllStoredSessions() {
   if (typeof window === 'undefined') return;
   try {
-    // 1. Remove all hidden_vault keys from localStorage
+    // 1. Remove all keys from localStorage
     localStorage.removeItem(USER_SESSION_KEY);
     localStorage.removeItem(ADMIN_SESSION_KEY);
     localStorage.removeItem('hidden_vault_player_state');
@@ -144,7 +143,7 @@ export function clearAllStoredSessions() {
     localStorage.removeItem('hidden_vault_custom_name');
     localStorage.removeItem('hidden_music_player_state');
 
-    // 2. Remove all Supabase auth keys from localStorage
+    // Remove all sb-* and hidden_vault keys
     Object.keys(localStorage).forEach((key) => {
       if (
         key.startsWith('sb-') ||
@@ -156,22 +155,43 @@ export function clearAllStoredSessions() {
       }
     });
 
-    // 3. Clear all sessionStorage
+    // 2. Clear sessionStorage completely
     sessionStorage.clear();
 
-    // 4. Clear all auth cookies
-    const allCookies = document.cookie.split(';');
-    for (const c of allCookies) {
-      const name = c.trim().split('=')[0];
-      if (name) {
-        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
-        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-      }
-    }
+    // 3. Clear all cookies with every combination of path and domain
+    const host = window.location.hostname;
+    const domains = ['', host, '.' + host];
+    const paths = ['/', ''];
 
-    // 5. Notify all listeners
+    const cookieNames = [
+      'hidden_vault_session',
+      'hidden_vault_admin',
+      'sb-access-token',
+      'sb-refresh-token',
+      'hidden_vault_custom_name',
+    ];
+
+    document.cookie.split(';').forEach((c) => {
+      const name = c.trim().split('=')[0];
+      if (name && !cookieNames.includes(name)) {
+        cookieNames.push(name);
+      }
+    });
+
+    cookieNames.forEach((name) => {
+      domains.forEach((dom) => {
+        paths.forEach((p) => {
+          const domStr = dom ? ` domain=${dom};` : '';
+          const pathStr = p ? ` path=${p};` : '';
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;${pathStr}${domStr} SameSite=Lax`;
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;${pathStr}${domStr}`;
+        });
+      });
+    });
+
+    // 4. Fire event
     window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: null }));
+    window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: null }));
   } catch (err) {
     console.warn('Error clearing sessions:', err);
   }
@@ -180,6 +200,10 @@ export function clearAllStoredSessions() {
 // Global Clean Unified Logout
 export async function performLogout() {
   try {
+    // 1. Call server-side cookie cleanup
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+
+    // 2. Supabase signOut
     const supabase = createClient();
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
@@ -188,7 +212,7 @@ export async function performLogout() {
   } finally {
     clearAllStoredSessions();
     if (typeof window !== 'undefined') {
-      window.location.href = '/';
+      window.location.replace('/');
     }
   }
 }
@@ -206,7 +230,7 @@ if (typeof window !== 'undefined') {
       clearAllStoredSessions();
       localStorage.clear();
       sessionStorage.clear();
-      window.location.href = '/';
+      window.location.replace('/');
     }
   });
 }
