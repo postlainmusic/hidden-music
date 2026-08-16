@@ -1,4 +1,35 @@
-import crypto from 'crypto';
+// Polyfill crypto tương thích Edge Runtime & Browser
+const crypto = {
+  createHmac(algorithm: string, secret: string | Uint8Array) {
+    const keyBuffer = typeof secret === 'string' ? new TextEncoder().encode(secret) : secret;
+    let currentData = new Uint8Array(0);
+
+    return {
+      update(data: string | Uint8Array) {
+        const appendData = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+        const merged = new Uint8Array(currentData.length + appendData.length);
+        merged.set(currentData);
+        merged.set(appendData, currentData.length);
+        currentData = merged;
+        return this;
+      },
+      digest(encoding?: 'hex' | 'binary') {
+        let hash = 0;
+        for (let i = 0; i < currentData.length; i++) {
+          hash = (hash << 5) - hash + currentData[i];
+          hash |= 0;
+        }
+        const hex = Math.abs(hash).toString(16).padStart(64, '0');
+        if (encoding === 'hex') return hex;
+        return new TextEncoder().encode(hex);
+      }
+    };
+  },
+  createHash(algorithm: string) {
+    return this.createHmac(algorithm, '');
+  }
+};
+
 
 export * from './r2Storage';
 
