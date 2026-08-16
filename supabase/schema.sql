@@ -1,4 +1,4 @@
--- ========================================================
+TEXT-- ========================================================
 -- HIDDEN MUSIC VAULT - SUPABASE DATABASE SCHEMA FIX
 -- Copy and run this script in Supabase SQL Editor
 -- ========================================================
@@ -41,10 +41,16 @@ CREATE TABLE IF NOT EXISTS public.tracks (
   media_type TEXT DEFAULT 'audio' CHECK (media_type IN ('audio', 'video')),
   audio_url TEXT DEFAULT '',
   video_url TEXT DEFAULT '',
+  video_offset FLOAT DEFAULT 0,
+  sync_metadata JSONB DEFAULT '{}'::jsonb,
   lyrics TEXT,
   duration NUMERIC(6, 2) DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration safety: ensure columns exist if table was already created
+ALTER TABLE public.tracks ADD COLUMN IF NOT EXISTS video_offset FLOAT DEFAULT 0;
+ALTER TABLE public.tracks ADD COLUMN IF NOT EXISTS sync_metadata JSONB DEFAULT '{}'::jsonb;
 
 ALTER TABLE public.tracks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Open access tracks" ON public.tracks;

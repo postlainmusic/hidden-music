@@ -179,8 +179,17 @@ export default function GlobalPlayerBar() {
   };
 
   const videoOffset = useMemo(() => {
+    // 1. Prioritize direct database column video_offset
+    if (
+      currentTrack?.video_offset !== undefined &&
+      currentTrack?.video_offset !== null &&
+      !isNaN(Number(currentTrack.video_offset))
+    ) {
+      return Number(currentTrack.video_offset);
+    }
+    // 2. Fallback to LRC header [video_offset:...]
     return extractVideoOffset(currentTrack?.lyrics || '');
-  }, [currentTrack?.lyrics]);
+  }, [currentTrack?.video_offset, currentTrack?.lyrics]);
 
   const songDuration = useMemo(() => {
     return currentTrack?.duration && currentTrack.duration > 0 ? currentTrack.duration : 180;
@@ -601,6 +610,24 @@ export default function GlobalPlayerBar() {
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">{isFullscreen ? 'EXIT FULL' : 'FULLSCREEN'}</span>
             </button>
+
+            {/* Smart Skip Intro Button (If video has an intro offset > 3 seconds) */}
+            {videoOffset > 3 && currentTime < 10 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSeek(0);
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = videoOffset;
+                  }
+                }}
+                className="absolute top-12 sm:top-14 left-2.5 sm:left-3 z-40 px-3 py-1.5 rounded-xl bg-black/90 hover:bg-white hover:text-black text-white text-[10px] sm:text-[11px] font-extrabold font-mono border border-white/30 backdrop-blur-md shadow-2xl transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                title="Bỏ qua phần giới thiệu / intro và nhảy vào bài hát"
+              >
+                <span>⏭ BỎ QUA INTRO</span>
+                <span className="text-[9px] opacity-70">({videoOffset > 0 ? `+${videoOffset}s` : `${videoOffset}s`})</span>
+              </button>
+            )}
 
             {/* Subtitle Overlay with Live Beat Sync */}
             {parsedLyrics.length > 0 && activeLyricIdx >= 0 && parsedLyrics[activeLyricIdx]?.text && (

@@ -26,6 +26,16 @@ export interface Album {
   tracks?: TrackItem[];
 }
 
+export interface SyncMetadata {
+  intro_duration?: number;
+  outro_start?: number;
+  confidence_score?: number;
+  sample_rate?: number;
+  analyzed_at?: string;
+  method?: 'cross_correlation' | 'energy_envelope' | 'manual';
+  notes?: string;
+}
+
 // Track / MV Item inside an Album Folder
 export interface TrackItem {
   id: string;
@@ -35,6 +45,8 @@ export interface TrackItem {
   media_type: MediaType;
   audio_url: string;
   video_url?: string;
+  video_offset?: number; // Offset in seconds (e.g. 13.78s)
+  sync_metadata?: SyncMetadata | string | null;
   cover_url?: string;
   original_year?: number;
   lyrics?: string;

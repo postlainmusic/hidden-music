@@ -46,6 +46,7 @@ import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
 import { extractVideoOffset, formatOffsetString } from '@/lib/lrcParser';
 import { getStoredAdminSession, setStoredAdminSession, getStoredUserSession } from '@/lib/authSession';
+import { calculateAudioVideoSync, AudioSyncResult } from '@/lib/audioSyncService';
 
 export interface BatchTrackItem {
   id: string;
@@ -133,6 +134,9 @@ export default function AdminPage() {
   const [videoUrlInput, setVideoUrlInput] = useState('');
   const [lyrics, setLyrics] = useState('');
   const [videoOffsetInput, setVideoOffsetInput] = useState('');
+  const [analyzingSync, setAnalyzingSync] = useState(false);
+  const [syncStatusText, setSyncStatusText] = useState<string | null>(null);
+  const [trackSyncMetadata, setTrackSyncMetadata] = useState<any>(null);
 
   // UUID Validator Regex
   const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -552,8 +556,13 @@ export default function AdminPage() {
     setVideoUrlInput(track.video_url || '');
     setMediaUrlInput(track.audio_url || track.video_url || '');
     setLyrics(track.lyrics || '');
-    const offsetSecs = extractVideoOffset(track.lyrics || '');
-    setVideoOffsetInput(offsetSecs > 0 ? formatOffsetString(offsetSecs) : '');
+    const offsetSecs =
+      track.video_offset !== undefined && track.video_offset !== null
+        ? Number(track.video_offset)
+        : extractVideoOffset(track.lyrics || '');
+    setVideoOffsetInput(offsetSecs !== 0 ? (offsetSecs > 0 ? `+${offsetSecs}` : `${offsetSecs}`) : '');
+    setTrackSyncMetadata(track.sync_metadata || null);
+    setSyncStatusText(null);
   };
 
   const cancelEditTrack = () => {
@@ -568,6 +577,60 @@ export default function AdminPage() {
     setAutoMetadata(null);
     setTrackDuration(200);
     setBatchTracks([]);
+    setTrackSyncMetadata(null);
+    setSyncStatusText(null);
+  };
+
+  // Automatic Audio-Video Waveform Fingerprinting & Cross-Correlation Synchronizer
+  const handleAutoAnalyzeSync = async () => {
+    const audioSource =
+      mediaFile && (mediaType === 'audio' || mediaFile.type.startsWith('audio/'))
+        ? mediaFile
+        : audioUrlInput.trim();
+    const videoSource =
+      mediaFile && (mediaType === 'video' || mediaFile.type.startsWith('video/'))
+        ? mediaFile
+        : videoUrlInput.trim();
+
+    if (!audioSource || !videoSource) {
+      setStatusMsg({
+        type: 'error',
+        text: 'Vui lòng cung cấp cả Tệp/URL Audio và Tệp/URL Video trước khi chạy phân tích đồng bộ!',
+      });
+      return;
+    }
+
+    setAnalyzingSync(true);
+    setSyncStatusText('Đang khởi tạo thuật toán Waveform Fingerprinting...');
+
+    try {
+      const result: AudioSyncResult = await calculateAudioVideoSync(audioSource, videoSource, {
+        onProgress: (percent, step) => {
+          setSyncStatusText(`[${percent}%] ${step}`);
+        },
+      });
+
+      const formattedOffset = result.offset > 0 ? `+${result.offset}` : `${result.offset}`;
+      setVideoOffsetInput(formattedOffset);
+      setTrackSyncMetadata(result.metadata);
+
+      setStatusMsg({
+        type: 'success',
+        text: `🎉 ${result.message}`,
+      });
+      setSyncStatusText(
+        `Đã tìm thấy offset: ${formattedOffset}s (Độ tin cậy: ${(result.confidence * 100).toFixed(1)}%)`
+      );
+    } catch (err: any) {
+      console.error('Auto sync error:', err);
+      setStatusMsg({
+        type: 'error',
+        text: `Lỗi phân tích đồng bộ: ${err.message || 'Không thể đọc luồng âm thanh.'}`,
+      });
+      setSyncStatusText(null);
+    } finally {
+      setAnalyzingSync(false);
+    }
   };
 
   const handleSelectMediaFile = async (file: File | null) => {
@@ -837,9 +900,11 @@ export default function AdminPage() {
       }
 
       let finalLyrics = lyrics.trim();
+      let numericOffset = 0;
       if (videoOffsetInput.trim()) {
         finalLyrics = finalLyrics.replace(/^\[(video_offset|music_start):.*?\]\r?\n?/gim, '').trim();
         finalLyrics = `[video_offset:${videoOffsetInput.trim()}]\n` + finalLyrics;
+        numericOffset = parseFloat(videoOffsetInput.trim().replace('+', '')) || 0;
       }
 
       const trackPayload: Record<string, any> = {
@@ -848,6 +913,8 @@ export default function AdminPage() {
         media_type: finalVideoUrl ? 'video' : mediaType,
         audio_url: finalAudioUrl,
         video_url: finalVideoUrl,
+        video_offset: numericOffset,
+        sync_metadata: trackSyncMetadata || undefined,
         lyrics: finalLyrics || undefined,
         duration: trackDuration > 0 ? trackDuration : 200,
       };
@@ -858,13 +925,15 @@ export default function AdminPage() {
       if (!editingTrackId && matchingTrack && (mediaType === 'video' || finalVideoUrl)) {
         const updatePayload: Record<string, any> = {
           video_url: finalVideoUrl || mediaUrlInput || '',
+          video_offset: numericOffset,
         };
-        if (lyrics) updatePayload.lyrics = lyrics;
+        if (trackSyncMetadata) updatePayload.sync_metadata = trackSyncMetadata;
+        if (lyrics) updatePayload.lyrics = finalLyrics;
 
         await safeUpdateTrack(supabase, matchingTrack.id, updatePayload);
         setStatusMsg({
           type: 'success',
-          text: `⚡ Đã tự động nhận diện bài hát trùng tên "${matchingTrack.title}" -> Tích hợp MV Video vào bài hát thành công!`,
+          text: `⚡ Đã tự động nhận diện bài hát trùng tên "${matchingTrack.title}" -> Tích hợp MV Video & Timeline Offset vào bài hát thành công!`,
         });
       } else if (editingTrackId && isUUID(editingTrackId)) {
         await safeUpdateTrack(supabase, editingTrackId, trackPayload);
@@ -1936,20 +2005,60 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-black border border-white/10 space-y-2 font-mono">
-                    <label className="block text-slate-300 font-bold flex items-center justify-between text-xs uppercase">
-                      <span className="flex items-center gap-1.5">
+                  <div className="p-3.5 rounded-2xl bg-black border border-white/10 space-y-2.5 font-mono">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-slate-300 font-bold flex items-center gap-1.5 text-xs uppercase">
                         <Clock className="w-3.5 h-3.5 text-yellow-400" /> LỆCH GIÂY VIDEO (VIDEO OFFSET)
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-normal">vd: +0.5s hoặc -1.2s</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="vd: +0.5 hoặc -1.2 (khớp âm thanh và hình ảnh)"
-                      value={videoOffsetInput}
-                      onChange={(e) => setVideoOffsetInput(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
-                    />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleAutoAnalyzeSync}
+                        disabled={analyzingSync || (!audioUrlInput && !mediaFile) || (!videoUrlInput && !mediaFile)}
+                        className="px-2.5 py-1 rounded-lg bg-yellow-400/15 hover:bg-yellow-400 text-yellow-300 hover:text-black font-extrabold text-[10px] uppercase border border-yellow-400/40 transition-all flex items-center gap-1 shadow-sm disabled:opacity-40"
+                        title="Tự động so khớp dạng sóng âm thanh PCM giữa bản Audio và MV để tính độ lệch thời gian chính xác"
+                      >
+                        {analyzingSync ? (
+                          <span className="flex items-center gap-1 text-yellow-300 animate-pulse">
+                            <Loader2 className="w-3 h-3 animate-spin" /> ĐANG TÍNH...
+                          </span>
+                        ) : (
+                          <>
+                            <Zap className="w-3 h-3 text-yellow-400" />
+                            <span>⚡ TỰ ĐỘNG TÍNH TOÁN OFFSET</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="vd: +13.78 hoặc -1.2 (khớp âm thanh và hình ảnh)"
+                        value={videoOffsetInput}
+                        onChange={(e) => setVideoOffsetInput(e.target.value)}
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
+                      />
+                      {videoOffsetInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoOffsetInput('');
+                            setTrackSyncMetadata(null);
+                            setSyncStatusText(null);
+                          }}
+                          className="text-[10px] text-slate-500 hover:text-white px-2 py-1"
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
+
+                    {syncStatusText && (
+                      <div className="p-2 rounded-xl bg-slate-900 border border-white/15 text-[10px] text-slate-300 flex items-center gap-1.5 animate-fadeIn">
+                        <Zap className="w-3 h-3 text-yellow-400 flex-shrink-0" />
+                        <span>{syncStatusText}</span>
+                      </div>
+                    )}
                   </div>
 
                   {autoMetadata && (
@@ -2072,6 +2181,11 @@ export default function AdminPage() {
                             {t.video_url && (
                               <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
                                 <Film className="w-2.5 h-2.5" /> VIDEO MV
+                              </span>
+                            )}
+                            {t.video_offset !== undefined && t.video_offset !== null && t.video_offset !== 0 && (
+                              <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-yellow-950/80 text-yellow-300 border border-yellow-500/40 flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5" /> {t.video_offset > 0 ? `+${t.video_offset}s` : `${t.video_offset}s`}
                               </span>
                             )}
                             {t.lyrics ? (
