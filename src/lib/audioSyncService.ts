@@ -363,11 +363,12 @@ async function extractAudioPCMFromVideo(
 }
 
 /**
- * Compute Root-Mean-Square (RMS) Energy Envelope of PCM signal
+ * Compute Transient Beat Onset Strength Envelope of PCM signal
+ * Uses half-wave rectified energy derivative to capture precise rhythmic attacks (kicks, snares, vocal transients)
  */
-function computeEnergyEnvelope(pcm: Float32Array, windowSize: number = 40): Float32Array {
+function computeOnsetStrengthEnvelope(pcm: Float32Array, windowSize: number = 40): Float32Array {
   const numFrames = Math.floor(pcm.length / windowSize);
-  const envelope = new Float32Array(numFrames);
+  const rms = new Float32Array(numFrames);
 
   for (let i = 0; i < numFrames; i++) {
     let sumSquares = 0;
@@ -376,21 +377,27 @@ function computeEnergyEnvelope(pcm: Float32Array, windowSize: number = 40): Floa
       const val = pcm[start + j] || 0;
       sumSquares += val * val;
     }
-    envelope[i] = Math.sqrt(sumSquares / windowSize);
+    rms[i] = Math.sqrt(sumSquares / windowSize);
   }
 
-  // Normalize envelope
-  let max = 0;
-  for (let i = 0; i < envelope.length; i++) {
-    if (envelope[i] > max) max = envelope[i];
+  // First-order forward differential (transient onset detection)
+  const onsets = new Float32Array(numFrames);
+  let maxVal = 0;
+  for (let i = 1; i < numFrames; i++) {
+    const diff = rms[i] - rms[i - 1];
+    const onset = diff > 0 ? diff : 0; // Half-wave rectification for attack transients
+    onsets[i] = onset;
+    if (onset > maxVal) maxVal = onset;
   }
-  if (max > 0) {
-    for (let i = 0; i < envelope.length; i++) {
-      envelope[i] /= max;
+
+  // Normalize to [0, 1]
+  if (maxVal > 0) {
+    for (let i = 0; i < numFrames; i++) {
+      onsets[i] /= maxVal;
     }
   }
 
-  return envelope;
+  return onsets;
 }
 
 /**
@@ -442,7 +449,7 @@ function computeNormalizedCrossCorrelation(
       }
     }
 
-    if (count > audioSignal.length * 0.35) {
+    if (count > audioSignal.length * 0.3) {
       const vMean = videoSum / count;
       const vVar = Math.max(0, videoSqSum / count - vMean * vMean);
       const vStd = Math.sqrt(vVar) || 1e-6;
@@ -477,11 +484,16 @@ function computeNormalizedCrossCorrelation(
   }
 
   // Confidence calculation: peak score + prominence over background
-  const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.1;
+  const avgBackground = validScoreCount > 0 ? scoreSum / validScoreCount : 0.05;
   const prominence = maxScore / (avgBackground + 1e-4);
   const confidenceRatio = Math.max(
     0,
-    Math.min(1, Math.round((Math.max(0, maxScore) * 0.75 + Math.min(1, prominence / 2.5) * 0.25) * 100) / 100)
+    Math.min(
+      1,
+      Math.round(
+        (Math.min(1, maxScore * 1.3) * 0.7 + Math.min(1, prominence / 2.2) * 0.3) * 100
+      ) / 100
+    )
   );
 
   return { bestLag, maxScore, confidenceRatio };
@@ -496,9 +508,9 @@ export async function calculateAudioVideoSync(
   options: AudioSyncOptions = {}
 ): Promise<AudioSyncResult> {
   const {
-    maxDurationToAnalyze = 40,
+    maxDurationToAnalyze = 60,
     downsampleRate = 4000,
-    maxOffsetSearchSeconds = 35,
+    maxOffsetSearchSeconds = 50,
     onProgress,
   } = options;
 
@@ -530,16 +542,16 @@ export async function calculateAudioVideoSync(
     }
   );
 
-  if (onProgress) onProgress(85, 'Đang so khớp sóng âm Cross-Correlation & Waveform Fingerprinting...');
+  if (onProgress) onProgress(85, 'Đang phân tích Beat Onset & Waveform Fingerprinting...');
 
-  // 3. Compute Energy Envelopes (100 FPS)
+  // 3. Compute Transient Beat Onset Envelopes (100 FPS)
   const windowSize = Math.floor(downsampleRate / 100); // 40 samples per envelope frame
-  const audioEnvelope = computeEnergyEnvelope(audioPCM, windowSize);
-  const videoEnvelope = computeEnergyEnvelope(videoPCM, windowSize);
+  const audioEnvelope = computeOnsetStrengthEnvelope(audioPCM, windowSize);
+  const videoEnvelope = computeOnsetStrengthEnvelope(videoPCM, windowSize);
 
   const envelopeFrameRate = 100; // 100 frames/sec (10ms precision)
   const minLag = Math.floor(-5 * envelopeFrameRate); // -5s search
-  const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +35s search
+  const maxLag = Math.floor(maxOffsetSearchSeconds * envelopeFrameRate); // +50s search
 
   const { bestLag, confidenceRatio } = computeNormalizedCrossCorrelation(
     audioEnvelope,
@@ -551,7 +563,7 @@ export async function calculateAudioVideoSync(
   if (onProgress) onProgress(98, 'Đang hoàn tất phân tích độ lệch...');
 
   const offsetSeconds = Math.round((bestLag / envelopeFrameRate) * 100) / 100;
-  const isConfident = confidenceRatio >= 0.35;
+  const isConfident = confidenceRatio >= 0.25;
   const finalOffset = isConfident ? offsetSeconds : 0;
 
   const metadata: SyncMetadata = {
