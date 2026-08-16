@@ -33,12 +33,17 @@ import {
   Bug,
   Flame,
   Music2,
-  HelpCircle
+  HelpCircle,
+  ShieldAlert,
+  Lock,
+  Key,
+  Shield
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
 import { extractVideoOffset, formatOffsetString } from '@/lib/lrcParser';
+import { getStoredAdminSession, setStoredAdminSession, getStoredUserSession } from '@/lib/authSession';
 
 export interface BatchTrackItem {
   id: string;
@@ -53,6 +58,14 @@ export interface BatchTrackItem {
 }
 
 export default function AdminPage() {
+  // Authorization & Security Guard State
+  const [adminChecking, setAdminChecking] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [passkeyInput, setPasskeyInput] = useState('');
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
   const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks'>('albums');
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,9 +218,94 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    fetchSupabaseData();
-    fetchFeedbacks();
+    const verifyAdminAccess = async () => {
+      setAdminChecking(true);
+      try {
+        // 1. Direct Master Admin Session (Passkey verified / Master session)
+        if (getStoredAdminSession()) {
+          setIsAuthorized(true);
+          setAdminChecking(false);
+          fetchSupabaseData();
+          fetchFeedbacks();
+          return;
+        }
+
+        // 2. Check Supabase authenticated user session
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          setCurrentUserEmail(user.email || null);
+
+          // Admin email bypass
+          if (user.email === 'admin@hiddenvault.com') {
+            setStoredAdminSession(true);
+            setIsAuthorized(true);
+            setAdminChecking(false);
+            fetchSupabaseData();
+            fetchFeedbacks();
+            return;
+          }
+
+          // Check role in profiles table
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (profile?.role === 'admin') {
+            setStoredAdminSession(true);
+            setIsAuthorized(true);
+            setAdminChecking(false);
+            fetchSupabaseData();
+            fetchFeedbacks();
+            return;
+          }
+        } else {
+          // Check local user session for email
+          const stored = getStoredUserSession();
+          if (stored?.email) {
+            setCurrentUserEmail(stored.email);
+            if (stored.role === 'admin' || stored.email === 'admin@hiddenvault.com') {
+              setIsAuthorized(true);
+              setAdminChecking(false);
+              fetchSupabaseData();
+              fetchFeedbacks();
+              return;
+            }
+          }
+        }
+
+        // Unauthorized regular user or guest
+        setIsAuthorized(false);
+      } catch (err) {
+        console.error('Error verifying admin permissions:', err);
+        setIsAuthorized(false);
+      } finally {
+        setAdminChecking(false);
+      }
+    };
+
+    verifyAdminAccess();
   }, []);
+
+  const handleVerifyPasskey = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasskeyError(null);
+    setPasskeyLoading(true);
+
+    if (passkeyInput.trim() === 'Lucii@1108') {
+      setStoredAdminSession(true);
+      setIsAuthorized(true);
+      setPasskeyLoading(false);
+      fetchSupabaseData();
+      fetchFeedbacks();
+    } else {
+      setPasskeyLoading(false);
+      setPasskeyError('Mã Passkey không chính xác. Quyền truy cập bị từ chối!');
+    }
+  };
 
   const handleToggleFeedbackStatus = async (id: string, currentStatus: string | undefined) => {
     const newStatus = currentStatus === 'unread' || !currentStatus ? 'read' : 'unread';
@@ -1217,6 +1315,110 @@ export default function AdminPage() {
     if (feedbackFilter === 'read') return fb.status === 'read' || fb.status === 'resolved';
     return true;
   });
+
+  // SCREEN 1: VERIFYING ADMIN ROLE SCANNER
+  if (adminChecking) {
+    return (
+      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-cyber relative select-none">
+        <div className="tv-grain-overlay" />
+        <div className="text-center space-y-4 relative z-10 font-mono">
+          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/20 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-sm font-extrabold text-white uppercase tracking-widest">
+              ĐANG XÁC THỰC QUYỀN HẠN BẢO MẬT...
+            </h2>
+            <p className="text-[11px] text-slate-500">Checking Cryptographic Admin Role & Credentials</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // SCREEN 2: 403 ACCESS DENIED / FORBIDDEN FOR REGULAR USERS & GUESTS
+  if (!isAuthorized) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center p-4 font-cyber relative select-none">
+        <div className="tv-grain-overlay" />
+        <div className="bw-panel w-full max-w-md rounded-3xl p-6 sm:p-8 border border-red-500/40 shadow-2xl relative space-y-6 font-mono text-center z-10 bg-black/90 backdrop-blur-xl">
+          
+          {/* Glowing Lock Icon */}
+          <div className="w-16 h-16 rounded-2xl bg-red-950/40 border border-red-500/50 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(239,68,68,0.25)]">
+            <ShieldAlert className="w-8 h-8 text-red-400" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-block px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/30">
+              403 ACCESS FORBIDDEN
+            </div>
+            <h2 className="text-lg sm:text-xl font-extrabold text-white uppercase tracking-wider font-mono">
+              TRUY CẬP BỊ TỪ CHỐI
+            </h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Trang quản trị (Admin Portal) chỉ dành riêng cho <strong>Ban Quản Trị Vault (Admin)</strong>.
+            </p>
+          </div>
+
+          {/* Current User Session Status */}
+          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 text-xs text-left space-y-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span>Tài khoản đang đăng nhập:</span>
+              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/10 text-slate-300">USER</span>
+            </div>
+            <p className="font-bold text-white truncate font-mono text-xs">
+              {currentUserEmail || 'Khách (Chưa đăng nhập)'}
+            </p>
+          </div>
+
+          {/* Passkey Unlock Form */}
+          <form onSubmit={handleVerifyPasskey} className="space-y-3 pt-2 border-t border-white/10 text-left">
+            <label className="block text-[10px] uppercase text-slate-400 font-bold flex items-center gap-1">
+              <Key className="w-3 h-3 text-yellow-400" />
+              <span>MỞ KHÓA BẰNG MASTER ADMIN PASSKEY</span>
+            </label>
+            
+            <div className="relative">
+              <input
+                type="password"
+                value={passkeyInput}
+                onChange={(e) => setPasskeyInput(e.target.value)}
+                placeholder="Nhập Master Passkey..."
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white font-mono"
+              />
+            </div>
+
+            {passkeyError && (
+              <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-300 text-[11px] flex items-center gap-1.5 font-mono">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>{passkeyError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={passkeyLoading || !passkeyInput.trim()}
+              className="w-full py-2.5 rounded-xl bg-white text-black font-extrabold text-xs uppercase tracking-wider hover:bg-slate-200 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>MỞ KHÓA ADMIN PORTAL</span>
+            </button>
+          </form>
+
+          {/* Back to Home Action */}
+          <div className="pt-1">
+            <Link
+              href="/"
+              className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 block"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>QUAY VỀ TRANG CHỦ</span>
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-8 pb-36 sm:pb-40 font-cyber relative">
