@@ -147,7 +147,13 @@ export function clearAllStoredSessions() {
 // Global Clean Unified Logout
 export async function performLogout() {
   try {
-    // 1. Supabase global signOut
+    // 1. Wipe all local client state synchronously first
+    clearAllStoredSessions();
+
+    // 2. Call server endpoint in background
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+
+    // 3. Supabase global signOut
     const supabase = createClient();
     await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
@@ -156,7 +162,7 @@ export async function performLogout() {
   } finally {
     clearAllStoredSessions();
     if (typeof window !== 'undefined') {
-      window.location.replace('/api/auth/logout');
+      window.location.href = '/';
     }
   }
 }
