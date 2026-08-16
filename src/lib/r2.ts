@@ -72,7 +72,7 @@ export async function uploadToR2(
       'x-amz-content-sha256': payloadHash,
       Authorization: authorizationHeader,
     },
-    body: buffer,
+    body: buffer as unknown as BodyInit,
   });
 
   if (!res.ok) {
