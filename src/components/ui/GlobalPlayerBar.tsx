@@ -19,6 +19,7 @@ import {
   Maximize2,
   Minimize2,
   X,
+  Radio,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex, extractVideoOffset } from '@/lib/lrcParser';
@@ -976,7 +977,8 @@ export default function GlobalPlayerBar() {
               <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
                 <img
                   src={
-                    getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 120, quality: 85 }) ||
+                    currentTrack?.cover_url ||
+                    (currentAlbum?.cover_url ? getCoverCdnUrl(currentAlbum.cover_url, { width: 120, quality: 85 }) : '') ||
                     'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'
                   }
                   alt={currentTrack.title}
@@ -990,7 +992,11 @@ export default function GlobalPlayerBar() {
                   <h4 className="text-[11px] sm:text-xs font-extrabold text-white truncate font-cyber uppercase tracking-wide">
                     {currentTrack.title}
                   </h4>
-                  {currentTrack.video_url && (
+                  {currentTrack?.source === 'youtube' ? (
+                    <span className="text-[7px] uppercase px-1 py-0.2 rounded font-extrabold bg-cyan-950 text-cyan-300 border border-cyan-500/40 flex-shrink-0">
+                      YT
+                    </span>
+                  ) : currentTrack.video_url ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1008,10 +1014,10 @@ export default function GlobalPlayerBar() {
                     >
                       <Film className="w-2 h-2" /> MV
                     </button>
-                  )}
+                  ) : null}
                 </div>
                 <p className="text-[9px] text-slate-400 truncate uppercase font-mono">
-                  {currentAlbum?.artist || 'VAULT ARTIST'}
+                  {currentTrack.artist || currentAlbum?.artist || (currentTrack?.source === 'youtube' ? 'YOUTUBE MUSIC' : 'VAULT ARTIST')}
                 </p>
               </div>
             </div>
@@ -1159,7 +1165,8 @@ export default function GlobalPlayerBar() {
             <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-white/20 flex-shrink-0 bg-slate-900 shadow-md">
               <img
                 src={
-                  getCoverCdnUrl(currentAlbum?.cover_url || '', { width: 160, quality: 85 }) ||
+                  currentTrack?.cover_url ||
+                  (currentAlbum?.cover_url ? getCoverCdnUrl(currentAlbum.cover_url, { width: 160, quality: 85 }) : '') ||
                   'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'
                 }
                 alt={currentTrack.title}
@@ -1173,7 +1180,11 @@ export default function GlobalPlayerBar() {
                 <h4 className="text-[11px] font-extrabold text-white truncate uppercase tracking-wider font-cyber">
                   {currentTrack.title}
                 </h4>
-                {currentTrack.video_url ? (
+                {currentTrack?.source === 'youtube' ? (
+                  <span className="text-[8px] uppercase px-1.5 py-0.5 rounded font-extrabold bg-cyan-950 text-cyan-300 border border-cyan-500/40 flex items-center gap-1 flex-shrink-0">
+                    <Radio className="w-2.5 h-2.5 text-cyan-400" /> YT MUSIC
+                  </span>
+                ) : currentTrack.video_url ? (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1198,7 +1209,7 @@ export default function GlobalPlayerBar() {
                 )}
               </div>
               <p className="text-[9px] text-slate-400 truncate uppercase font-mono">
-                {currentAlbum?.artist || 'VAULT ARTIST'}
+                {currentTrack.artist || currentAlbum?.artist || (currentTrack?.source === 'youtube' ? 'YOUTUBE MUSIC' : 'VAULT ARTIST')}
               </p>
             </div>
           </div>

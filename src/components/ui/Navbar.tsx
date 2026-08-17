@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LogIn, UserCheck, LogOut, Disc3, ArrowLeft, Settings } from 'lucide-react';
+import { LogIn, UserCheck, LogOut, Disc3, ArrowLeft, Settings, Search } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/ui/AuthModal';
 import ProfileModal from '@/components/ui/ProfileModal';
@@ -12,6 +12,7 @@ interface NavbarProps {
   userEmail?: string | null;
   onLogout?: () => void;
   onOpenAuthModal?: (tab?: 'login' | 'register') => void;
+  onOpenSearch?: () => void;
   showBackButton?: boolean;
   onBackClick?: () => void;
   title?: string;
@@ -29,6 +30,7 @@ export default function Navbar({
   userEmail: propUserEmail,
   onLogout: propOnLogout,
   onOpenAuthModal: propOnOpenAuthModal,
+  onOpenSearch,
   showBackButton = false,
   onBackClick,
   title,
@@ -127,13 +129,21 @@ export default function Navbar({
           </Link>
         </div>
 
-        {/* Center: Title if provided */}
-        {title && (
-          <div className="hidden md:flex items-center gap-2 text-slate-300 font-mono text-xs max-w-xs truncate">
-            <span className="text-white/30">•</span>
-            <span className="uppercase tracking-widest font-extrabold truncate text-white">{title}</span>
-          </div>
-        )}
+        {/* Center / Search Button: HYBRID VAULT + YT SEARCH */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white text-slate-300 hover:text-black border border-white/20 text-[11px] font-bold font-mono transition-all group shadow-lg active:scale-95"
+            title="Tìm kiếm nhạc Vault & YouTube Music (Ctrl + K)"
+          >
+            <Search className="w-3.5 h-3.5 text-white/70 group-hover:text-black" />
+            <span className="hidden sm:inline">TÌM KIẾM NHẠC</span>
+            <kbd className="hidden md:inline-block px-1.5 py-0.2 text-[9px] bg-black/40 text-slate-400 group-hover:text-black group-hover:bg-black/10 rounded border border-white/10">
+              ⌘K
+            </kbd>
+          </button>
+        </div>
 
         {/* Right: User Display Name Badge & Settings Button */}
         <div className="flex items-center gap-1 sm:gap-2 font-mono flex-shrink-0">

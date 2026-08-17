@@ -517,6 +517,82 @@ export default {
       }
     }
 
+    if (url.pathname === '/api/yt/search' || url.pathname.startsWith('/api/yt/search')) {
+      const q = url.searchParams.get('q')?.trim() || '';
+      if (!q) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { ...Object.fromEntries(corsHeaders), 'Content-Type': 'application/json' } });
+      }
+      try {
+        const ytRes = await fetch('https://www.youtube.com/youtubei/v1/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+          body: JSON.stringify({
+            context: { client: { clientName: 'WEB', clientVersion: '2.20240401.01.00', hl: 'vi', gl: 'VN' } },
+            query: `${q} official audio`,
+          }),
+        });
+        const data: any = await ytRes.json();
+        const sections = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+        const results: any[] = [];
+        for (const section of sections) {
+          const items = section?.itemSectionRenderer?.contents || [];
+          for (const item of items) {
+            const video = item?.videoRenderer;
+            if (video && video.videoId) {
+              const videoId = video.videoId;
+              results.push({
+                id: `yt_${videoId}`,
+                youtube_id: videoId,
+                source: 'youtube',
+                title: video.title?.runs?.[0]?.text || 'Untitled',
+                artist: video.ownerText?.runs?.[0]?.text || 'YouTube Artist',
+                duration: 200,
+                cover_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                audio_url: `/api/yt/stream/${videoId}`,
+              });
+              if (results.length >= 25) break;
+            }
+          }
+          if (results.length >= 25) break;
+        }
+        return new Response(JSON.stringify(results), { status: 200, headers: { ...Object.fromEntries(corsHeaders), 'Content-Type': 'application/json' } });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...Object.fromEntries(corsHeaders), 'Content-Type': 'application/json' } });
+      }
+    }
+
+    if (url.pathname.startsWith('/api/yt/stream/')) {
+      const videoId = url.pathname.replace('/api/yt/stream/', '').replace(/^yt_/, '').trim();
+      try {
+        const playerRes = await fetch('https://www.youtube.com/youtubei/v1/player', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': 'com.google.android.youtube/19.09.37' },
+          body: JSON.stringify({
+            context: { client: { clientName: 'ANDROID', clientVersion: '19.09.37', androidSdkVersion: 30, hl: 'en', gl: 'US' } },
+            videoId,
+          }),
+        });
+        if (playerRes.ok) {
+          const pData: any = await playerRes.json();
+          const adaptive = pData?.streamingData?.adaptiveFormats || [];
+          const audio = adaptive.filter((f: any) => f.mimeType?.startsWith('audio/') && f.url).sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+          if (audio.length > 0 && audio[0].url) {
+            return new Response(null, {
+              status: 302,
+              headers: {
+                ...Object.fromEntries(corsHeaders),
+                Location: audio[0].url,
+                'Cache-Control': 'public, max-age=1800',
+              },
+            });
+          }
+        }
+        return new Response(JSON.stringify({ error: 'Stream not found' }), { status: 404, headers: { ...Object.fromEntries(corsHeaders), 'Content-Type': 'application/json' } });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...Object.fromEntries(corsHeaders), 'Content-Type': 'application/json' } });
+      }
+    }
+
     if (url.pathname.startsWith('/api/stream/')) {
       const rawKey = decodeURIComponent(url.pathname.replace('/api/stream/', '').replace(/^\/+/, ''));
       return await handleR2Stream(rawKey, request, env);
@@ -531,7 +607,7 @@ export default {
       JSON.stringify({
         name: 'Hidden Music Vault API Gateway',
         status: 'online',
-        endpoints: ['/api/stream/:key', '/api/upload/presign', '/api/tracks', '/api/albums', '/health'],
+        endpoints: ['/api/stream/:key', '/api/yt/search', '/api/yt/stream/:videoId', '/api/upload/presign', '/api/tracks', '/api/albums', '/health'],
       }),
       { status: 200, headers: { ...Object.fromEntries(corsHeaders), 'Content-Type': 'application/json' } }
     );

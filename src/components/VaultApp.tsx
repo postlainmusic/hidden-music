@@ -19,6 +19,7 @@ import {
   isUserSubscribed
 } from '@/lib/authSession';
 import SubscriptionModal from '@/components/ui/SubscriptionModal';
+import HybridSearchModal from '@/components/ui/HybridSearchModal';
 
 interface VaultAppProps {
   initialAlbumId?: string;
@@ -32,12 +33,25 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(true);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [initialMediaMode, setInitialMediaMode] = useState<'audio' | 'video'>('audio');
 
   // Seamless Master-Detail View Orchestration States
   const [viewMode, setViewMode] = useState<'vault' | 'album'>(initialAlbumId ? 'album' : 'vault');
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<TrackItem | null>(null);
+
+  // Global Ctrl + K / Cmd + K Shortcut to toggle Hybrid Search
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   // Dynamic Maintenance Estimated Time (+2 hours from viewing)
   const [maintenanceTime, setMaintenanceTime] = useState<{ timeStr: string; fullStr: string }>({
@@ -403,10 +417,18 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
         }}
       />
 
-      {/* Top Navbar with Dynamic State & Smooth Back Handler */}
+      {/* Hybrid Search Modal (Vault R2 + YouTube Music Global) */}
+      <HybridSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        vaultAlbums={albums}
+      />
+
+      {/* Top Navbar with Dynamic State, Smooth Back Handler & Hybrid Search Trigger */}
       <Navbar
         userEmail={userSession?.email}
         onLogout={handleLogout}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
         showBackButton={viewMode === 'album'}
         onBackClick={() => handleBackToVault(true)}
         title={viewMode === 'album' ? selectedAlbum?.title : undefined}

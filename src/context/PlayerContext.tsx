@@ -128,11 +128,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const kickTimestampsRef = useRef<number[]>([]);
   const snareTimestampsRef = useRef<number[]>([]);
   const isPCMReadyRef = useRef<boolean>(false);
-  const currentProcessingUrlRef = useRef<string>('');
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const lastUiTimeUpdateRef = useRef<number>(0);
-  const rawTrackUrl = currentTrack?.audio_url || '';
-  const trackUrl = rawTrackUrl;
+  const trackUrl = useMemo(() => {
+    if (!currentTrack) return '';
+    if (currentTrack.source === 'youtube' || currentTrack.id.startsWith('yt_') || currentTrack.youtube_id) {
+      const vid = currentTrack.youtube_id || currentTrack.id.replace(/^yt_/, '');
+      return `/api/yt/stream/${vid}`;
+    }
+    return currentTrack.audio_url || '';
+  }, [currentTrack]);
 
   // Reset beat map states on track change
   useEffect(() => {

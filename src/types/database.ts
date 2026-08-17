@@ -49,6 +49,8 @@ export interface TrackItem {
   title: string;
   artist?: string;
   media_type: MediaType;
+  source?: 'vault' | 'youtube';
+  youtube_id?: string;
   audio_url: string;
   video_url?: string;
   video_offset?: number; // Offset in seconds (e.g. 13.78s)
