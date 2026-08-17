@@ -4,11 +4,17 @@ export type Theme3D = 'monochrome_disc' | 'cyber_crystal' | 'vinyl_gold' | 'holo
 
 export type MediaType = 'audio' | 'video';
 
+export type SubscriptionTier = 'free' | 'vip' | 'lifetime';
+export type SubscriptionStatus = 'active' | 'inactive' | 'expired' | 'trial';
+
 export interface Profile {
   id: string;
   email: string;
   display_name: string | null;
   role: UserRole;
+  is_subscribed?: boolean;
+  subscription_status?: SubscriptionStatus;
+  subscription_tier?: SubscriptionTier;
   avatar_url: string | null;
   created_at: string;
 }

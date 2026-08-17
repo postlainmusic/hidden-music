@@ -7,6 +7,22 @@ export interface VaultUserSession {
   display_name?: string;
   user_metadata?: Record<string, any>;
   role?: string;
+  is_subscribed?: boolean;
+  subscription_status?: 'active' | 'inactive' | 'expired' | 'trial';
+  subscription_tier?: 'free' | 'vip' | 'lifetime';
+}
+
+export function isUserSubscribed(session?: VaultUserSession | null): boolean {
+  if (!session) return false;
+  if (session.role === 'admin') return true;
+  if (session.is_subscribed || session.subscription_status === 'active' || session.subscription_tier === 'vip' || session.subscription_tier === 'lifetime') {
+    return true;
+  }
+  // Check localStorage flag if manually set
+  if (typeof window !== 'undefined' && localStorage.getItem('hidden_vault_vip_active') === 'true') {
+    return true;
+  }
+  return false;
 }
 
 const USER_SESSION_KEY = 'hidden_vault_user_session';

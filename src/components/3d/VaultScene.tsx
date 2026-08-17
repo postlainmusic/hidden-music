@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Shuffle, Disc3, Music, MessageSquare, Film, ListMusic } from 'lucide-react';
+import { Play, Pause, Shuffle, Disc3, Music, MessageSquare, Film, ListMusic, Lock, Crown } from 'lucide-react';
 import { Album, TrackItem } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
 
@@ -9,7 +9,10 @@ interface VaultSceneProps {
   albums: Album[];
   viewMode?: 'vault' | 'album';
   selectedAlbum?: Album | null;
-  onSelectAlbum: (album: Album) => void;
+  onSelectAlbum: (album: Album, initialMediaMode?: 'audio' | 'video') => void;
+  isSubscribed?: boolean;
+  onOpenSubscriptionModal?: () => void;
+  initialMediaMode?: 'audio' | 'video';
   // Detail mode controls
   tracks?: TrackItem[];
   selectedTrack?: TrackItem | null;
@@ -31,6 +34,9 @@ export default function VaultScene({
   viewMode = 'vault',
   selectedAlbum,
   onSelectAlbum,
+  isSubscribed = false,
+  onOpenSubscriptionModal,
+  initialMediaMode = 'audio',
   tracks = [],
   selectedTrack,
   setSelectedTrack,
@@ -50,11 +56,19 @@ export default function VaultScene({
   const [mouseOffset, setMouseOffset] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const [albumTab, setAlbumTab] = useState<'tracks' | 'comments'>('tracks');
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'audio' | 'video'>('all');
   const [commentsCount, setCommentsCount] = useState(0);
   const touchStartY = useRef(0);
   const lastScrollTime = useRef(0);
 
   const isDetail = viewMode === 'album';
+
+  // Sync media filter with initialMediaMode when entering album view
+  useEffect(() => {
+    if (isDetail) {
+      setMediaFilter(initialMediaMode === 'video' ? 'video' : 'all');
+    }
+  }, [isDetail, initialMediaMode, selectedAlbum?.id]);
 
   // Reset tab to tracks when changing album
   useEffect(() => {
@@ -256,7 +270,8 @@ export default function VaultScene({
           <div
             onClick={() => {
               if (!isDetail) {
-                onSelectAlbum(activeAlbum);
+                // Click directly on album defaults to Audio mode
+                onSelectAlbum(activeAlbum, 'audio');
               } else if (togglePlay && handlePlayAlbum) {
                 if (isCurrentPlayingThisAlbum) togglePlay();
                 else handlePlayAlbum();
@@ -337,12 +352,60 @@ export default function VaultScene({
             </div>
           </div>
 
-          {/* Action Buttons Deck (Fades in below album in Detail Mode) */}
+          {/* MODE SELECTION ON HOVER (VAULT HOME MODE) */}
+          {!isDetail && (
+            <div className="flex items-center gap-2.5 mt-2 z-30 animate-fadeIn transition-all">
+              {/* Audio Option (Default) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectAlbum(activeAlbum, 'audio');
+                }}
+                className="px-4 py-2 rounded-full bg-white hover:bg-slate-200 text-black font-black font-mono text-xs uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
+                title="Nghe Audio Album"
+              >
+                <Music className="w-3.5 h-3.5 fill-current" />
+                <span>AUDIO</span>
+              </button>
+
+              {/* Video Option (VIP Exclusive) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isSubscribed) {
+                    onSelectAlbum(activeAlbum, 'video');
+                  } else if (onOpenSubscriptionModal) {
+                    onOpenSubscriptionModal();
+                  }
+                }}
+                className={`px-4 py-2 rounded-full font-black font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 border shadow-lg ${
+                  isSubscribed
+                    ? 'bg-white/10 hover:bg-white/20 text-white border-white/40 hover:scale-105 active:scale-95'
+                    : 'bg-black/60 hover:bg-white/10 text-slate-300 border-white/20 hover:border-white/40'
+                }`}
+                title={isSubscribed ? 'Xem Video MV Album' : 'Mở khóa Video MV (Yêu cầu VIP Subscription)'}
+              >
+                {isSubscribed ? (
+                  <Film className="w-3.5 h-3.5 text-white" />
+                ) : (
+                  <Lock className="w-3.5 h-3.5 text-white/70" />
+                )}
+                <span>VIDEO MV</span>
+                {!isSubscribed && (
+                  <span className="text-[8px] bg-white text-black px-1.5 py-0.5 rounded font-black tracking-wider uppercase ml-1 shadow-sm">
+                    VIP
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Action Buttons Deck (Detail Mode) */}
           <div
             className={`w-full max-w-[280px] flex flex-col items-center gap-2 mt-1 transition-all duration-500 ease-out ${
               isDetail
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
-                : 'opacity-0 translate-y-4 pointer-events-none'
+                : 'opacity-0 translate-y-4 pointer-events-none hidden'
             }`}
           >
             <div className="w-full flex items-center gap-2">
@@ -436,76 +499,131 @@ export default function VaultScene({
         >
           <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
             {albumTab === 'tracks' ? (
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 animate-fadeIn" style={{ WebkitOverflowScrolling: 'touch' }}>
-                {tracks.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                    <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
-                    <p className="text-xs uppercase tracking-widest font-mono">
-                      NO TRACKS IN THIS ARCHIVE
-                    </p>
-                  </div>
-                ) : (
-                  tracks.map((track, idx) => {
-                    const isCurrentPlaying = currentTrack?.id === track.id;
-                    const trackIndex = String(idx + 1).padStart(2, '0');
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                {/* Media Filter Tabs */}
+                <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-white/10 px-1 flex-shrink-0 text-[11px] font-mono">
+                  <button
+                    onClick={() => setMediaFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      mediaFilter === 'all'
+                        ? 'bg-white text-black font-black shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    TẤT CẢ ({tracks.length})
+                  </button>
+                  <button
+                    onClick={() => setMediaFilter('audio')}
+                    className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                      mediaFilter === 'audio'
+                        ? 'bg-white text-black font-black shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Music className="w-3 h-3" />
+                    AUDIO ({tracks.filter((t) => t.audio_url).length})
+                  </button>
+                  <button
+                    onClick={() => setMediaFilter('video')}
+                    className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                      mediaFilter === 'video'
+                        ? 'bg-white text-black font-black shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Film className="w-3 h-3" />
+                    VIDEO MV ({tracks.filter((t) => t.video_url || t.media_type === 'video').length})
+                    {!isSubscribed && <Lock className="w-2.5 h-2.5 text-slate-400" />}
+                  </button>
+                </div>
 
-                    return (
-                      <div
-                        key={track.id}
-                        onClick={() => {
-                          if (setSelectedTrack) setSelectedTrack(track);
-                          if (playTrack) playTrack(track, activeAlbum, tracks);
-                        }}
-                        className={`group relative h-13 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
-                          isCurrentPlaying
-                            ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
-                            : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-3">
-                          <div className="w-6 flex items-center justify-center flex-shrink-0">
-                            {isCurrentPlaying && isPlaying ? (
-                              <div className="flex items-end gap-[2px] h-3.5">
-                                <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '70%', animationDelay: '0ms' }} />
-                                <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
-                                <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '85%', animationDelay: '300ms' }} />
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 animate-fadeIn" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  {tracks.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
+                      <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
+                      <p className="text-xs uppercase tracking-widest font-mono">
+                        NO TRACKS IN THIS ARCHIVE
+                      </p>
+                    </div>
+                  ) : (
+                    tracks
+                      .filter((t) => {
+                        if (mediaFilter === 'audio') return Boolean(t.audio_url);
+                        if (mediaFilter === 'video') return Boolean(t.video_url || t.media_type === 'video');
+                        return true;
+                      })
+                      .map((track, idx) => {
+                        const isCurrentPlaying = currentTrack?.id === track.id;
+                        const trackIndex = String(idx + 1).padStart(2, '0');
+                        const isVideoTrack = Boolean(track.video_url || track.media_type === 'video');
+
+                        return (
+                          <div
+                            key={track.id}
+                            onClick={() => {
+                              if (isVideoTrack && !isSubscribed && onOpenSubscriptionModal) {
+                                onOpenSubscriptionModal();
+                                return;
+                              }
+                              if (setSelectedTrack) setSelectedTrack(track);
+                              if (playTrack) playTrack(track, activeAlbum, tracks);
+                            }}
+                            className={`group relative h-13 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                              isCurrentPlaying
+                                ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
+                                : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-3">
+                              <div className="w-6 flex items-center justify-center flex-shrink-0">
+                                {isCurrentPlaying && isPlaying ? (
+                                  <div className="flex items-end gap-[2px] h-3.5">
+                                    <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '70%', animationDelay: '0ms' }} />
+                                    <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
+                                    <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '85%', animationDelay: '300ms' }} />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className={`text-xs font-mono font-bold group-hover:hidden ${
+                                      isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
+                                    }`}>
+                                      {trackIndex}
+                                    </span>
+                                    <Play className="w-3.5 h-3.5 fill-white text-white hidden group-hover:block transition-all" />
+                                  </>
+                                )}
                               </div>
-                            ) : (
-                              <>
-                                <span className={`text-xs font-mono font-bold group-hover:hidden ${
-                                  isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
+
+                              <span className={`truncate text-xs sm:text-sm font-cyber tracking-wide ${
+                                isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
+                              }`}>
+                                {track.title}
+                              </span>
+
+                              {track.video_url && (
+                                <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold flex items-center gap-1 flex-shrink-0 ${
+                                  isSubscribed
+                                    ? 'bg-white/10 text-white border border-white/20'
+                                    : 'bg-white/5 text-slate-400 border border-white/10'
                                 }`}>
-                                  {trackIndex}
+                                  {isSubscribed ? <Film className="w-2.5 h-2.5 text-white" /> : <Lock className="w-2.5 h-2.5" />}
+                                  MV {!isSubscribed && 'VIP'}
                                 </span>
-                                <Play className="w-3.5 h-3.5 fill-white text-white hidden group-hover:block transition-all" />
-                              </>
-                            )}
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                              <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
+                                isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
+                              }`}>
+                                {formatDuration(track.duration)}
+                              </span>
+                            </div>
                           </div>
-
-                          <span className={`truncate text-xs sm:text-sm font-cyber tracking-wide ${
-                            isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
-                          }`}>
-                            {track.title}
-                          </span>
-
-                          {track.video_url && (
-                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold bg-white/10 text-white border border-white/20 flex items-center gap-1 flex-shrink-0">
-                              <Film className="w-2.5 h-2.5 text-white" /> MV
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
-                          <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
-                            isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
-                          }`}>
-                            {formatDuration(track.duration)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+                        );
+                      })
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col animate-fadeIn">
@@ -530,7 +648,8 @@ export default function VaultScene({
           <div
             onClick={() => {
               if (!isDetail) {
-                onSelectAlbum(activeAlbum);
+                // Click directly on mobile album defaults to Audio mode
+                onSelectAlbum(activeAlbum, 'audio');
               } else if (togglePlay && handlePlayAlbum) {
                 if (isCurrentPlayingThisAlbum) togglePlay();
                 else handlePlayAlbum();
@@ -603,7 +722,47 @@ export default function VaultScene({
             </div>
           </div>
 
-          {/* Action Buttons Deck */}
+          {/* MOBILE MODE SELECTION ON HOME VIEW */}
+          {!isDetail && (
+            <div className="flex items-center gap-2 mt-2 z-30 animate-fadeIn">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectAlbum(activeAlbum, 'audio');
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-white text-black font-black font-mono text-[11px] uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center gap-1"
+              >
+                <Music className="w-3 h-3 fill-current" />
+                <span>AUDIO</span>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isSubscribed) {
+                    onSelectAlbum(activeAlbum, 'video');
+                  } else if (onOpenSubscriptionModal) {
+                    onOpenSubscriptionModal();
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-full font-black font-mono text-[11px] uppercase tracking-wider transition-all flex items-center gap-1 border ${
+                  isSubscribed
+                    ? 'bg-white/10 text-white border-white/30'
+                    : 'bg-black/60 text-slate-300 border-white/20'
+                }`}
+              >
+                {isSubscribed ? <Film className="w-3 h-3" /> : <Lock className="w-3 h-3 text-white/60" />}
+                <span>VIDEO MV</span>
+                {!isSubscribed && (
+                  <span className="text-[7px] bg-white text-black px-1 py-0.2 rounded font-black tracking-widest uppercase ml-0.5">
+                    VIP
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Action Buttons Deck (Detail Mode) */}
           {isDetail && (
             <div className="w-full max-w-[260px] flex items-center gap-1.5 mt-1 mb-1 animate-fadeIn">
               <button
@@ -677,64 +836,119 @@ export default function VaultScene({
           <div className="flex-1 min-h-[140px] max-h-[48vh] w-full flex flex-col font-mono mt-1 overflow-hidden z-10 animate-fadeIn">
             <div className="dark-neumorph-card p-1.5 sm:p-2 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
               {albumTab === 'tracks' ? (
-                <div
-                  className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 overscroll-contain"
-                  style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
-                >
-                  {tracks.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center">
-                      <Disc3 className="w-6 h-6 text-slate-600 animate-spin-slow mb-1" />
-                      <p className="text-[10px] uppercase tracking-widest font-mono">
-                        NO TRACKS IN THIS ARCHIVE
-                      </p>
-                    </div>
-                  ) : (
-                    tracks.map((track, idx) => {
-                      const isCurrentPlaying = currentTrack?.id === track.id;
-                      const trackIndex = String(idx + 1).padStart(2, '0');
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  {/* Media Filter Tabs on Mobile */}
+                  <div className="flex items-center gap-1 mb-1.5 pb-1.5 border-b border-white/10 px-0.5 flex-shrink-0 text-[10px] font-mono">
+                    <button
+                      onClick={() => setMediaFilter('all')}
+                      className={`px-2 py-0.5 rounded-md transition-all ${
+                        mediaFilter === 'all'
+                          ? 'bg-white text-black font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      TẤT CẢ
+                    </button>
+                    <button
+                      onClick={() => setMediaFilter('audio')}
+                      className={`px-2 py-0.5 rounded-md transition-all flex items-center gap-0.5 ${
+                        mediaFilter === 'audio'
+                          ? 'bg-white text-black font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Music className="w-2.5 h-2.5" />
+                      AUDIO
+                    </button>
+                    <button
+                      onClick={() => setMediaFilter('video')}
+                      className={`px-2 py-0.5 rounded-md transition-all flex items-center gap-0.5 ${
+                        mediaFilter === 'video'
+                          ? 'bg-white text-black font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Film className="w-2.5 h-2.5" />
+                      VIDEO
+                      {!isSubscribed && <Lock className="w-2 h-2 text-slate-400" />}
+                    </button>
+                  </div>
 
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => {
-                            if (setSelectedTrack) setSelectedTrack(track);
-                            if (playTrack) playTrack(track, activeAlbum, tracks);
-                          }}
-                          className={`group relative h-10 sm:h-11 px-2.5 rounded-lg cursor-pointer transition-all duration-150 flex items-center justify-between border ${
-                            isCurrentPlaying
-                              ? 'bg-white/[0.12] border-white/30 shadow-[0_0_15px_rgba(255,255,255,0.08)]'
-                              : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 pr-1.5">
-                            <span className={`text-[11px] font-mono font-bold ${
-                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
-                            }`}>
-                              {trackIndex}
-                            </span>
+                  <div
+                    className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 overscroll-contain"
+                    style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+                  >
+                    {tracks.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center">
+                        <Disc3 className="w-6 h-6 text-slate-600 animate-spin-slow mb-1" />
+                        <p className="text-[10px] uppercase tracking-widest font-mono">
+                          NO TRACKS IN THIS ARCHIVE
+                        </p>
+                      </div>
+                    ) : (
+                      tracks
+                        .filter((t) => {
+                          if (mediaFilter === 'audio') return Boolean(t.audio_url);
+                          if (mediaFilter === 'video') return Boolean(t.video_url || t.media_type === 'video');
+                          return true;
+                        })
+                        .map((track, idx) => {
+                          const isCurrentPlaying = currentTrack?.id === track.id;
+                          const trackIndex = String(idx + 1).padStart(2, '0');
+                          const isVideoTrack = Boolean(track.video_url || track.media_type === 'video');
 
-                            <span className={`truncate text-xs font-cyber tracking-wide ${
-                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 font-medium'
-                            }`}>
-                              {track.title}
-                            </span>
+                          return (
+                            <div
+                              key={track.id}
+                              onClick={() => {
+                                if (isVideoTrack && !isSubscribed && onOpenSubscriptionModal) {
+                                  onOpenSubscriptionModal();
+                                  return;
+                                }
+                                if (setSelectedTrack) setSelectedTrack(track);
+                                if (playTrack) playTrack(track, activeAlbum, tracks);
+                              }}
+                              className={`group relative h-10 sm:h-11 px-2.5 rounded-lg cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                                isCurrentPlaying
+                                  ? 'bg-white/[0.12] border-white/30 shadow-[0_0_15px_rgba(255,255,255,0.08)]'
+                                  : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 pr-1.5">
+                                <span className={`text-[11px] font-mono font-bold ${
+                                  isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
+                                }`}>
+                                  {trackIndex}
+                                </span>
 
-                            {track.video_url && (
-                              <span className="text-[7px] uppercase px-1 py-0.2 rounded font-bold bg-white/10 text-white border border-white/20 flex items-center gap-0.5 flex-shrink-0">
-                                <Film className="w-2 h-2 text-white" /> MV
+                                <span className={`truncate text-xs font-cyber tracking-wide ${
+                                  isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 font-medium'
+                                }`}>
+                                  {track.title}
+                                </span>
+
+                                {track.video_url && (
+                                  <span className={`text-[7px] uppercase px-1 py-0.2 rounded font-bold flex items-center gap-0.5 flex-shrink-0 ${
+                                    isSubscribed
+                                      ? 'bg-white/10 text-white border border-white/20'
+                                      : 'bg-white/5 text-slate-400 border border-white/10'
+                                  }`}>
+                                    {isSubscribed ? <Film className="w-2 h-2 text-white" /> : <Lock className="w-2 h-2" />}
+                                    MV {!isSubscribed && 'VIP'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <span className={`text-[10px] font-mono tabular-nums ${
+                                isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500'
+                              }`}>
+                                {formatDuration(track.duration)}
                               </span>
-                            )}
-                          </div>
-
-                          <span className={`text-[10px] font-mono tabular-nums ${
-                            isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500'
-                          }`}>
-                            {formatDuration(track.duration)}
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex-1 min-h-0 overflow-hidden flex flex-col animate-fadeIn">

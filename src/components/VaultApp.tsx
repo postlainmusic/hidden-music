@@ -15,8 +15,10 @@ import {
   setStoredUserSession,
   getStoredAdminSession,
   clearAllStoredSessions,
-  performLogout
+  performLogout,
+  isUserSubscribed
 } from '@/lib/authSession';
+import SubscriptionModal from '@/components/ui/SubscriptionModal';
 
 interface VaultAppProps {
   initialAlbumId?: string;
@@ -29,6 +31,8 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   const [userSession, setUserSession] = useState<any>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(true);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [initialMediaMode, setInitialMediaMode] = useState<'audio' | 'video'>('audio');
 
   // Seamless Master-Detail View Orchestration States
   const [viewMode, setViewMode] = useState<'vault' | 'album'>(initialAlbumId ? 'album' : 'vault');
@@ -252,7 +256,8 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   }, [albums]);
 
   // Handle Album Selection with Smooth 60FPS Morph Transition
-  const handleSelectAlbum = async (album: Album, updateHistory = true) => {
+  const handleSelectAlbum = async (album: Album, updateHistory = true, mediaMode: 'audio' | 'video' = 'audio') => {
+    setInitialMediaMode(mediaMode);
     let fullAlbum = album;
 
     // Check if album needs tracks fetched
@@ -286,7 +291,12 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
     setSelectedAlbum(fullAlbum);
     if (fullAlbum.tracks && fullAlbum.tracks.length > 0) {
-      setSelectedTrack(fullAlbum.tracks[0]);
+      if (mediaMode === 'video') {
+        const firstVideoTrack = fullAlbum.tracks.find((t) => t.video_url || t.media_type === 'video');
+        setSelectedTrack(firstVideoTrack || fullAlbum.tracks[0]);
+      } else {
+        setSelectedTrack(fullAlbum.tracks[0]);
+      }
     }
     setViewMode('album');
 
@@ -310,6 +320,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
   const tracks = useMemo(() => selectedAlbum?.tracks || [], [selectedAlbum]);
   const isCurrentPlayingThisAlbum = currentTrack && tracks.some((t) => t.id === currentTrack.id);
+  const isSubscribed = isUserSubscribed(userSession);
 
   const handlePlayAlbum = () => {
     if (tracks.length > 0 && selectedAlbum) {
@@ -363,6 +374,9 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
           viewMode={viewMode}
           selectedAlbum={selectedAlbum}
           onSelectAlbum={handleSelectAlbum}
+          isSubscribed={isSubscribed}
+          onOpenSubscriptionModal={() => setIsSubscriptionModalOpen(true)}
+          initialMediaMode={initialMediaMode}
           tracks={tracks}
           selectedTrack={selectedTrack}
           setSelectedTrack={setSelectedTrack}
@@ -378,6 +392,16 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
           formatDuration={formatDuration}
         />
       )}
+
+      {/* Subscription VIP Modal */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        onSubscribed={() => {
+          const fresh = getStoredUserSession();
+          setUserSession(fresh);
+        }}
+      />
 
       {/* Top Navbar with Dynamic State & Smooth Back Handler */}
       <Navbar
