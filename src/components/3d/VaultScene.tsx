@@ -235,16 +235,21 @@ export default function VaultScene({
       {/* ========================================================================= */}
       {/* 2. UNIFIED CONTINUOUS STAGE (MATHEMATICALLY CENTERED IN BOTH MODES)       */}
       {/* ========================================================================= */}
-      <div className="relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden">
+      <div
+        className={`relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center ${
+          isDetail ? 'justify-start lg:justify-center pt-12 sm:pt-14 pb-28 sm:pb-32 overflow-y-auto lg:overflow-hidden no-scrollbar' : 'justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden'
+        }`}
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         
         {/* PHYSICAL ALBUM DECK (Slides left in detail mode, dead center in vault mode) */}
         <div
-          className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20"
+          className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20 flex-shrink-0"
           style={{
             transform: isDetail
               ? (typeof window !== 'undefined' && window.innerWidth >= 1024
                   ? 'translateX(-280px) scale(1.02)'
-                  : 'translateY(-10px) scale(0.94)')
+                  : 'translateY(0px) scale(0.92)')
               : `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.03 : 1.0})`,
             perspective: '1000px',
             transformStyle: 'preserve-3d',

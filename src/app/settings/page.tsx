@@ -1,5 +1,7 @@
 'use client';
 
+export const runtime = 'edge';
+
 import React from 'react';
 import Navbar from '@/components/ui/Navbar';
 import SettingsModal from '@/components/ui/SettingsModal';

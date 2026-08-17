@@ -1,5 +1,7 @@
 'use client';
 
+export const runtime = 'edge';
+
 import React, { useState } from 'react';
 import { Shield, FileText, Scale } from 'lucide-react';
 import Footer from '@/components/ui/Footer';

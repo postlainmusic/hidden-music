@@ -1,0 +1,50 @@
+# ========================================================
+# Cloudflare Pages Edge Headers Configuration
+# ========================================================
+
+# Global Default Security & CORS Headers
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD
+  Access-Control-Allow-Headers: Range, Content-Type, Authorization, apikey, X-Requested-With
+  Access-Control-Expose-Headers: Content-Range, Content-Length, Accept-Ranges, ETag, Cache-Control
+
+# Web Fonts (Gotham, DFVN Grafika, Outfit) - 1 Year Immutable Cache
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+# Static App Assets & Manifest
+/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/icon.svg
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Next.js Static Chunks & Bundles - 1 Year Immutable Cache
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# API & Streaming Routes - Range Request & Edge Revalidation
+/api/stream/*
+  Accept-Ranges: bytes
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/api/tracks*
+  Cache-Control: public, s-maxage=60, stale-while-revalidate=600
+  Access-Control-Allow-Origin: *
+
+/api/albums*
+  Cache-Control: public, s-maxage=60, stale-while-revalidate=600
+  Access-Control-Allow-Origin: *
