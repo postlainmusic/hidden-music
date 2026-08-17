@@ -233,23 +233,18 @@ export default function VaultScene({
       />
 
       {/* ========================================================================= */}
-      {/* 2. UNIFIED CONTINUOUS STAGE (MATHEMATICALLY CENTERED IN BOTH MODES)       */}
+      {/* 2. UNIFIED CONTINUOUS STAGE (APP-LIKE DESKTOP & MOBILE ORCHESTRATION)    */}
       {/* ========================================================================= */}
-      <div
-        className={`relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center ${
-          isDetail ? 'justify-start lg:justify-center pt-12 sm:pt-14 pb-28 sm:pb-32 overflow-y-auto lg:overflow-hidden no-scrollbar' : 'justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden'
-        }`}
-        style={{ WebkitOverflowScrolling: 'touch' }}
-      >
+
+      {/* --- DESKTOP VIEW (lg+) --- */}
+      <div className="hidden lg:flex relative z-10 w-full max-w-[1400px] h-full items-center justify-center pt-10 pb-20 overflow-hidden select-none">
         
-        {/* PHYSICAL ALBUM DECK (Slides left in detail mode, dead center in vault mode) */}
+        {/* DESKTOP PHYSICAL ALBUM DECK */}
         <div
-          className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20 flex-shrink-0"
+          className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20"
           style={{
             transform: isDetail
-              ? (typeof window !== 'undefined' && window.innerWidth >= 1024
-                  ? 'translateX(-280px) scale(1.02)'
-                  : 'translateY(0px) scale(0.92)')
+              ? 'translateX(-280px) scale(1.02)'
               : `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.03 : 1.0})`,
             perspective: '1000px',
             transformStyle: 'preserve-3d',
@@ -351,7 +346,6 @@ export default function VaultScene({
             }`}
           >
             <div className="w-full flex items-center gap-2">
-              {/* Left Comments / Playlist Toggle Button */}
               <button
                 onClick={() => setAlbumTab((prev) => (prev === 'comments' ? 'tracks' : 'comments'))}
                 title={albumTab === 'comments' ? 'Xem danh sách bài hát (Playlist)' : 'Xem thảo luận & bình luận'}
@@ -429,9 +423,7 @@ export default function VaultScene({
           )}
         </div>
 
-        {/* ========================================================================= */}
-        {/* 3. RIGHT COLUMN: PLAYLIST & COMMENTS PANEL (DESKTOP)                      */}
-        {/* ========================================================================= */}
+        {/* DESKTOP RIGHT COLUMN: PLAYLIST & COMMENTS */}
         <div
           className={`hidden lg:flex absolute z-10 w-[500px] xl:w-[560px] h-[460px] xl:h-[500px] max-h-[70vh] flex-col font-mono transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
             isDetail
@@ -444,7 +436,6 @@ export default function VaultScene({
         >
           <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
             {albumTab === 'tracks' ? (
-              /* Clean Tracklist with smooth slide/fade */
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 animate-fadeIn" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {tracks.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
@@ -517,7 +508,6 @@ export default function VaultScene({
                 )}
               </div>
             ) : (
-              /* Album Comments with smooth slide/fade */
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col animate-fadeIn">
                 <AlbumComments
                   albumId={activeAlbum.id}
@@ -529,85 +519,235 @@ export default function VaultScene({
           </div>
         </div>
 
-        {/* MOBILE PLAYLIST & COMMENTS (Rendered below on small screens) */}
-        <div
-          className={`lg:hidden w-full max-w-md h-[290px] xs:h-[320px] sm:h-[360px] flex flex-col font-mono transition-all duration-500 will-change-transform z-10 mt-2 ${
-            isDetail
-              ? 'opacity-100 translate-y-0 pointer-events-auto'
-              : 'opacity-0 translate-y-6 pointer-events-none hidden'
-          }`}
-        >
-          <div className="dark-neumorph-card p-2 sm:p-3 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
-            {albumTab === 'tracks' ? (
-              /* Mobile Tracklist */
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 animate-fadeIn" style={{ WebkitOverflowScrolling: 'touch' }}>
-                {tracks.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                    <Disc3 className="w-8 h-8 text-slate-600 animate-spin-slow mb-2" />
-                    <p className="text-xs uppercase tracking-widest font-mono">
-                      NO TRACKS IN THIS ARCHIVE
-                    </p>
+      </div>
+
+      {/* --- MOBILE APP-LIKE CONTAINER (Locked 100dvh & Smart Scaling) --- */}
+      <div className="lg:hidden w-full max-w-md h-full max-h-[100dvh] flex flex-col justify-between items-center mx-auto relative overflow-hidden pt-11 sm:pt-14 pb-20 sm:pb-22 px-3 select-none touch-none overscroll-none">
+        
+        {/* MOBILE TOP SECTION: COMPACT ALBUM DECK */}
+        <div className="flex flex-col items-center justify-center w-full flex-shrink-0 z-20">
+          
+          <div
+            onClick={() => {
+              if (!isDetail) {
+                onSelectAlbum(activeAlbum);
+              } else if (togglePlay && handlePlayAlbum) {
+                if (isCurrentPlayingThisAlbum) togglePlay();
+                else handlePlayAlbum();
+              }
+            }}
+            className={`cursor-pointer transition-all duration-500 flex flex-col items-center w-full max-w-[280px] ${
+              isDetail ? 'p-1' : 'glass-card p-3 my-auto'
+            }`}
+          >
+            {/* Symmetrical Composition with Smart Height-Aware Clamping */}
+            <div className="relative mx-auto flex items-center justify-center w-[clamp(130px,21vh,200px)] h-[clamp(130px,21vh,200px)] overflow-visible">
+              
+              {/* Grooved Vinyl Record */}
+              <div
+                className="absolute w-[clamp(120px,19vh,185px)] h-[clamp(120px,19vh,185px)] rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/25 shadow-2xl flex items-center justify-center transition-all duration-700 pointer-events-none z-0 will-change-transform"
+                style={{
+                  transform: (isDetail || (isCurrentPlayingThisAlbum && isPlaying))
+                    ? (isDetail ? 'translateX(40px) rotate(180deg)' : 'translateX(20px) rotate(180deg)')
+                    : 'translateX(0px) rotate(0deg)',
+                }}
+              >
+                <div className="w-full h-full rounded-full border border-white/10 p-2 flex items-center justify-center">
+                  <div className="w-full h-full rounded-full border border-white/10 p-2 flex items-center justify-center">
+                    <div className={`w-[clamp(32px,5vh,52px)] h-[clamp(32px,5vh,52px)] rounded-full bg-zinc-800 border border-white/40 flex items-center justify-center shadow-inner ${
+                      isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
+                    }`}>
+                      <img src={activeAlbum.cover_url} alt="" className="w-full h-full object-cover rounded-full" />
+                      <div className="absolute w-2.5 h-2.5 rounded-full bg-black border border-white/60" />
+                    </div>
                   </div>
-                ) : (
-                  tracks.map((track, idx) => {
-                    const isCurrentPlaying = currentTrack?.id === track.id;
-                    const trackIndex = String(idx + 1).padStart(2, '0');
+                </div>
+              </div>
 
-                    return (
-                      <div
-                        key={track.id}
-                        onClick={() => {
-                          if (setSelectedTrack) setSelectedTrack(track);
-                          if (playTrack) playTrack(track, activeAlbum, tracks);
-                        }}
-                        className={`group relative h-12 px-3 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
-                          isCurrentPlaying
-                            ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
-                            : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                          <span className={`text-xs font-mono font-bold ${
-                            isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
-                          }`}>
-                            {trackIndex}
-                          </span>
+              {/* Cover Artwork Sleeve */}
+              <div
+                className="relative z-10 w-[clamp(125px,20vh,190px)] h-[clamp(125px,20vh,190px)] rounded-xl overflow-hidden shadow-2xl border border-white/20 bg-zinc-950 flex-shrink-0 transition-transform duration-700 will-change-transform"
+                style={{
+                  transform: isDetail ? 'translateX(-15px)' : 'translateX(0px)',
+                }}
+              >
+                <img
+                  src={activeAlbum.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                  alt={activeAlbum.title}
+                  className="w-full h-full object-cover select-none"
+                  loading="eager"
+                />
 
-                          <span className={`truncate text-xs font-cyber tracking-wide ${
-                            isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
-                          }`}>
-                            {track.title}
-                          </span>
-
-                          {track.video_url && (
-                            <span className="text-[8px] uppercase px-1.5 py-0.2 rounded font-bold bg-white/10 text-white border border-white/20 flex items-center gap-0.5 flex-shrink-0">
-                              <Film className="w-2.5 h-2.5 text-white" /> MV
-                            </span>
-                          )}
-                        </div>
-
-                        <span className={`text-[10px] font-mono tabular-nums ${
-                          isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500'
-                        }`}>
-                          {formatDuration(track.duration)}
-                        </span>
-                      </div>
-                    );
-                  })
+                {isDetail && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-2xl">
+                      {isCurrentPlayingThisAlbum && isPlaying ? (
+                        <Pause className="w-4 h-4 fill-current" />
+                      ) : (
+                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
-            ) : (
-              /* Mobile Album Comments */
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col animate-fadeIn">
-                <AlbumComments
-                  albumId={activeAlbum.id}
-                  albumTitle={activeAlbum.title}
-                  onCommentsCountChange={setCommentsCount}
-                />
-              </div>
-            )}
+            </div>
+
+            {/* Album Title & Artist */}
+            <div className="flex flex-col items-center text-center mt-2 w-full">
+              <h2 className="text-sm xs:text-base sm:text-lg font-black font-cyber text-white tracking-wider truncate uppercase w-full">
+                {activeAlbum.title}
+              </h2>
+              <p className="text-[10px] sm:text-xs font-mono text-zinc-300 font-bold tracking-widest uppercase mt-0.5">
+                {activeAlbum.artist || 'VAULT ARTIST'}
+              </p>
+            </div>
           </div>
+
+          {/* Action Buttons Deck */}
+          {isDetail && (
+            <div className="w-full max-w-[260px] flex items-center gap-1.5 mt-1 mb-1 animate-fadeIn">
+              <button
+                onClick={() => setAlbumTab((prev) => (prev === 'comments' ? 'tracks' : 'comments'))}
+                className={`p-1.5 sm:p-2 rounded-full border transition-all flex items-center justify-center relative flex-shrink-0 ${
+                  albumTab === 'comments'
+                    ? 'bg-white text-black border-white shadow-lg'
+                    : 'bg-white/10 text-white border-white/20'
+                }`}
+              >
+                {albumTab === 'comments' ? <ListMusic className="w-3.5 h-3.5" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                {commentsCount > 0 && albumTab !== 'comments' && (
+                  <span className="absolute -top-1 -right-1 min-w-[13px] h-[13px] px-0.5 bg-white text-black rounded-full text-[7px] font-black flex items-center justify-center">
+                    {commentsCount > 99 ? '99+' : commentsCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  if (handlePlayAlbum) handlePlayAlbum();
+                }}
+                className="flex-1 py-1.5 sm:py-2 px-3 rounded-full bg-white text-black font-black font-mono text-[11px] uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center gap-1"
+              >
+                {isCurrentPlayingThisAlbum && isPlaying ? (
+                  <>
+                    <Pause className="w-3 h-3 fill-current" />
+                    <span>PAUSE</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>PLAY ALL</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  if (handleShufflePlay) handleShufflePlay();
+                }}
+                className={`p-1.5 sm:p-2 rounded-full border transition-all flex items-center justify-center flex-shrink-0 ${
+                  shuffleMode
+                    ? 'bg-white text-black border-white shadow-lg'
+                    : 'bg-white/10 text-white border-white/20'
+                }`}
+              >
+                <Shuffle className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Navigation Dots (Only in Vault Mode) */}
+          {!isDetail && albums.length > 1 && (
+            <div className="flex items-center gap-1.5 mt-3">
+              {albums.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`h-1 rounded-full transition-all duration-300 ${
+                    idx === currentIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/30'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* MOBILE BOTTOM SECTION: INTERNAL SCROLL TRACKLIST / COMMENTS (Detail Mode Only) */}
+        {isDetail && (
+          <div className="flex-1 min-h-[140px] max-h-[48vh] w-full flex flex-col font-mono mt-1 overflow-hidden z-10 animate-fadeIn">
+            <div className="dark-neumorph-card p-1.5 sm:p-2 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
+              {albumTab === 'tracks' ? (
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 overscroll-contain"
+                  style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+                >
+                  {tracks.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center">
+                      <Disc3 className="w-6 h-6 text-slate-600 animate-spin-slow mb-1" />
+                      <p className="text-[10px] uppercase tracking-widest font-mono">
+                        NO TRACKS IN THIS ARCHIVE
+                      </p>
+                    </div>
+                  ) : (
+                    tracks.map((track, idx) => {
+                      const isCurrentPlaying = currentTrack?.id === track.id;
+                      const trackIndex = String(idx + 1).padStart(2, '0');
+
+                      return (
+                        <div
+                          key={track.id}
+                          onClick={() => {
+                            if (setSelectedTrack) setSelectedTrack(track);
+                            if (playTrack) playTrack(track, activeAlbum, tracks);
+                          }}
+                          className={`group relative h-10 sm:h-11 px-2.5 rounded-lg cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+                            isCurrentPlaying
+                              ? 'bg-white/[0.12] border-white/30 shadow-[0_0_15px_rgba(255,255,255,0.08)]'
+                              : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 pr-1.5">
+                            <span className={`text-[11px] font-mono font-bold ${
+                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
+                            }`}>
+                              {trackIndex}
+                            </span>
+
+                            <span className={`truncate text-xs font-cyber tracking-wide ${
+                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 font-medium'
+                            }`}>
+                              {track.title}
+                            </span>
+
+                            {track.video_url && (
+                              <span className="text-[7px] uppercase px-1 py-0.2 rounded font-bold bg-white/10 text-white border border-white/20 flex items-center gap-0.5 flex-shrink-0">
+                                <Film className="w-2 h-2 text-white" /> MV
+                              </span>
+                            )}
+                          </div>
+
+                          <span className={`text-[10px] font-mono tabular-nums ${
+                            isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500'
+                          }`}>
+                            {formatDuration(track.duration)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 overflow-hidden flex flex-col animate-fadeIn">
+                  <AlbumComments
+                    albumId={activeAlbum.id}
+                    albumTitle={activeAlbum.title}
+                    onCommentsCountChange={setCommentsCount}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
