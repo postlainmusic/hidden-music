@@ -56,9 +56,9 @@ export default function SubscriptionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-fadeIn select-none font-mono">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 pb-28 sm:pb-32 overflow-y-auto bg-black/90 backdrop-blur-xl animate-fadeIn select-none font-mono">
       <div
-        className="relative w-full max-w-lg rounded-3xl bg-[#090a0f] border border-white/20 p-5 sm:p-7 shadow-[0_0_80px_rgba(255,255,255,0.08)] overflow-hidden flex flex-col gap-5 text-white animate-scaleUp"
+        className="relative w-full max-w-lg rounded-3xl bg-[#090a0f] border border-white/20 p-5 sm:p-7 shadow-[0_0_80px_rgba(255,255,255,0.08)] overflow-hidden flex flex-col gap-5 text-white animate-scaleUp my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle Ambient Glow */}
