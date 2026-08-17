@@ -1,0 +1,23 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { fetchAlbums } from '../../lib/api';
+import AlbumDetailView from '../../components/terminal/AlbumDetailView';
+
+export async function getStaticPaths() {
+  const albums = await fetchAlbums();
+  if (!albums || albums.length === 0) {
+    return [{ params: { id: 'hvl' }, props: { album: null } }];
+  }
+  return albums.map((album) => ({
+    params: { id: album.id },
+    props: { album },
+  }));
+}
+
+const { album } = Astro.props;
+const albumId = Astro.params.id;
+---
+
+<Layout title={`${album?.title || 'Album'} - Hidden Music Vault`}>
+  <AlbumDetailView client:load album={album} albumId={albumId} />
+</Layout>
