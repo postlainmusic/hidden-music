@@ -270,7 +270,20 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   }, [albums]);
 
   // Handle Album Selection with Smooth 60FPS Morph Transition
-  const handleSelectAlbum = async (album: Album, updateHistory = true, mediaMode: 'audio' | 'video' = 'audio') => {
+  const handleSelectAlbum = async (
+    album: Album,
+    mediaModeOrUpdateHistory?: 'audio' | 'video' | boolean,
+    updateHistory = true
+  ) => {
+    let mediaMode: 'audio' | 'video' = 'audio';
+    let shouldUpdateHistory = updateHistory;
+
+    if (typeof mediaModeOrUpdateHistory === 'string') {
+      mediaMode = mediaModeOrUpdateHistory;
+    } else if (typeof mediaModeOrUpdateHistory === 'boolean') {
+      shouldUpdateHistory = mediaModeOrUpdateHistory;
+    }
+
     setInitialMediaMode(mediaMode);
     let fullAlbum = album;
 
@@ -314,7 +327,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     }
     setViewMode('album');
 
-    if (updateHistory && typeof window !== 'undefined') {
+    if (shouldUpdateHistory && typeof window !== 'undefined') {
       window.history.pushState({ view: 'album', albumId: album.id }, '', `/album/${album.id}`);
     }
   };
