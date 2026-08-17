@@ -1,18 +1,31 @@
 # 📌 CURRENT CHECKPOINT & TIẾP TỤC DỰ ÁN (HANDOVER RECORD)
 
-> **MỤC ĐÍCH**: Đây là điểm lưu trữ trạng thái hiện tại của dự án **Hidden Music Vault**. Khi bạn mở phiên làm việc mới, bạn chỉ cần nói *"tiếp tục"* hoặc *"đang làm đến đâu rồi"*, AI sẽ đọc file này và tiếp tục hướng dẫn bạn chính xác từ bước này!
+> **MỤC ĐÍCH**: Đây là điểm lưu trữ trạng thái hiện tại của dự án **Hidden Music Vault** (`postlain.com`). Khi bạn mở phiên làm việc mới, bạn chỉ cần nói *"tiếp tục"* hoặc *"đang làm đến đâu rồi"*, AI sẽ đọc file này và tiếp tục hướng dẫn bạn chính xác từ bước này!
 
 ---
 
-## 📍 TRẠNG THÁI HIỆN TẠI (CURRENT STATE)
+## 📍 TRẠNG THÁI HIỆN TẠI (CURRENT STATE - NÂNG CẤP TOÀN DIỆN 4 BƯỚC)
 
-1. **Dual Media Engine (Audio & MV Video Restored 100%)**:
-   * Đã khôi phục toàn bộ giao diện **MV Video Stage**, chế độ xem Fullscreen tỉ lệ gốc (aspect ratio contain), phụ đề chạy chữ Gothic đồng bộ theo beat nhạc, cơ chế `video_offset` và nút bật/tắt MV mượt mà trên cả Mobile lẫn Desktop.
-2. **Cloudflare R2 Object Storage & Worker Gateway (100% Tested & Verified)**:
-   * Lưu trữ tệp âm thanh (MP3/FLAC/WAV) và MV Video (MP4) với **0 chi phí băng thông Egress**.
-   * Hệ thống Direct S3 Presigned URL hỗ trợ tải lên file dung lượng lớn vượt qua giới hạn của Vercel Serverless.
-   * Worker Gateway hỗ trợ RFC 7233 Range Requests (206 Partial Content) để tua nhạc/video tức thì.
-3. **CI/CD & Git Integration**: Đã thiết lập GitHub Actions và kết nối remote repo `postlainmusic/hidden-music` trên nhánh `main`.
+1. **Hono Backend API & Cloudflare Worker Gateway (`worker/index.ts` & `wrangler.toml`)**:
+   * Hỗ trợ chuẩn **RFC 7233 Byte-Range Requests (HTTP 206 Partial Content)** kết nối trực tiếp R2 Bucket `hidden-music-vault` qua `env.BUCKET`.
+   * Endpoint `/api/upload/presign` tạo AWS S3 SigV4 Presigned PUT URL để Client upload file FLAC/WAV/MP4 dung lượng không giới hạn thẳng lên R2.
+   * Endpoint `/api/tracks` và `/api/albums` kết nối Supabase Edge REST API có gắn Edge Caching (`stale-while-revalidate`).
+   * HMAC-SHA256 Expiring Stream Token (`/api/sign-stream`) bảo vệ các bản ghi độc quyền / private.
+
+2. **Astro + Persistent React Island Engine (`src/layouts/RootLayout.astro`, `astro.config.mjs`)**:
+   * Tích hợp **Astro View Transitions (`<ClientRouter />`)** cho phép chuyển trang tức thì < 50ms mà không reload trang.
+   * Cài đặt **Persistent Audio Island (`GlobalPlayerIsland.tsx` với `transition:persist`)** giữ nguyên 100% nhạc/video đang phát khi duyệt album.
+   * Bảo toàn 100% hệ thống giao diện Pure Monochrome B&W, CRT Scanlines, TV Grain Overlay và bộ font Gotham & DFVN Grafika.
+
+3. **Three.js & Mobile Performance Tối Ưu Triệt Để (`VaultPillar3D.tsx`, `VaultScene.tsx`)**:
+   * Khóa Clamped `devicePixelRatio` ($\le 1.5$ trên Mobile, $\le 2.0$ trên Desktop), triệt tiêu hiện tượng lag giật và tụt pin trên màn hình Retina/OLED di động.
+   * Tích hợp Off-screen Culling và `requestAnimationFrame` debouncing trên toàn bộ sự kiện con trỏ và cảm ứng.
+
+4. **Đa Nền Tảng PWA + Capacitor Android Background Playback (`manifest.webmanifest`, `sw.js`, `PlayerContext.tsx`)**:
+   * PWA Manifest chuẩn Web Standalone (`display: standalone`, Dark theme `#000000`).
+   * Service Worker (`public/sw.js`) cache App Shell và bỏ qua bypass các luồng Range Stream 206.
+   * Tích hợp đầy đủ **MediaSession API** (metadata, lockscreen controls, `seekto`, `seekbackward`, `seekforward`, `setPositionState`, `playbackState`) giúp phát nhạc nền liên tục khi tắt màn hình điện thoại.
+   * File cấu hình Capacitor (`capacitor.config.json`) sẵn sàng build Native Android APK.
 
 ---
 
@@ -39,7 +52,9 @@ Vào Cloudflare R2 > Bucket `hidden-music-vault` > Tab **Settings** > **CORS Pol
     "ExposeHeaders": [
       "ETag",
       "Content-Length",
-      "Content-Type"
+      "Content-Type",
+      "Content-Range",
+      "Accept-Ranges"
     ],
     "MaxAgeSeconds": 3600
   }

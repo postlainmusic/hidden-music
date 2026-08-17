@@ -28,8 +28,14 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Hidden Music Vault | Kho Âm Nhạc Bị Ẩn & Thu Hồi 3D',
   description: 'Trải nghiệm không gian 3D đẳng cấp thế giới lưu trữ và phát trực tuyến các sản phẩm âm nhạc bị cấm, bị ẩn hoặc chưa từng phát hành.',
-  keywords: ['Hidden Music', '3D Vault', 'Web Audio 3D', 'Unreleased Music', 'Supabase', 'Vercel'],
+  keywords: ['Hidden Music', '3D Vault', 'Web Audio 3D', 'Unreleased Music', 'Supabase', 'Cloudflare R2'],
   authors: [{ name: 'Hidden Vault Team' }],
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Hidden Music',
+  },
   openGraph: {
     title: 'Hidden Music Vault | Kho Âm Nhạc 3D Tối Mật',
     description: 'Nền tảng phát nhạc 3D tương tác theo thời gian thực dành cho các bản nhạc bị cấm & thu hồi.',
@@ -47,9 +53,24 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link
           href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
           rel="stylesheet"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW register warning:', err));
+                });
+              }
+            `,
+          }}
         />
       </head>
       <body className="bg-black text-white antialiased selection:bg-white selection:text-black overflow-x-hidden">

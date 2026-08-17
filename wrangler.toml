@@ -18,6 +18,12 @@ preview_bucket_name = "hidden-music-vault"
 ALLOWED_ORIGINS = "*"
 PUBLIC_URL = "https://pub-1d0bee5762b4432cbce8cd4c1c010fa4.r2.dev"
 STREAM_SECRET_KEY = "vault-stream-secret-key-prod-2026"
+SUPABASE_URL = "https://muemwfqynfljpmvxmpep.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11ZW13ZnF5bmZsanBtdnhtcGVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTIwMDYsImV4cCI6MjEwMjIyODAwNn0.btnyUiVm-KqKlGQ-PlhVdPBy-VP005ltDMzABIHfYro"
+R2_ACCOUNT_ID = "5da953b3d1c0e1c733cf2285f8e7ab39"
+R2_ACCESS_KEY_ID = "57456fede976516aa1adecf2cd2b24e3"
+R2_SECRET_ACCESS_KEY = "4cb6fa310e4a74e524dd8217bb0bae7072b5f0fdd21c350d8591a65f29fd4ee4"
+R2_BUCKET_NAME = "hidden-music-vault"
 
 # 3. Observability & Logging
 [observability]

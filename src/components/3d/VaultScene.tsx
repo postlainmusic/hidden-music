@@ -71,32 +71,44 @@ export default function VaultScene({
 
   const activeAlbum = (isDetail && selectedAlbum) ? selectedAlbum : (albums[currentIndex] || albums[0]);
 
-  // Smooth 3D Cursor Parallax for Background & Card Tilt (Disabled in detail mode)
+  // Smooth 3D Cursor Parallax with RAF Debouncing & Mobile Throttling
   useEffect(() => {
+    let rafId: number | null = null;
+    const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
+
     const handleMouseMove = (e: MouseEvent) => {
-      const { innerWidth, innerHeight } = window;
-      const normX = (e.clientX / innerWidth - 0.5) * 2; // -1 to 1
-      const normY = (e.clientY / innerHeight - 0.5) * 2; // -1 to 1
+      if (isMobile && !isDetail) return; // Skip mouse parallax calculations on touch devices
+      if (rafId !== null) return;
 
-      // 3D Parallax Offset for Background Space Layers
-      setMouseOffset({
-        x: normX,
-        y: normY,
-      });
+      rafId = requestAnimationFrame(() => {
+        const { innerWidth, innerHeight } = window;
+        const normX = (e.clientX / innerWidth - 0.5) * 2; // -1 to 1
+        const normY = (e.clientY / innerHeight - 0.5) * 2; // -1 to 1
 
-      // 3D Tilt for Card (Only in 3D Vault mode)
-      if (!isDetail) {
-        setTilt({
-          x: -normY * 7,
-          y: normX * 7,
+        // 3D Parallax Offset for Background Space Layers
+        setMouseOffset({
+          x: normX,
+          y: normY,
         });
-      } else {
-        setTilt({ x: 0, y: 0 });
-      }
+
+        // 3D Tilt for Card (Only in 3D Vault mode)
+        if (!isDetail && !isMobile) {
+          setTilt({
+            x: -normY * 7,
+            y: normX * 7,
+          });
+        } else {
+          setTilt({ x: 0, y: 0 });
+        }
+        rafId = null;
+      });
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [isDetail]);
 
   // Vertical Navigation Handlers in 3D Vault Mode (Wheel, Arrow Keys, Touch)

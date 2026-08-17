@@ -508,28 +508,61 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     // MediaSession lockscreen and system notification integration
-    if ('mediaSession' in navigator && currentTrack) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title,
-        artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
-        album: currentAlbum?.title || 'Hidden Music Vault',
-        artwork: currentAlbum?.cover_url ? [
-          { src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' },
-        ] : [],
-      });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && currentTrack) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title,
+          artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
+          album: currentAlbum?.title || 'Hidden Music Vault',
+          artwork: currentAlbum?.cover_url ? [
+            { src: currentAlbum.cover_url, sizes: '96x96', type: 'image/jpeg' },
+            { src: currentAlbum.cover_url, sizes: '128x128', type: 'image/jpeg' },
+            { src: currentAlbum.cover_url, sizes: '256x256', type: 'image/jpeg' },
+            { src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' },
+          ] : [],
+        });
 
-      navigator.mediaSession.setActionHandler('play', () => {
-        setIsPlaying(true);
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        setIsPlaying(false);
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        prevTrack();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        nextTrack();
-      });
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+        navigator.mediaSession.setActionHandler('play', () => {
+          setIsPlaying(true);
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          setIsPlaying(false);
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          prevTrack();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          nextTrack();
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime !== undefined && details.seekTime !== null) {
+            seekTo(details.seekTime);
+          }
+        });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skipTime = details.seekOffset || 10;
+          seekTo(Math.max(0, currentTime - skipTime));
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skipTime = details.seekOffset || 10;
+          seekTo(Math.min(duration || 1000, currentTime + skipTime));
+        });
+        navigator.mediaSession.setActionHandler('stop', () => {
+          setIsPlaying(false);
+        });
+
+        if ('setPositionState' in navigator.mediaSession && duration > 0) {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(duration, 1),
+            playbackRate: 1.0,
+            position: Math.min(Math.max(currentTime, 0), duration),
+          });
+        }
+      } catch (e) {
+        console.warn('MediaSession handler setup error:', e);
+      }
     }
   }, [isPlaying, trackUrl, currentTrack, currentAlbum]);
 
