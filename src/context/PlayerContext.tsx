@@ -130,6 +130,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const isPCMReadyRef = useRef<boolean>(false);
   const currentProcessingUrlRef = useRef<string>('');
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const lastUiTimeUpdateRef = useRef<number>(0);
   const rawTrackUrl = currentTrack?.audio_url || '';
   const trackUrl = rawTrackUrl;
 
@@ -140,189 +141,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     isPCMReadyRef.current = false;
   }, [currentTrack?.id]);
 
-  // Extract Separate Kick & Snare Timestamps from raw PCM AudioBuffer with Multi-band Spectral Guarding
-  const processPCMBeatMap = async (url: string) => {
-    if (!url || typeof window === 'undefined') return;
-    currentProcessingUrlRef.current = url;
-    try {
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        audioCtxRef.current = new AudioCtx();
-      }
-      const response = await fetch(url);
-      const arrayBuffer = await response.arrayBuffer();
-      if (currentProcessingUrlRef.current !== url) return;
-
-      const audioBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
-      if (currentProcessingUrlRef.current !== url) return;
-
-      const sampleRate = audioBuffer.sampleRate;
-      const channelData = audioBuffer.getChannelData(0);
-      const len = channelData.length;
-
-      // 1. Digital 55Hz Biquad Bandpass Filter for Kick Sub-Punch (High Q=3.5)
-      const f0K = 55, QK = 3.5;
-      const w0K = (2 * Math.PI * f0K) / sampleRate;
-      const alphaK = Math.sin(w0K) / (2 * QK);
-      const B0K = alphaK / (1 + alphaK), B2K = -alphaK / (1 + alphaK);
-      const A1K = (-2 * Math.cos(w0K)) / (1 + alphaK), A2K = (1 - alphaK) / (1 + alphaK);
-
-      const filteredKick = new Float32Array(len);
-      let x1K = 0, x2K = 0, y1K = 0, y2K = 0;
-      for (let i = 0; i < len; i++) {
-        const x0 = channelData[i];
-        const y0 = B0K * x0 + B2K * x2K - A1K * y1K - A2K * y2K;
-        x2K = x1K; x1K = x0; y2K = y1K; y1K = y0;
-        filteredKick[i] = y0;
-      }
-
-      // 2. Digital 3200Hz Biquad Bandpass Filter for Snare / Clap High Crack (Q=1.8)
-      // High-frequency crack 3.2kHz captures sharp percussion transients
-      const f0S = 3200, QS = 1.8;
-      const w0S = (2 * Math.PI * f0S) / sampleRate;
-      const alphaS = Math.sin(w0S) / (2 * QS);
-      const B0S = alphaS / (1 + alphaS), B2S = -alphaS / (1 + alphaS);
-      const A1S = (-2 * Math.cos(w0S)) / (1 + alphaS), A2S = (1 - alphaS) / (1 + alphaS);
-
-      const filteredSnare = new Float32Array(len);
-      let x1S = 0, x2S = 0, y1S = 0, y2S = 0;
-      for (let i = 0; i < len; i++) {
-        const x0 = channelData[i];
-        const y0 = B0S * x0 + B2S * x2S - A1S * y1S - A2S * y2S;
-        x2S = x1S; x1S = x0; y2S = y1S; y1S = y0;
-        filteredSnare[i] = y0;
-      }
-
-      // 3. Digital 600Hz Mid-Range Guard Filter for Acoustic Guitar / Instrumental / Vocals (Q=1.0)
-      // Measures guitar chords, piano bodies, and vocal energy to distinguish real percussion from acoustic strums
-      const f0M = 600, QM = 1.0;
-      const w0M = (2 * Math.PI * f0M) / sampleRate;
-      const alphaM = Math.sin(w0M) / (2 * QM);
-      const B0M = alphaM / (1 + alphaM), B2M = -alphaM / (1 + alphaM);
-      const A1M = (-2 * Math.cos(w0M)) / (1 + alphaM), A2M = (1 - alphaM) / (1 + alphaM);
-
-      const filteredMid = new Float32Array(len);
-      let x1M = 0, x2M = 0, y1M = 0, y2M = 0;
-      for (let i = 0; i < len; i++) {
-        const x0 = channelData[i];
-        const y0 = B0M * x0 + B2M * x2M - A1M * y1M - A2M * y2M;
-        x2M = x1M; x1M = x0; y2M = y1M; y1M = y0;
-        filteredMid[i] = y0;
-      }
-
-      const frameSize = Math.floor(sampleRate * 0.02); // 20ms frame
-      const totalFrames = Math.floor(len / frameSize);
-
-      // Compute Global Max Energies for Peak Normalization
-      let maxEnergyK = 0;
-      let maxEnergyS = 0;
-      let maxEnergyM = 0;
-      for (let f = 0; f < totalFrames; f++) {
-        const start = f * frameSize;
-        let sumK = 0, sumS = 0, sumM = 0;
-        for (let i = 0; i < frameSize; i++) {
-          const k = filteredKick[start + i];
-          const s = filteredSnare[start + i];
-          const m = filteredMid[start + i];
-          sumK += k * k;
-          sumS += s * s;
-          sumM += m * m;
-        }
-        const eK = Math.sqrt(sumK / frameSize);
-        const eS = Math.sqrt(sumS / frameSize);
-        const eM = Math.sqrt(sumM / frameSize);
-        if (eK > maxEnergyK) maxEnergyK = eK;
-        if (eS > maxEnergyS) maxEnergyS = eS;
-        if (eM > maxEnergyM) maxEnergyM = eM;
-      }
-
-      // Check if the track actually contains real percussive kick / snare drums
-      // Tracks with only guitar/piano have weak Sub-to-Mid ratios (< 0.30) and low sub energy (< 0.080)
-      const hasRealKickDrums = maxEnergyK >= 0.080 && (maxEnergyM === 0 || maxEnergyK / maxEnergyM >= 0.30);
-      const hasRealSnares = maxEnergyS >= 0.080 && (maxEnergyM === 0 || maxEnergyS / maxEnergyM >= 0.28);
-
-      const kickStamps: number[] = [];
-      const snareStamps: number[] = [];
-
-      if (hasRealKickDrums || hasRealSnares) {
-        let prevKickE = 0, smoothKickTrans = 0, lastKickSec = -1;
-        let prevSnareE = 0, smoothSnareTrans = 0, lastSnareSec = -1;
-
-        for (let f = 0; f < totalFrames; f++) {
-          const start = f * frameSize;
-          let sumK = 0, sumS = 0, sumM = 0;
-          for (let i = 0; i < frameSize; i++) {
-            const k = filteredKick[start + i];
-            const s = filteredSnare[start + i];
-            const m = filteredMid[start + i];
-            sumK += k * k;
-            sumS += s * s;
-            sumM += m * m;
-          }
-          const eK = Math.sqrt(sumK / frameSize);
-          const eS = Math.sqrt(sumS / frameSize);
-          const eM = Math.sqrt(sumM / frameSize);
-
-          const deltaK = Math.max(0, eK - prevKickE);
-          const deltaS = Math.max(0, eS - prevSnareE);
-          prevKickE = eK;
-          prevSnareE = eS;
-
-          smoothKickTrans = smoothKickTrans * 0.85 + deltaK * 0.15;
-          smoothSnareTrans = smoothSnareTrans * 0.85 + deltaS * 0.15;
-
-          const threshK = Math.max(0.026, smoothKickTrans * 1.8);
-          const threshS = Math.max(0.032, smoothSnareTrans * 1.9);
-
-          const curSec = (f * frameSize) / sampleRate;
-
-          // Kick drum impact:
-          // Requires prominent sub punch (eK > maxEnergyK * 0.50 AND eK > 0.065)
-          // AND requires eK >= eM * 0.48 to reject acoustic guitar strums and vocal formants
-          if (
-            hasRealKickDrums &&
-            deltaK > threshK &&
-            deltaK > 0.026 &&
-            eK > maxEnergyK * 0.50 &&
-            eK > 0.065 &&
-            eK >= eM * 0.48 &&
-            (curSec - lastKickSec > 0.16)
-          ) {
-            lastKickSec = curSec;
-            kickStamps.push(Number(curSec.toFixed(3)));
-          }
-
-          // Snare / Clap impact:
-          // Requires sharp high-frequency transient (eS > maxEnergyS * 0.50 AND eS > 0.068)
-          // AND eS >= eM * 0.42 to reject guitar pick string slides
-          if (
-            hasRealSnares &&
-            deltaS > threshS &&
-            deltaS > 0.032 &&
-            eS > maxEnergyS * 0.50 &&
-            eS > 0.068 &&
-            eS >= eM * 0.42 &&
-            (curSec - lastSnareSec > 0.16)
-          ) {
-            lastSnareSec = curSec;
-            snareStamps.push(Number(curSec.toFixed(3)));
-          }
-        }
-      }
-
-      if (currentProcessingUrlRef.current === url) {
-        kickTimestampsRef.current = kickStamps;
-        snareTimestampsRef.current = snareStamps;
-        isPCMReadyRef.current = true;
-      }
-    } catch (e) {
-      console.warn('PCM Beat map generation note:', e);
-      if (currentProcessingUrlRef.current === url) {
-        isPCMReadyRef.current = true;
-      }
-    }
-  };
-
+  // Instant Real-time streaming Web Audio Graph (Zero memory footprint, zero extra network request)
   const initAudioAnalyser = () => {
     if (!audioRef.current || typeof window === 'undefined') return;
     try {
@@ -337,13 +156,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const audioCtx = audioCtxRef.current;
         const source = audioCtx.createMediaElementSource(audioRef.current);
 
-        // 1. Full Spectrum Master Analyser
+        // 1. Full Spectrum Master Analyser for Visualizer
         const masterAnalyser = audioCtx.createAnalyser();
         masterAnalyser.fftSize = 256;
         masterAnalyser.smoothingTimeConstant = 0.15;
 
-        // 2. High-Q Trap Sub-Punch Kick Filter (Peak @ 55Hz, Band 45Hz-70Hz, Q=3.2)
-        // High steepness Q=3.2 rejects male vocal fundamentals (100Hz+) and acoustic guitar mid-tones
+        // 2. Real-time Kick Sub-Punch Analyser
         const kickFilter = audioCtx.createBiquadFilter();
         kickFilter.type = 'bandpass';
         kickFilter.frequency.value = 55;
@@ -351,10 +169,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
         const kickAnalyser = audioCtx.createAnalyser();
         kickAnalyser.fftSize = 256;
-        kickAnalyser.smoothingTimeConstant = 0.02; // Instantaneous 60fps transient response
+        kickAnalyser.smoothingTimeConstant = 0.02;
 
-        // 3. High Crack Snare / Clap Filter (Peak @ 3200Hz, Q=1.8)
-        // Measures high-frequency percussion snap to detect real snares/claps
+        // 3. Real-time Snare / Clap Analyser
         const snareFilter = audioCtx.createBiquadFilter();
         snareFilter.type = 'bandpass';
         snareFilter.frequency.value = 3200;
@@ -378,9 +195,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         kickAnalyserRef.current = kickAnalyser;
         snareAnalyserRef.current = snareAnalyser;
         sourceRef.current = source;
+        isPCMReadyRef.current = true;
       }
     } catch (err) {
-      console.warn('AudioAnalyser initialization warning:', err);
+      console.warn('AudioAnalyser initialization note:', err);
     }
   };
 
@@ -498,7 +316,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
     if (isPlaying) {
       initAudioAnalyser();
-      processPCMBeatMap(trackUrl);
       audioRef.current.play().catch((err) => {
         console.warn('Audio play blocked by browser policy:', err);
         setIsPlaying(false);
@@ -668,15 +485,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
 
-      {/* Global Clean Background HTML5 Audio Element */}
+      {/* Global Clean Background HTML5 Audio Element (Zero Buffering Stream) */}
       {currentTrack && trackUrl && (
         <audio
           ref={audioRef}
           src={trackUrl}
           crossOrigin="anonymous"
+          preload="auto"
           autoPlay={isPlaying}
           onPlay={initAudioAnalyser}
-          onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+          onTimeUpdate={(e) => {
+            const target = e.currentTarget;
+            currentTimeRef.current = target.currentTime;
+            const now = performance.now();
+            if (now - lastUiTimeUpdateRef.current > 250) {
+              lastUiTimeUpdateRef.current = now;
+              setCurrentTime(target.currentTime);
+            }
+          }}
+          onSeeked={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          onPause={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={() => {
             if (audioRef.current) {
               setDuration(audioRef.current.duration);

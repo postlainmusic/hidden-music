@@ -74,8 +74,9 @@ function AlbumCard3D({
     cardGroupRef.current.position.y = THREE.MathUtils.lerp(cardGroupRef.current.position.y, wrappedY + 0.3, safeDelta * 10);
     cardGroupRef.current.position.z = THREE.MathUtils.lerp(cardGroupRef.current.position.z, targetZ, safeDelta * 10);
     cardGroupRef.current.rotation.x = THREE.MathUtils.lerp(cardGroupRef.current.rotation.x, targetRotX, safeDelta * 8);
-    cardGroupRef.current.rotation.y = THREE.MathUtils.lerp(cardGroupRef.current.rotation.y, targetRotY, safeDelta * 8);
-    cardGroupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), safeDelta * 10);
+    const curScale = cardGroupRef.current.scale.x;
+    const lerpedScale = THREE.MathUtils.lerp(curScale, targetScale, safeDelta * 10);
+    cardGroupRef.current.scale.set(lerpedScale, lerpedScale, lerpedScale);
 
     // Apply Opacity Fade to Materials
     if (frameMatRef.current) {
