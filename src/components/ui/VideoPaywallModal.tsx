@@ -8,6 +8,7 @@ import {
   X,
   Lock,
   ShieldCheck,
+  ShieldAlert,
   Crown,
   Disc3,
   Flame,
@@ -348,6 +349,28 @@ export default function VideoPaywallModal({
                 </div>
               </div>
 
+              {/* Important Notes & Screenshot Reminder Box */}
+              <div className="w-full mt-3 p-3 rounded-xl bg-amber-950/25 border border-amber-500/30 text-left space-y-1.5 font-mono text-[11px] leading-relaxed">
+                <div className="flex items-center gap-1.5 text-amber-300 font-bold uppercase tracking-wider text-[10px]">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <span>HƯỚNG DẪN & LƯU Ý QUAN TRỌNG:</span>
+                </div>
+                <ul className="space-y-1 text-slate-300 text-[10px] pl-1 list-none">
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-400 font-bold">1.</span>
+                    <span>Quét mã VietQR hoặc copy chính xác <strong>Số tài khoản</strong>, <strong>Số tiền</strong> và <strong>Nội dung chuyển khoản</strong>.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-400 font-bold">2.</span>
+                    <span className="text-amber-200 font-semibold">📸 <strong>Vui lòng chụp lại ảnh màn hình giao dịch / hóa đơn chuyển khoản</strong> để bảo đảm quyền lợi và đối soát nhanh khi cần.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-400 font-bold">3.</span>
+                    <span>Hệ thống tự động kích hoạt gói VIP ngay khi giao dịch thành công (thời gian xử lý 5-30 giây).</span>
+                  </li>
+                </ul>
+              </div>
+
               {/* Polling indicator */}
               <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-300">
                 <Disc3 className="w-3.5 h-3.5 animate-spin text-white" />
@@ -358,12 +381,18 @@ export default function VideoPaywallModal({
             {/* Direct PayOS Link Button */}
             <div className="flex gap-2">
               <a
-                href={payOSPayment.checkoutUrl}
+                href={payOSPayment.checkoutUrl || '#'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 py-3 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-black font-cyber text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all"
+                onClick={(e) => {
+                  if (payOSPayment.checkoutUrl) {
+                    window.open(payOSPayment.checkoutUrl, '_blank', 'noopener,noreferrer');
+                    e.preventDefault();
+                  }
+                }}
+                className="flex-1 py-3 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-black font-cyber text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
               >
-                <span>MỞ TRANG PAYOS</span>
+                <span>MỞ TRANG THANH TOÁN PAYOS</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
 

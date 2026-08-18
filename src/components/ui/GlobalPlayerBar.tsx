@@ -10,6 +10,7 @@ import {
   Repeat,
   Repeat1,
   Volume2,
+  Volume1,
   VolumeX,
   ListMusic,
   Disc3,
@@ -70,6 +71,8 @@ export default function GlobalPlayerBar() {
   const animFrameIdRef = useRef<number | null>(null);
   const timelineRafIdRef = useRef<number | null>(null);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const volumeSliderRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingVolumeRef = useRef<boolean>(false);
 
   // Direct DOM refs for 60FPS timeline updates without React re-renders
   const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
@@ -131,7 +134,7 @@ export default function GlobalPlayerBar() {
 
   // High-Performance 60FPS Direct DOM Timeline Updater (Zero React Re-render Lag)
   useEffect(() => {
-    if (!isPlaying || activeZone !== 'video') {
+    if (!isPlaying || activeZone !== 'audio') {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
       return;
     }
@@ -350,16 +353,62 @@ export default function GlobalPlayerBar() {
     }
   }, [activeLyricIdx, showLyrics]);
 
-  // Volume hover UX handlers
+  // Volume hover & drag UX handlers
   const handleVolumeMouseEnter = useCallback(() => {
     if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
     setShowVolumeSlider(true);
   }, []);
 
   const handleVolumeMouseLeave = useCallback(() => {
+    if (isDraggingVolumeRef.current) return;
     volumeTimeoutRef.current = setTimeout(() => {
       setShowVolumeSlider(false);
-    }, 450);
+    }, 550);
+  }, []);
+
+  const updateVolumeFromPosition = useCallback((clientY: number) => {
+    if (!volumeSliderRef.current) return;
+    const rect = volumeSliderRef.current.getBoundingClientRect();
+    const rawRatio = (rect.bottom - clientY) / rect.height;
+    const clamped = Math.max(0, Math.min(1, rawRatio));
+    setVolume(Math.round(clamped * 100) / 100);
+  }, [setVolume]);
+
+  const handleVolumeDragStart = useCallback((clientY: number) => {
+    isDraggingVolumeRef.current = true;
+    updateVolumeFromPosition(clientY);
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingVolumeRef.current) {
+        updateVolumeFromPosition(e.clientY);
+      }
+    };
+
+    const handleMouseUp = () => {
+      isDraggingVolumeRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [updateVolumeFromPosition]);
+
+  const handleVolumeTouchStart = useCallback((e: React.TouchEvent) => {
+    isDraggingVolumeRef.current = true;
+    if (e.touches[0]) {
+      updateVolumeFromPosition(e.touches[0].clientY);
+    }
+  }, [updateVolumeFromPosition]);
+
+  const handleVolumeTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isDraggingVolumeRef.current && e.touches[0]) {
+      updateVolumeFromPosition(e.touches[0].clientY);
+    }
+  }, [updateVolumeFromPosition]);
+
+  const handleVolumeTouchEnd = useCallback(() => {
+    isDraggingVolumeRef.current = false;
   }, []);
 
   // Global Keyboard Shortcuts
@@ -420,9 +469,9 @@ export default function GlobalPlayerBar() {
       ref={playerRootRef}
       className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none px-3 sm:px-6 md:px-8 pb-3 sm:pb-5 transition-all duration-300"
     >
-      {/* 1. ATTACHED DRAWER: LYRICS & QUEUE (FLUSH ATTACHED TO TOP OF PLAYBAR) */}
+      {/* 1. SEAMLESS ATTACHED DRAWER: LYRICS & QUEUE (FLUSH MOUNTED DIRECTLY ON TOP OF PLAYBAR) */}
       {hasDrawerOpen && (
-        <div className="w-full max-w-5xl h-[320px] sm:h-[380px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/95 shadow-[0_-15px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-4 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto animate-fadeIn font-mono">
+        <div className="w-full max-w-5xl h-[320px] sm:h-[380px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/98 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-4 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto font-mono z-10 animate-fadeIn">
           {/* Drawer Header */}
           <div className="flex items-center justify-between pb-2.5 border-b border-white/10 flex-shrink-0">
             <div className="flex items-center gap-2">
@@ -515,11 +564,11 @@ export default function GlobalPlayerBar() {
         </div>
       )}
 
-      {/* 2. PURE AUDIO SINGLE-ROW PLAYBAR CONTAINER */}
+      {/* 2. PURE AUDIO SINGLE-ROW PLAYBAR CONTAINER (FLUSH SEAMLESSLY ATTACHED) */}
       <div
         ref={barContainerRef}
-        className={`relative w-full max-w-5xl bg-zinc-950/95 border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl px-3.5 sm:px-5 py-2 sm:py-2.5 pointer-events-auto will-change-transform transition-all font-mono select-none ${
-          hasDrawerOpen ? 'rounded-b-3xl rounded-t-none border-t-white/10' : 'rounded-3xl'
+        className={`relative w-full max-w-5xl bg-zinc-950/98 border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl px-3.5 sm:px-5 py-2 sm:py-2.5 pointer-events-auto will-change-transform transition-all font-mono select-none z-10 ${
+          hasDrawerOpen ? 'rounded-b-3xl rounded-t-none border-t-0 -mt-[1px]' : 'rounded-3xl'
         }`}
       >
         {/* Monochromatic Flash Overlay */}
@@ -705,33 +754,73 @@ export default function GlobalPlayerBar() {
               <ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
 
-            {/* Volume Control with Popover */}
+            {/* Volume Control with iOS Control Center Vertical Capsule Slider */}
             <div
               className="relative"
               onMouseEnter={handleVolumeMouseEnter}
               onMouseLeave={handleVolumeMouseLeave}
             >
               <button
-                onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
-                title={volume > 0 ? 'Tắt tiếng' : 'Bật tiếng'}
-                className="p-1.5 sm:p-2 rounded-full bg-white/5 hover:bg-white/20 text-slate-300 hover:text-white border border-white/10 transition-all"
+                onClick={() => {
+                  setShowVolumeSlider((prev) => !prev);
+                }}
+                onDoubleClick={() => setVolume(volume > 0 ? 0 : 0.8)}
+                title={`Âm lượng: ${Math.round(volume * 100)}% (Click để chỉnh, Nhấp đúp để tắt tiếng)`}
+                className={`p-1.5 sm:p-2 rounded-full border transition-all ${
+                  showVolumeSlider
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/5 hover:bg-white/20 text-slate-300 hover:text-white border border-white/10'
+                }`}
               >
-                {volume > 0 ? <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <VolumeX className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                {volume >= 0.5 ? (
+                  <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                ) : volume > 0 ? (
+                  <Volume1 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                ) : (
+                  <VolumeX className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-400" />
+                )}
               </button>
 
-              {/* Volume Slider Popover */}
+              {/* iOS Control Center Vertical Pill Capsule Popover */}
               {showVolumeSlider && (
-                <div className="absolute bottom-10 right-0 p-2.5 rounded-2xl bg-zinc-950 border border-white/20 shadow-2xl flex flex-col items-center gap-1.5 animate-fadeIn z-50">
-                  <span className="text-[9px] text-slate-400 font-mono">{Math.round(volume * 100)}%</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={volume}
-                    onChange={(e) => setVolume(parseFloat(e.target.value))}
-                    className="w-20 h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-zinc-800"
-                  />
+                <div
+                  className="absolute bottom-12 right-0 p-2.5 rounded-3xl bg-zinc-950/98 border border-white/25 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl flex flex-col items-center gap-2 animate-fadeIn z-50 select-none"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Percentage Tooltip Badge */}
+                  <span className="text-[10px] text-white font-mono font-bold px-2 py-0.5 rounded-full bg-white/10 border border-white/15 tabular-nums shadow-sm">
+                    {Math.round(volume * 100)}%
+                  </span>
+
+                  {/* iOS Vertical Capsule Track */}
+                  <div
+                    ref={volumeSliderRef}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleVolumeDragStart(e.clientY);
+                    }}
+                    onTouchStart={handleVolumeTouchStart}
+                    onTouchMove={handleVolumeTouchMove}
+                    onTouchEnd={handleVolumeTouchEnd}
+                    className="relative w-11 h-36 rounded-full bg-zinc-900 border border-white/20 overflow-hidden cursor-pointer shadow-inner flex flex-col justify-end group/slider"
+                  >
+                    {/* Fill Level (from bottom up) */}
+                    <div
+                      style={{ height: `${Math.round(volume * 100)}%` }}
+                      className="w-full bg-white transition-[height] duration-75 ease-out rounded-b-full pointer-events-none"
+                    />
+
+                    {/* Integrated Dynamic Speaker Icon at bottom */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none flex items-center justify-center transition-colors">
+                      {volume >= 0.5 ? (
+                        <Volume2 className={`w-4 h-4 transition-colors ${volume > 0.18 ? 'text-black' : 'text-white'}`} />
+                      ) : volume > 0 ? (
+                        <Volume1 className={`w-4 h-4 transition-colors ${volume > 0.18 ? 'text-black' : 'text-white'}`} />
+                      ) : (
+                        <VolumeX className="w-4 h-4 text-rose-400" />
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
