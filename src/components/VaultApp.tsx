@@ -16,7 +16,8 @@ import {
   setStoredUserSession,
   getStoredAdminSession,
   clearAllStoredSessions,
-  performLogout
+  performLogout,
+  activateVideoSubscription
 } from '@/lib/authSession';
 
 interface VaultAppProps {
