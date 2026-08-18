@@ -1,26 +1,28 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
 > **Thời gian cập nhật**: 18/08/2026
-> **Trạng thái**: Hoàn tất phân tách kiến trúc Audio Zone & Video Zone, Cổng thanh toán Video Paywall Gatekeeper và Dọn dẹp Video Offset trong Admin.
+> **Trạng thái**: Tích hợp trọn vẹn Cổng thanh toán tự động payOS (VietQR) cho Gói Video VIP Pass & Mở khóa Video Zone.
 
 ---
 
 ## 🎯 CÁC HẠNG MỤC ĐÃ HOÀN THÀNH:
-1. **Phân tách 2 vùng độc lập**:
-   - **Audio Zone**: GlobalPlayerBar thuần nhạc, thanh timeline trải dài toàn màn hình mượt mà, loại bỏ mọi nút/popup/drawer video.
-   - **Video Zone**: Card Theater tỷ lệ 2/3 chuẩn điện ảnh kèm Compact Playlist, Tab Thảo luận & Nút icon Audio quay lại Audio Zone. Khi vào Video Zone, Playbar và luồng Audio dừng và ẩn hoàn toàn.
-2. **Video Access Gatekeeper**:
-   - Nút icon Video đặt tại Album Header cạnh nút `PLAY ALL` và tại badge `[MV]` của tracklist.
-   - Tự động kiểm tra quyền gói dịch vụ (`hasVideoSubscription`).
-   - Mở modal `VideoPaywallModal` cho người dùng chưa kích hoạt, hỗ trợ kích hoạt nhanh và nhập mã voucher/passkey.
-3. **Dọn dẹp Admin & Schema**:
-   - Loại bỏ hoàn toàn trường nhập "Lệch giây video (Video Offset)", các nút tính toán sync và `audioSyncService`.
-   - Tách biệt 2 trường độc lập: URL Audio và URL Video.
-4. **Bảo toàn giao diện & hiệu ứng**:
-   - Giữ nguyên Monochrome B&W, Analog TV Grain, CRT Scanlines và tương tác 3D Monolith.
+1. **Tích hợp payOS Payment Gateway**:
+   - Cấu hình Environment Variables (`PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`, `NEXT_PUBLIC_APP_URL`).
+   - Thư viện client `src/lib/payos.ts` hỗ trợ tạo link thanh toán, tra cứu trạng thái và xác thực chữ ký HMAC SHA256.
+   - API endpoints:
+     - `POST /api/payos/create-payment`: Khởi tạo đơn hàng (Gói Tháng 49k / Gói Trọn Đời 199k).
+     - `GET /api/payos/check-payment`: Polling kiểm tra trạng thái thanh toán & cập nhật quyền Supabase.
+     - `POST /api/payos/webhook`: Nhận callback xác thực tự động từ payOS.
+2. **Giao diện Thanh toán VietQR Thông minh**:
+   - Hiển thị trực tiếp mã VietQR kèm số tiền, số tài khoản, ngân hàng và nội dung chuyển khoản với nút sao chép 1 chạm trong `VideoPaywallModal.tsx`.
+   - Hệ thống tự động kiểm tra (polling 2.5s) và kích hoạt tức thì khi người dùng hoàn tất chuyển khoản.
+   - Nút "MỞ TRANG PAYOS" cho phép người dùng mở trang thanh toán chính thức nếu muốn.
+   - Xử lý chuyển hướng URL return (`?payment=success&orderCode=...`) trong `VaultApp.tsx`.
+3. **Phân tách 2 vùng Audio Zone & Video Zone**:
+   - Single-line Playbar siêu gọn gàng, Lời bài hát Gothic auto-scroll cố định tâm.
+   - Video Zone Theater Card 2/3 với controls căn giữa, nút quay về Audio Zone và cơ chế chống tải Video.
 
 ---
 
 ## 🚀 CÁC BƯỚC TIẾP THEO:
-1. Kiểm tra build dự án (`npm run build` hoặc linting check).
-2. Commit và push lên GitHub main để Vercel CI/CD tự động deploy.
+1. Commit & push code lên GitHub main để Vercel CI/CD tự động deploy.

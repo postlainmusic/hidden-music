@@ -86,6 +86,23 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
       setUserSession(session);
     }
 
+    // 1.1 Check if returning from payOS payment redirect
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const paymentStatus = searchParams.get('payment');
+      const orderCode = searchParams.get('orderCode');
+
+      if (paymentStatus === 'success' || orderCode) {
+        activateVideoSubscription();
+        const updated = getStoredUserSession();
+        if (updated) setUserSession(updated);
+
+        // Clean up URL parameters cleanly
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    }
+
     const effectiveAlbumId = initialAlbumId || (typeof window !== 'undefined' && window.location.pathname.startsWith('/album/') ? window.location.pathname.replace('/album/', '') : '');
     if (effectiveAlbumId) {
       setViewMode('album');
