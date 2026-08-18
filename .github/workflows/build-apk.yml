@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build Ultra-Smooth Android APK
+    name: Build Music Player APK with Media Playbar
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,7 @@ jobs:
 
       - name: Convert SVG to Native Android Icons
         run: |
-          sudo apt-get update && sudo apt-get install -y librsvg2-bin imagemagick
+          sudo apt-get update && sudo apt-get install -y librsvg2-bin
 
           mkdir -p native-app/app/src/main/res/mipmap-mdpi
           mkdir -p native-app/app/src/main/res/mipmap-hdpi
@@ -39,14 +39,13 @@ jobs:
           mkdir -p native-app/app/src/main/res/mipmap-xxhdpi
           mkdir -p native-app/app/src/main/res/mipmap-xxxhdpi
 
-          # Render icon chuẩn từ file src/app/icon.svg
           rsvg-convert -w 48 -h 48 src/app/icon.svg -o native-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
           rsvg-convert -w 72 -h 72 src/app/icon.svg -o native-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
           rsvg-convert -w 96 -h 96 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           rsvg-convert -w 144 -h 144 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           rsvg-convert -w 192 -h 192 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Scaffold Hardware-Accelerated Native App
+      - name: Scaffold Music Player App with MediaSession
         run: |
           mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
           mkdir -p native-app/app/src/main/res/values
@@ -96,10 +95,10 @@ jobs:
 
               defaultConfig {
                   applicationId "com.postlain.hiddenmusic"
-                  minSdk 21
+                  minSdk 24
                   targetSdk 34
-                  versionCode 4
-                  versionName "1.3.0"
+                  versionCode 5
+                  versionName "1.4.0"
               }
 
               buildTypes {
@@ -119,10 +118,11 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'androidx.webkit:webkit:1.10.0'
+              implementation 'androidx.media:media:1.7.0'
           }
           EOF
 
-          # 5. AndroidManifest.xml (Kích hoạt phần cứng GPU + Icon chính chủ)
+          # 5. AndroidManifest.xml (Bổ sung quyền chạy nền phát nhạc & thông báo Notification)
           cat << 'EOF' > native-app/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -130,6 +130,10 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
               <application
                   android:allowBackup="true"
@@ -161,12 +165,15 @@ jobs:
           </resources>
           EOF
 
-          # 7. MainActivity.java (Ép tăng tốc đồ họa phần cứng GPU)
+          # 7. MainActivity.java (Bật quyền phát âm thanh nền khi tắt màn hình)
           cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MainActivity.java
           package com.postlain.hiddenmusic;
 
+          import android.Manifest;
           import android.annotation.SuppressLint;
+          import android.content.pm.PackageManager;
           import android.net.http.SslError;
+          import android.os.Build;
           import android.os.Bundle;
           import android.view.View;
           import android.view.WindowManager;
@@ -177,6 +184,8 @@ jobs:
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
@@ -185,6 +194,13 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+
+                  // Xin quyền gửi Notification trên Android 13+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
+                      }
+                  }
 
                   getWindow().setFlags(
                       WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
@@ -203,6 +219,8 @@ jobs:
                   settings.setDatabaseEnabled(true);
                   settings.setAllowFileAccess(true);
                   settings.setAllowContentAccess(true);
+                  
+                  // QUAN TRỌNG: Cho phép Audio tự play và chạy ngầm khi ẩn app
                   settings.setMediaPlaybackRequiresUserGesture(false);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   settings.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -221,6 +239,12 @@ jobs:
                   });
 
                   webView.loadUrl("https://hiddenmusic.postlain.com");
+              }
+
+              @Override
+              protected void onPause() {
+                  // KHÔNG gọi webView.onPause() để âm thanh tiếp tục phát nền
+                  super.onPause();
               }
 
               @Override
@@ -246,7 +270,7 @@ jobs:
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: HiddenMusic-Native-APK
+          name: HiddenMusic-Media-APK
           path: ./hidden-music.apk
           retention-days: 14
 
@@ -256,8 +280,8 @@ jobs:
           tag_name: latest
           name: "Hidden Music Vault Android (Latest)"
           body: |
-            ## 🎵 Hidden Music Vault - Native Android APK
-            Bản build chính thức có gắn đúng Icon logo đĩa than từ file SVG gốc và bật Hardware Acceleration GPU.
+            ## 🎵 Hidden Music Vault - Android APK (Media Background & Playbar Support)
+            Hỗ trợ phát nhạc nền khi tắt màn hình, tích hợp quyền Notification & MediaSession.
           draft: false
           prerelease: false
           files: ./hidden-music.apk
