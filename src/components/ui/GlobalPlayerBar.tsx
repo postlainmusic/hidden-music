@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -70,6 +70,8 @@ export default function GlobalPlayerBar() {
   // Direct DOM refs for 60FPS timeline updates without React re-renders
   const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const seekerInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileSeekerInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileProgressBarRef = useRef<HTMLDivElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -114,11 +116,20 @@ export default function GlobalPlayerBar() {
       return;
     }
 
+    const effectiveDur = duration > 0 && isFinite(duration) ? duration : (currentTrack?.duration || 1);
+
     const updateDirectTimeline = () => {
       if (!isDraggingSeekerRef.current) {
         const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
         if (seekerInputRef.current) {
           seekerInputRef.current.value = String(liveSec);
+        }
+        if (mobileSeekerInputRef.current) {
+          mobileSeekerInputRef.current.value = String(liveSec);
+        }
+        if (mobileProgressBarRef.current && effectiveDur > 0) {
+          const pct = Math.min(100, Math.max(0, (liveSec / effectiveDur) * 100));
+          mobileProgressBarRef.current.style.width = `${pct}%`;
         }
         if (currentTimeTextRef.current) {
           currentTimeTextRef.current.textContent = formatTime(liveSec);
@@ -132,7 +143,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
     };
-  }, [isPlaying, activeZone, currentTimeRef, audioRef]);
+  }, [isPlaying, activeZone, currentTimeRef, audioRef, duration, currentTrack?.duration]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -164,7 +175,7 @@ export default function GlobalPlayerBar() {
     }
   }, [activeLyricIdx, showLyrics]);
 
-  // Keyboard shortcut listener (Space: Play/Pause, L: Lyrics, Q: Queue, Left/Right: Seek 5s)
+  // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -274,7 +285,6 @@ export default function GlobalPlayerBar() {
     }, 450);
   };
 
-  // Only render if mounted, authenticated, and in Audio Zone with an active track
   if (!mounted || !isAuth || activeZone !== 'audio' || !currentTrack) {
     return null;
   }
@@ -285,9 +295,12 @@ export default function GlobalPlayerBar() {
   return (
     <div
       ref={playerRootRef}
-      className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none px-3 sm:px-6 md:px-8 pb-3 sm:pb-5 transition-all duration-300"
+      style={{
+        paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+      }}
+      className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none px-2 sm:px-6 md:px-8 transition-all duration-300"
     >
-      {/* 1. SEAMLESS ATTACHED DRAWER: LYRICS & QUEUE (FLUSH MOUNTED DIRECTLY ON TOP OF PLAYBAR) */}
+      {/* 1. SEAMLESS ATTACHED DRAWER: LYRICS & QUEUE */}
       {hasDrawerOpen && (
         <div className="w-full max-w-5xl h-[320px] sm:h-[380px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/98 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-4 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto font-mono z-10 animate-fadeIn">
           {/* Drawer Header */}
@@ -309,7 +322,7 @@ export default function GlobalPlayerBar() {
             </button>
           </div>
 
-          {/* Drawer Body - Modern Sans-serif Typography with Perfect Vietnamese Accents */}
+          {/* Drawer Body */}
           <div className="flex-1 min-h-0 relative overflow-hidden select-none">
             {showLyrics && (
               <div
@@ -395,18 +408,57 @@ export default function GlobalPlayerBar() {
         </div>
       )}
 
-      {/* 2. DOCK PLAYBAR (ROCK-SOLID STATIC CLEAN DARK VAULT DOCK - ZERO JITTER) */}
+      {/* 2. DOCK PLAYBAR */}
       <div
-        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-visible transition-all duration-200 select-none ${
+        className={`w-full max-w-5xl rounded-2xl md:rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-hidden transition-all duration-200 select-none ${
           hasDrawerOpen ? '-mt-[1px] rounded-t-none border-t-0' : ''
         }`}
       >
-        {/* STRICT SINGLE-ROW HORIZONTAL LAYOUT */}
-        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full">
+        {/* Mobile Top Progress Bar Line (Seamless Top Border Scrubber) */}
+        <div className="block md:hidden absolute top-0 left-0 right-0 h-[2.5px] bg-white/10 overflow-hidden">
+          <div
+            ref={mobileProgressBarRef}
+            className="h-full bg-white transition-[width] duration-100 ease-linear shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+            style={{
+              width: `${effectiveDuration > 0 ? (currentTime / effectiveDuration) * 100 : 0}%`,
+            }}
+          />
+          <input
+            ref={mobileSeekerInputRef}
+            type="range"
+            min={0}
+            max={effectiveDuration || 100}
+            defaultValue={currentTime}
+            onMouseDown={() => {
+              isDraggingSeekerRef.current = true;
+            }}
+            onTouchStart={() => {
+              isDraggingSeekerRef.current = true;
+            }}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (mobileProgressBarRef.current && effectiveDuration > 0) {
+                mobileProgressBarRef.current.style.width = `${(val / effectiveDuration) * 100}%`;
+              }
+            }}
+            onMouseUp={(e) => {
+              isDraggingSeekerRef.current = false;
+              seekTo(parseFloat((e.target as HTMLInputElement).value));
+            }}
+            onTouchEnd={(e) => {
+              isDraggingSeekerRef.current = false;
+              seekTo(parseFloat((e.target as HTMLInputElement).value));
+            }}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          />
+        </div>
+
+        {/* SINGLE-ROW RESPONSIVE FLEXBOX */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
           
-          {/* Left: Track Information & Album Cover */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[140px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0">
-            <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-lg">
+          {/* Left: Track Information & Cover */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[130px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0">
+            <div className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-lg">
               {currentAlbum?.cover_url ? (
                 <img
                   src={currentAlbum.cover_url}
@@ -431,16 +483,16 @@ export default function GlobalPlayerBar() {
             </div>
           </div>
 
-          {/* Center: Controls + Inline Elongated Timeline (All on the same line) */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          {/* Center: Controls + Inline Timeline */}
+          <div className="flex items-center justify-center md:justify-start gap-1.5 sm:gap-3 flex-1 min-w-0">
             
-            {/* Playback Controls Cluster */}
+            {/* Playback Controls */}
             <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-              {/* Shuffle Button */}
+              {/* Shuffle Button (Hidden on Mobile) */}
               <button
                 onClick={toggleShuffle}
                 title={shuffleMode ? 'Tắt trộn bài' : 'Bật trộn bài'}
-                className={`p-1.5 sm:p-2 rounded-full border transition-all ${
+                className={`hidden md:flex p-1.5 sm:p-2 rounded-full border transition-all ${
                   shuffleMode
                     ? 'bg-white text-black border-white shadow-md'
                     : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/15'
@@ -458,7 +510,7 @@ export default function GlobalPlayerBar() {
                 <SkipBack className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
               </button>
 
-              {/* Play / Pause Master Button with Loading Indicator */}
+              {/* Play / Pause Master Button */}
               <button
                 onClick={togglePlay}
                 title={isBuffering ? 'Đang tải âm thanh...' : isPlaying ? 'Tạm dừng' : 'Phát'}
@@ -482,11 +534,11 @@ export default function GlobalPlayerBar() {
                 <SkipForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
               </button>
 
-              {/* Repeat Button */}
+              {/* Repeat Button (Hidden on Mobile) */}
               <button
                 onClick={toggleRepeat}
                 title={`Lặp: ${repeatMode}`}
-                className={`p-1.5 sm:p-2 rounded-full border transition-all ${
+                className={`hidden md:flex p-1.5 sm:p-2 rounded-full border transition-all ${
                   repeatMode !== 'off'
                     ? 'bg-white text-black border-white shadow-md'
                     : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/15'
@@ -500,16 +552,16 @@ export default function GlobalPlayerBar() {
               </button>
             </div>
 
-            {/* Direct DOM Elapsed Time */}
+            {/* Elapsed Time (Hidden on Mobile) */}
             <span
               ref={currentTimeTextRef}
-              className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0"
+              className="hidden md:inline-block text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0"
             >
               {formatTime(currentTime)}
             </span>
 
-            {/* Direct DOM Scrubber Timeline Range Input */}
-            <div className="relative flex-1 flex items-center min-w-[60px] group/seek">
+            {/* Desktop Scrubber Range Input (Hidden on Mobile) */}
+            <div className="hidden md:flex relative flex-1 items-center min-w-[60px] group/seek">
               <input
                 ref={seekerInputRef}
                 type="range"
@@ -540,8 +592,8 @@ export default function GlobalPlayerBar() {
               />
             </div>
 
-            {/* Inline Total Duration */}
-            <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
+            {/* Total Duration (Hidden on Mobile) */}
+            <span className="hidden md:inline-block text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
               {formatTime(effectiveDuration)}
             </span>
 
@@ -562,7 +614,7 @@ export default function GlobalPlayerBar() {
                   : 'bg-white/5 text-slate-300 border-white/10 hover:text-white hover:bg-white/15'
               }`}
             >
-              <Mic2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <Mic2 className="w-3.5 h-3.5" />
             </button>
 
             {/* Queue Drawer Toggle */}
@@ -578,12 +630,12 @@ export default function GlobalPlayerBar() {
                   : 'bg-white/5 text-slate-300 border-white/10 hover:text-white hover:bg-white/15'
               }`}
             >
-              <ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <ListMusic className="w-3.5 h-3.5" />
             </button>
 
-            {/* Volume Control with iOS Control Center Vertical Capsule Slider */}
+            {/* Volume Control (Hidden on Mobile) */}
             <div
-              className="relative"
+              className="hidden md:block relative"
               onMouseEnter={handleVolumeMouseEnter}
               onMouseLeave={handleVolumeMouseLeave}
             >
@@ -592,7 +644,7 @@ export default function GlobalPlayerBar() {
                   setShowVolumeSlider((prev) => !prev);
                 }}
                 onDoubleClick={() => setVolume(volume > 0 ? 0 : 0.8)}
-                title={`Âm lượng: ${Math.round(volume * 100)}% (Click để chỉnh, Nhấp đúp để tắt tiếng)`}
+                title={`Âm lượng: ${Math.round(volume * 100)}%`}
                 className={`p-1.5 sm:p-2 rounded-full border transition-all ${
                   showVolumeSlider
                     ? 'bg-white text-black border-white shadow-md'
@@ -600,11 +652,11 @@ export default function GlobalPlayerBar() {
                 }`}
               >
                 {volume >= 0.5 ? (
-                  <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <Volume2 className="w-3.5 h-3.5" />
                 ) : volume > 0 ? (
-                  <Volume1 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <Volume1 className="w-3.5 h-3.5" />
                 ) : (
-                  <VolumeX className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-400" />
+                  <VolumeX className="w-3.5 h-3.5 text-rose-400" />
                 )}
               </button>
 
@@ -614,12 +666,10 @@ export default function GlobalPlayerBar() {
                   className="absolute bottom-12 right-0 p-2.5 rounded-3xl bg-zinc-950/98 border border-white/25 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl flex flex-col items-center gap-2 animate-fadeIn z-50 select-none"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Percentage Tooltip Badge */}
                   <span className="text-[10px] text-white font-mono font-bold px-2 py-0.5 rounded-full bg-white/10 border border-white/15 tabular-nums shadow-sm">
                     {Math.round(volume * 100)}%
                   </span>
 
-                  {/* iOS Vertical Capsule Track */}
                   <div
                     ref={volumeSliderRef}
                     onMouseDown={(e) => {
@@ -631,13 +681,11 @@ export default function GlobalPlayerBar() {
                     onTouchEnd={handleVolumeTouchEnd}
                     className="relative w-11 h-36 rounded-full bg-zinc-900 border border-white/20 overflow-hidden cursor-pointer shadow-inner flex flex-col justify-end group/slider"
                   >
-                    {/* Fill Level (from bottom up) */}
                     <div
                       style={{ height: `${Math.round(volume * 100)}%` }}
                       className="w-full bg-white transition-[height] duration-75 ease-out rounded-b-full pointer-events-none"
                     />
 
-                    {/* Integrated Dynamic Speaker Icon at bottom */}
                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none flex items-center justify-center transition-colors">
                       {volume >= 0.5 ? (
                         <Volume2 className={`w-4 h-4 transition-colors ${volume > 0.18 ? 'text-black' : 'text-white'}`} />
