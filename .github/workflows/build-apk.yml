@@ -48,8 +48,9 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=PostLain, OU=Music, O=HiddenMusic, L=DaLat, S=LamDong, C=VN"
 
-      - name: Build TWA Project
+      - name: Initialize & Build TWA Project
         run: |
+          bubblewrap update --manifest=twa-manifest.json --skipPwaValidation
           bubblewrap build \
             --manifest=twa-manifest.json \
             --skipPwaValidation \
@@ -58,7 +59,7 @@ jobs:
 
       - name: Prepare APK Binary
         run: |
-          cp app-release-signed.apk ./hidden-music.apk || cp app-debug.apk ./hidden-music.apk || cp *.apk ./hidden-music.apk
+          find . -name "*.apk" -exec cp {} ./hidden-music.apk \;
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
