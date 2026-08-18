@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -48,14 +48,16 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=PostLain, OU=Music, O=HiddenMusic, L=DaLat, S=LamDong, C=VN"
 
-      - name: Build TWA APK via Gradle
+      - name: Generate Android Project & Build APK
         run: |
-          npx @bubblewrap/cli build \
-            --manifest=twa-manifest.json \
-            --skipPwaValidation \
-            --signingKey.storePassword=android \
-            --signingKey.keyPassword=android \
-            --skipVersionCode
+          bubblewrap init --manifest=https://music.postlain.com/manifest.json --directory=twa-project
+          cd twa-project
+          chmod +x ./gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=../android.keystore \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=android \
+            -Pandroid.injected.signing.key.password=android || ./gradlew assembleDebug
 
       - name: Prepare APK Binary
         run: |
