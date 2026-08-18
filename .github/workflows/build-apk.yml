@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build Ultra Native Music Player APK
+    name: Build Ultra Apple-Music Style APK
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +29,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Convert SVG to Native Android Icons
+      - name: Convert SVG to Icons & Vectors
         run: |
           sudo apt-get update && sudo apt-get install -y librsvg2-bin
 
@@ -50,7 +50,7 @@ jobs:
           rsvg-convert -w 192 -h 192 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           rsvg-convert -w 96 -h 96 src/app/icon.svg -o native-app/app/src/main/res/drawable/ic_music_note.png
 
-      - name: Scaffold Native App with Premium Widgets and MediaSession
+      - name: Scaffold High-End Native Music Service & Apple Widgets
         run: |
           mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
 
@@ -101,8 +101,8 @@ jobs:
                   applicationId "com.postlain.hiddenmusic"
                   minSdk 24
                   targetSdk 34
-                  versionCode 8
-                  versionName "2.0.0"
+                  versionCode 9
+                  versionName "2.1.0"
               }
 
               buildTypes {
@@ -129,159 +129,72 @@ jobs:
               implementation 'androidx.webkit:webkit:1.10.0'
               implementation 'androidx.media:media:1.7.0'
               implementation 'androidx.core:core:1.12.0'
-              implementation 'androidx.palette:palette:1.0.0'
           }
           EOF
 
-          # 5. Strings & Colors
+          # 5. Resources & Colors
           cat << 'EOF' > native-app/app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Hidden Music</string>
-              <string name="widget_mini_name">Hidden Music (Mini Player)</string>
-              <string name="widget_expanded_name">Hidden Music (Full Player)</string>
+              <string name="widget_compact_name">Hidden Music (Apple Style)</string>
           </resources>
           EOF
 
-          cat << 'EOF' > native-app/app/src/main/res/values/colors.xml
+          # 6. Smooth Rounding & Glassmorphic Shapes
+          cat << 'EOF' > native-app/app/src/main/res/drawable/widget_apple_bg.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="widget_bg">#121218</color>
-              <color name="widget_text_primary">#FFFFFF</color>
-              <color name="widget_text_secondary">#9CA3AF</color>
-          </resources>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#E6121217" />
+              <corners android:radius="26dp" />
+              <stroke android:width="1dp" android:color="#26FFFFFF" />
+          </shape>
           EOF
 
-          # 6. Widget Provider Info XMLs
-          cat << 'EOF' > native-app/app/src/main/res/xml/widget_mini_info.xml
+          cat << 'EOF' > native-app/app/src/main/res/drawable/art_squircle.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-              android:minWidth="140dp"
-              android:minHeight="140dp"
-              android:targetCellWidth="2"
-              android:targetCellHeight="2"
-              android:updatePeriodMillis="0"
-              android:initialLayout="@layout/widget_mini"
-              android:resizeMode="horizontal|vertical"
-              android:widgetCategory="home_screen" />
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#202026" />
+              <corners android:radius="18dp" />
+          </shape>
           EOF
 
-          cat << 'EOF' > native-app/app/src/main/res/xml/widget_expanded_info.xml
+          # 7. Widget Configuration (Tỷ lệ 4x1 & 2x2 siêu gọn)
+          cat << 'EOF' > native-app/app/src/main/res/xml/widget_compact_info.xml
           <?xml version="1.0" encoding="utf-8"?>
           <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-              android:minWidth="280dp"
-              android:minHeight="110dp"
+              android:minWidth="250dp"
+              android:minHeight="70dp"
               android:targetCellWidth="4"
-              android:targetCellHeight="2"
+              android:targetCellHeight="1"
               android:updatePeriodMillis="0"
-              android:initialLayout="@layout/widget_expanded"
-              android:resizeMode="horizontal|vertical"
+              android:initialLayout="@layout/widget_apple_compact"
+              android:resizeMode="horizontal"
               android:widgetCategory="home_screen" />
           EOF
 
-          # 7. Widget Background Drawable (Glassmorphic)
-          cat << 'EOF' > native-app/app/src/main/res/drawable/widget_background.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android"
-              android:shape="rectangle">
-              <solid android:color="#F0101014" />
-              <corners android:radius="24dp" />
-              <stroke android:width="1dp" android:color="#25FFFFFF" />
-          </shape>
-          EOF
-
-          cat << 'EOF' > native-app/app/src/main/res/drawable/artwork_rounded.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android"
-              android:shape="rectangle">
-              <solid android:color="#1F1F24" />
-              <corners android:radius="16dp" />
-          </shape>
-          EOF
-
-          # 8. Widget Layouts (Glassmorphism & High-end UI)
-          cat << 'EOF' > native-app/app/src/main/res/layout/widget_mini.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/widget_mini_root"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="@drawable/widget_background"
-              android:padding="12dp">
-
-              <ImageView
-                  android:id="@+id/widget_artwork"
-                  android:layout_width="match_parent"
-                  android:layout_height="match_parent"
-                  android:scaleType="centerCrop"
-                  android:background="@drawable/artwork_rounded"
-                  android:clipToOutline="true"
-                  android:src="@drawable/ic_music_note" />
-
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:layout_alignParentBottom="true"
-                  android:orientation="horizontal"
-                  android:gravity="center_vertical"
-                  android:background="#D0000000"
-                  android:padding="8dp">
-
-                  <LinearLayout
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:orientation="vertical">
-
-                      <TextView
-                          android:id="@+id/widget_title"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:text="Hidden Music"
-                          android:textColor="#FFFFFF"
-                          android:textSize="12sp"
-                          android:textStyle="bold"
-                          android:maxLines="1"
-                          android:ellipsize="end" />
-
-                      <TextView
-                          android:id="@+id/widget_artist"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:text="PostLain Vault"
-                          android:textColor="#9CA3AF"
-                          android:textSize="10sp"
-                          android:maxLines="1"
-                          android:ellipsize="end" />
-                  </LinearLayout>
-
-                  <ImageView
-                      android:id="@+id/widget_btn_play_pause"
-                      android:layout_width="28dp"
-                      android:layout_height="28dp"
-                      android:src="@android:drawable/ic_media_play"
-                      android:tint="#FFFFFF"
-                      android:padding="4dp" />
-              </LinearLayout>
-          </RelativeLayout>
-          EOF
-
-          cat << 'EOF' > native-app/app/src/main/res/layout/widget_expanded.xml
+          # 8. Widget Layout: Apple Music Pill Capsule
+          cat << 'EOF' > native-app/app/src/main/res/layout/widget_apple_compact.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/widget_expanded_root"
+              android:id="@+id/widget_root"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:background="@drawable/widget_background"
+              android:background="@drawable/widget_apple_bg"
               android:orientation="horizontal"
               android:gravity="center_vertical"
-              android:padding="12dp">
+              android:paddingStart="12dp"
+              android:paddingEnd="16dp"
+              android:paddingTop="10dp"
+              android:paddingBottom="10dp">
 
               <ImageView
                   android:id="@+id/widget_artwork"
-                  android:layout_width="80dp"
-                  android:layout_height="80dp"
+                  android:layout_width="54dp"
+                  android:layout_height="54dp"
                   android:scaleType="centerCrop"
-                  android:background="@drawable/artwork_rounded"
+                  android:background="@drawable/art_squircle"
                   android:clipToOutline="true"
                   android:src="@drawable/ic_music_note" />
 
@@ -290,16 +203,16 @@ jobs:
                   android:layout_height="wrap_content"
                   android:layout_weight="1"
                   android:orientation="vertical"
-                  android:layout_marginStart="14dp"
-                  android:layout_marginEnd="6dp">
+                  android:layout_marginStart="12dp"
+                  android:layout_marginEnd="8dp">
 
                   <TextView
                       android:id="@+id/widget_title"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="Hidden Music Vault"
+                      android:text="Hidden Music"
                       android:textColor="#FFFFFF"
-                      android:textSize="14sp"
+                      android:textSize="13sp"
                       android:textStyle="bold"
                       android:maxLines="1"
                       android:ellipsize="end" />
@@ -314,45 +227,44 @@ jobs:
                       android:layout_marginTop="2dp"
                       android:maxLines="1"
                       android:ellipsize="end" />
+              </LinearLayout>
 
-                  <LinearLayout
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:orientation="horizontal"
-                      android:gravity="center_vertical"
-                      android:layout_marginTop="8dp">
+              <LinearLayout
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal"
+                  android:gravity="center_vertical">
 
-                      <ImageView
-                          android:id="@+id/widget_btn_prev"
-                          android:layout_width="32dp"
-                          android:layout_height="32dp"
-                          android:src="@android:drawable/ic_media_previous"
-                          android:tint="#FFFFFF"
-                          android:padding="6dp" />
+                  <ImageView
+                      android:id="@+id/widget_btn_prev"
+                      android:layout_width="28dp"
+                      android:layout_height="28dp"
+                      android:src="@android:drawable/ic_media_previous"
+                      android:tint="#FFFFFF"
+                      android:padding="3dp" />
 
-                      <ImageView
-                          android:id="@+id/widget_btn_play_pause"
-                          android:layout_width="36dp"
-                          android:layout_height="36dp"
-                          android:layout_marginStart="8dp"
-                          android:layout_marginEnd="8dp"
-                          android:src="@android:drawable/ic_media_play"
-                          android:tint="#FFFFFF"
-                          android:padding="6dp" />
+                  <ImageView
+                      android:id="@+id/widget_btn_play_pause"
+                      android:layout_width="36dp"
+                      android:layout_height="36dp"
+                      android:layout_marginStart="8dp"
+                      android:layout_marginEnd="8dp"
+                      android:src="@android:drawable/ic_media_play"
+                      android:tint="#FFFFFF"
+                      android:padding="3dp" />
 
-                      <ImageView
-                          android:id="@+id/widget_btn_next"
-                          android:layout_width="32dp"
-                          android:layout_height="32dp"
-                          android:src="@android:drawable/ic_media_next"
-                          android:tint="#FFFFFF"
-                          android:padding="6dp" />
-                  </LinearLayout>
+                  <ImageView
+                      android:id="@+id/widget_btn_next"
+                      android:layout_width="28dp"
+                      android:layout_height="28dp"
+                      android:src="@android:drawable/ic_media_next"
+                      android:tint="#FFFFFF"
+                      android:padding="3dp" />
               </LinearLayout>
           </LinearLayout>
           EOF
 
-          # 9. AndroidManifest.xml (Đầy đủ Quyền & Cấu hình 2 Widgets)
+          # 9. AndroidManifest.xml (Đăng ký Native Audio Service + Widget)
           cat << 'EOF' > native-app/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -387,30 +299,25 @@ jobs:
                       </intent-filter>
                   </activity>
 
-                  <!-- Widget 1: Mini 2x2 -->
-                  <receiver
-                      android:name=".MusicMiniWidgetProvider"
+                  <service
+                      android:name=".MusicService"
                       android:exported="true"
-                      android:label="@string/widget_mini_name">
+                      android:foregroundServiceType="mediaPlayback">
                       <intent-filter>
-                          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                          <action android:name="android.media.browse.MediaBrowserService" />
                       </intent-filter>
-                      <meta-data
-                          android:name="android.appwidget.provider"
-                          android:resource="@xml/widget_mini_info" />
-                  </receiver>
+                  </service>
 
-                  <!-- Widget 2: Full Expanded 4x2 -->
                   <receiver
-                      android:name=".MusicExpandedWidgetProvider"
+                      android:name=".MusicCompactWidgetProvider"
                       android:exported="true"
-                      android:label="@string/widget_expanded_name">
+                      android:label="@string/widget_compact_name">
                       <intent-filter>
                           <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                       </intent-filter>
                       <meta-data
                           android:name="android.appwidget.provider"
-                          android:resource="@xml/widget_expanded_info" />
+                          android:resource="@xml/widget_compact_info" />
                   </receiver>
 
                   <receiver android:name=".MediaNotificationReceiver" android:exported="false" />
@@ -418,7 +325,7 @@ jobs:
           </manifest>
           EOF
 
-          # 10. Java Backend Core (MediaNotificationReceiver, WidgetProviders, MainActivity)
+          # 10. Java Source Files
           cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MediaNotificationReceiver.java
           package com.postlain.hiddenmusic;
 
@@ -437,19 +344,18 @@ jobs:
           }
           EOF
 
-          cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MusicMiniWidgetProvider.java
+          cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MusicCompactWidgetProvider.java
           package com.postlain.hiddenmusic;
 
           import android.app.PendingIntent;
           import android.appwidget.AppWidgetManager;
           import android.appwidget.AppWidgetProvider;
-          import android.content.ComponentName;
           import android.content.Context;
           import android.content.Intent;
           import android.graphics.Bitmap;
           import android.widget.RemoteViews;
 
-          public class MusicMiniWidgetProvider extends AppWidgetProvider {
+          public class MusicCompactWidgetProvider extends AppWidgetProvider {
               @Override
               public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
                   updateAll(context, appWidgetManager, appWidgetIds, null, null, null, false);
@@ -458,7 +364,7 @@ jobs:
               public static void updateAll(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds,
                                            String title, String artist, Bitmap artwork, boolean isPlaying) {
                   for (int appWidgetId : appWidgetIds) {
-                      RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_mini);
+                      RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_apple_compact);
 
                       if (title != null) views.setTextViewText(R.id.widget_title, title);
                       if (artist != null) views.setTextViewText(R.id.widget_artist, artist);
@@ -470,12 +376,20 @@ jobs:
                               isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
 
                       Intent mainIntent = new Intent(context, MainActivity.class);
-                      PendingIntent mainPi = PendingIntent.getActivity(context, 10, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                      views.setOnClickPendingIntent(R.id.widget_mini_root, mainPi);
+                      PendingIntent mainPi = PendingIntent.getActivity(context, 30, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                      views.setOnClickPendingIntent(R.id.widget_root, mainPi);
+
+                      Intent prevIntent = new Intent(context, MediaNotificationReceiver.class).setAction("PREV");
+                      PendingIntent prevPi = PendingIntent.getBroadcast(context, 31, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                      views.setOnClickPendingIntent(R.id.widget_btn_prev, prevPi);
 
                       Intent playIntent = new Intent(context, MediaNotificationReceiver.class).setAction("PLAY_PAUSE");
-                      PendingIntent playPi = PendingIntent.getBroadcast(context, 11, playIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                      PendingIntent playPi = PendingIntent.getBroadcast(context, 32, playIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
                       views.setOnClickPendingIntent(R.id.widget_btn_play_pause, playPi);
+
+                      Intent nextIntent = new Intent(context, MediaNotificationReceiver.class).setAction("NEXT");
+                      PendingIntent nextPi = PendingIntent.getBroadcast(context, 33, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                      views.setOnClickPendingIntent(R.id.widget_btn_next, nextPi);
 
                       appWidgetManager.updateAppWidget(appWidgetId, views);
                   }
@@ -483,56 +397,26 @@ jobs:
           }
           EOF
 
-          cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MusicExpandedWidgetProvider.java
+          cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MusicService.java
           package com.postlain.hiddenmusic;
 
-          import android.app.PendingIntent;
-          import android.appwidget.AppWidgetManager;
-          import android.appwidget.AppWidgetProvider;
-          import android.content.ComponentName;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.graphics.Bitmap;
-          import android.widget.RemoteViews;
+          import android.os.Bundle;
+          import androidx.annotation.NonNull;
+          import androidx.annotation.Nullable;
+          import androidx.media.MediaBrowserServiceCompat;
+          import java.util.Collections;
+          import java.util.List;
 
-          public class MusicExpandedWidgetProvider extends AppWidgetProvider {
+          public class MusicService extends MediaBrowserServiceCompat {
+              @Nullable
               @Override
-              public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-                  updateAll(context, appWidgetManager, appWidgetIds, null, null, null, false);
+              public BrowserRoot onGetRoot(@NonNull String clientPackageName, int clientUid, @Nullable Bundle rootHints) {
+                  return new BrowserRoot("root_media", null);
               }
 
-              public static void updateAll(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds,
-                                           String title, String artist, Bitmap artwork, boolean isPlaying) {
-                  for (int appWidgetId : appWidgetIds) {
-                      RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_expanded);
-
-                      if (title != null) views.setTextViewText(R.id.widget_title, title);
-                      if (artist != null) views.setTextViewText(R.id.widget_artist, artist);
-                      if (artwork != null) {
-                          views.setImageViewBitmap(R.id.widget_artwork, artwork);
-                      }
-
-                      views.setImageViewResource(R.id.widget_btn_play_pause,
-                              isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
-
-                      Intent mainIntent = new Intent(context, MainActivity.class);
-                      PendingIntent mainPi = PendingIntent.getActivity(context, 20, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                      views.setOnClickPendingIntent(R.id.widget_expanded_root, mainPi);
-
-                      Intent prevIntent = new Intent(context, MediaNotificationReceiver.class).setAction("PREV");
-                      PendingIntent prevPi = PendingIntent.getBroadcast(context, 21, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                      views.setOnClickPendingIntent(R.id.widget_btn_prev, prevPi);
-
-                      Intent playIntent = new Intent(context, MediaNotificationReceiver.class).setAction("PLAY_PAUSE");
-                      PendingIntent playPi = PendingIntent.getBroadcast(context, 22, playIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                      views.setOnClickPendingIntent(R.id.widget_btn_play_pause, playPi);
-
-                      Intent nextIntent = new Intent(context, MediaNotificationReceiver.class).setAction("NEXT");
-                      PendingIntent nextPi = PendingIntent.getBroadcast(context, 23, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                      views.setOnClickPendingIntent(R.id.widget_btn_next, nextPi);
-
-                      appWidgetManager.updateAppWidget(appWidgetId, views);
-                  }
+              @Override
+              public void onLoadChildren(@NonNull String parentId, @NonNull Result<List<android.support.v4.media.MediaBrowserCompat.MediaItem>> result) {
+                  result.sendResult(Collections.emptyList());
               }
           }
           EOF
@@ -580,8 +464,8 @@ jobs:
               private WebView webView;
               private MediaSessionCompat mediaSession;
               private NotificationManager notificationManager;
-              private static final String CHANNEL_ID = "hidden_music_playback";
-              private static final int NOTIFICATION_ID = 1001;
+              private static final String CHANNEL_ID = "hidden_music_playback_v2";
+              private static final int NOTIFICATION_ID = 2002;
 
               @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
               @Override
@@ -639,6 +523,7 @@ jobs:
 
               private void setupMediaSession() {
                   mediaSession = new MediaSessionCompat(this, "HiddenMusicMediaSession");
+                  mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
                   mediaSession.setCallback(new MediaSessionCompat.Callback() {
                       @Override
                       public void onPlay() {
@@ -713,7 +598,7 @@ jobs:
                           albumArt = BitmapFactory.decodeResource(getResources(), R.drawable.ic_music_note);
                       }
 
-                      // 1. Cập nhật MediaSession hệ thống (Tạo sóng âm, thanh seekbar live trên notification)
+                      // Update Native Android MediaSession
                       MediaMetadataCompat.Builder metaBuilder = new MediaMetadataCompat.Builder()
                           .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
                           .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
@@ -732,7 +617,7 @@ jobs:
                                     positionMs, 1.0f);
                       mediaSession.setPlaybackState(stateBuilder.build());
 
-                      // 2. Cập nhật Notification MediaStyle
+                      // Build Apple-Style Media Notification
                       Intent mainIntent = new Intent(this, MainActivity.class);
                       PendingIntent contentIntent = PendingIntent.getActivity(this, 0, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
@@ -761,14 +646,10 @@ jobs:
                           notificationManager.notify(NOTIFICATION_ID, builder.build());
                       }
 
-                      // 3. Cập nhật đồng thời cho 2 Widgets ngoài màn hình chính
+                      // Update Compact Apple Widget
                       AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
-
-                      int[] miniIds = appWidgetManager.getAppWidgetIds(new ComponentName(this, MusicMiniWidgetProvider.class));
-                      MusicMiniWidgetProvider.updateAll(this, appWidgetManager, miniIds, title, artist, albumArt, isPlaying);
-
-                      int[] expIds = appWidgetManager.getAppWidgetIds(new ComponentName(this, MusicExpandedWidgetProvider.class));
-                      MusicExpandedWidgetProvider.updateAll(this, appWidgetManager, expIds, title, artist, albumArt, isPlaying);
+                      int[] compactIds = appWidgetManager.getAppWidgetIds(new ComponentName(this, MusicCompactWidgetProvider.class));
+                      MusicCompactWidgetProvider.updateAll(this, appWidgetManager, compactIds, title, artist, albumArt, isPlaying);
 
                   }).start();
               }
@@ -812,7 +693,7 @@ jobs:
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: HiddenMusic-FullNative-APK
+          name: HiddenMusic-AppleStyle-APK
           path: ./hidden-music.apk
           retention-days: 14
 
@@ -820,11 +701,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Hidden Music Vault Android (Ultra Native)"
+          name: "Hidden Music Vault Android (Apple Style UI)"
           body: |
-            ## 🎵 Hidden Music Vault - Native Android APK v2.0
-            - Tích hợp **MediaStyle Notification** chuẩn Android 13/14+ (Full Metadata, Artwork, Real-time Playback State).
-            - Bổ sung **2 Home Screen Widgets** phong cách Apple Music / Spotify (Mini 2x2 & Full 4x2).
+            ## 🎵 Hidden Music Vault - Native Android APK v2.1
+            - Widget thiết kế Pill Capsule tinh gọn phong cách Apple Music.
+            - Đồng bộ `MediaBrowserServiceCompat` để hệ thống kích hoạt Playbar Android 14+ thực thụ.
           draft: false
           prerelease: false
           files: ./hidden-music.apk
