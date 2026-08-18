@@ -21,6 +21,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
       - name: Scaffold Native WebView App
         run: |
           mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
@@ -46,14 +51,20 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Root build.gradle
+          # 2. gradle.properties
+          cat << 'EOF' > native-app/gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dhttp.agent=Mozilla/5.0
+          android.useAndroidX=true
+          EOF
+
+          # 3. Root build.gradle
           cat << 'EOF' > native-app/build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # 3. App build.gradle
+          # 4. App build.gradle
           cat << 'EOF' > native-app/app/build.gradle
           plugins {
               id 'com.android.application'
@@ -91,7 +102,7 @@ jobs:
           }
           EOF
 
-          # 4. AndroidManifest.xml
+          # 5. AndroidManifest.xml
           cat << 'EOF' > native-app/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -118,14 +129,14 @@ jobs:
           </manifest>
           EOF
 
-          # 5. Strings resource
+          # 6. Strings resource
           cat << 'EOF' > native-app/app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Hidden Music</string>
           </resources>
           EOF
 
-          # 6. MainActivity.java (Bật đầy đủ JS, DOM Storage, Audio background)
+          # 7. MainActivity.java
           cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MainActivity.java
           package com.postlain.hiddenmusic;
 
@@ -169,11 +180,10 @@ jobs:
           }
           EOF
 
-      - name: Build APK via Gradle
+      - name: Build APK via Gradle 8.5
         run: |
           cd native-app
-          gradle wrapper
-          ./gradlew assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon
 
       - name: Prepare APK Binary
         run: |
@@ -193,7 +203,7 @@ jobs:
           name: "Hidden Music Vault Android (Latest)"
           body: |
             ## 🎵 Hidden Music Vault - Native Android APK
-            Bản build Native WebView Android kết nối trực tiếp hệ thống [music.postlain.com](https://music.postlain.com).
+            Bản build Native WebView Android kết nối trực tiếp [music.postlain.com](https://music.postlain.com).
           draft: false
           prerelease: false
           files: ./hidden-music.apk
