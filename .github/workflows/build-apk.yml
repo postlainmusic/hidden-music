@@ -29,32 +29,29 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Scaffold Hardware-Accelerated App
+      - name: Convert SVG to Native Android Icons
         run: |
-          mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
-          mkdir -p native-app/app/src/main/res/values
-          mkdir -p native-app/app/src/main/res/mipmap-hdpi
+          sudo apt-get update && sudo apt-get install -y librsvg2-bin imagemagick
+
           mkdir -p native-app/app/src/main/res/mipmap-mdpi
+          mkdir -p native-app/app/src/main/res/mipmap-hdpi
           mkdir -p native-app/app/src/main/res/mipmap-xhdpi
           mkdir -p native-app/app/src/main/res/mipmap-xxhdpi
           mkdir -p native-app/app/src/main/res/mipmap-xxxhdpi
 
-          # 1. Copy App Icon
-          if [ -f "public/icon.png" ]; then
-            cp public/icon.png native-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp public/icon.png native-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp public/icon.png native-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp public/icon.png native-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp public/icon.png native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          elif [ -f "public/favicon.ico" ]; then
-            cp public/favicon.ico native-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp public/favicon.ico native-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp public/favicon.ico native-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp public/favicon.ico native-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp public/favicon.ico native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
+          # Render icon chuẩn từ file src/app/icon.svg
+          rsvg-convert -w 48 -h 48 src/app/icon.svg -o native-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          rsvg-convert -w 72 -h 72 src/app/icon.svg -o native-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          rsvg-convert -w 96 -h 96 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          rsvg-convert -w 144 -h 144 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          rsvg-convert -w 192 -h 192 src/app/icon.svg -o native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-          # 2. settings.gradle
+      - name: Scaffold Hardware-Accelerated Native App
+        run: |
+          mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
+          mkdir -p native-app/app/src/main/res/values
+
+          # 1. settings.gradle
           cat << 'EOF' > native-app/settings.gradle
           pluginManagement {
               repositories {
@@ -74,20 +71,20 @@ jobs:
           include ':app'
           EOF
 
-          # 3. gradle.properties
+          # 2. gradle.properties
           cat << 'EOF' > native-app/gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dhttp.agent=Mozilla/5.0
           android.useAndroidX=true
           EOF
 
-          # 4. Root build.gradle
+          # 3. Root build.gradle
           cat << 'EOF' > native-app/build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # 5. App build.gradle
+          # 4. App build.gradle
           cat << 'EOF' > native-app/app/build.gradle
           plugins {
               id 'com.android.application'
@@ -101,8 +98,8 @@ jobs:
                   applicationId "com.postlain.hiddenmusic"
                   minSdk 21
                   targetSdk 34
-                  versionCode 2
-                  versionName "1.1.0"
+                  versionCode 4
+                  versionName "1.3.0"
               }
 
               buildTypes {
@@ -125,7 +122,7 @@ jobs:
           }
           EOF
 
-          # 6. AndroidManifest.xml (BẬT ÉP HARDWARE ACCELERATION CẤP CAO NHẤT)
+          # 5. AndroidManifest.xml (Kích hoạt phần cứng GPU + Icon chính chủ)
           cat << 'EOF' > native-app/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -157,20 +154,19 @@ jobs:
           </manifest>
           EOF
 
-          # 7. Strings resource
+          # 6. Strings resource
           cat << 'EOF' > native-app/app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Hidden Music</string>
           </resources>
           EOF
 
-          # 8. MainActivity.java (Ép GPU Render layer, cache bộ nhớ đệm, tối ưu 60-120FPS cho WebGL)
+          # 7. MainActivity.java (Ép tăng tốc đồ họa phần cứng GPU)
           cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MainActivity.java
           package com.postlain.hiddenmusic;
 
           import android.annotation.SuppressLint;
           import android.net.http.SslError;
-          import android.os.Build;
           import android.os.Bundle;
           import android.view.View;
           import android.view.WindowManager;
@@ -189,8 +185,7 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  
-                  // Bật cờ phần cứng cho Window
+
                   getWindow().setFlags(
                       WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                       WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
@@ -199,7 +194,6 @@ jobs:
                   webView = new WebView(this);
                   setContentView(webView);
 
-                  // Ép GPU Render Layer cho WebView
                   webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                   webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
 
@@ -211,8 +205,6 @@ jobs:
                   settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  
-                  // Tối ưu cache & bộ nhớ đệm render
                   settings.setCacheMode(WebSettings.LOAD_DEFAULT);
                   settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
                   settings.setOffscreenPreRaster(true);
@@ -264,8 +256,8 @@ jobs:
           tag_name: latest
           name: "Hidden Music Vault Android (Latest)"
           body: |
-            ## 🎵 Hidden Music Vault - Native Android APK (GPU Accelerated)
-            Bản build tối ưu phần cứng GPU, tăng tốc độ khung hình (FPS) cho Three.js và giao diện đĩa than 3D.
+            ## 🎵 Hidden Music Vault - Native Android APK
+            Bản build chính thức có gắn đúng Icon logo đĩa than từ file SVG gốc và bật Hardware Acceleration GPU.
           draft: false
           prerelease: false
           files: ./hidden-music.apk
