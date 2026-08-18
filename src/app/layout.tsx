@@ -6,6 +6,7 @@ import { PlayerProvider } from '@/context/PlayerContext';
 import GlobalPlayerBar from '@/components/ui/GlobalPlayerBar';
 import CinematicVisualizer from '@/components/ui/CinematicVisualizer';
 import ShortcutsDrawer from '@/components/ui/ShortcutsDrawer';
+import Script from 'next/script';
 
 const outfit = Outfit({
   subsets: ['latin', 'latin-ext'],
@@ -30,6 +31,12 @@ export const metadata: Metadata = {
   description: 'Trải nghiệm không gian 3D đẳng cấp thế giới lưu trữ và phát trực tuyến các sản phẩm âm nhạc bị cấm, bị ẩn hoặc chưa từng phát hành.',
   keywords: ['Hidden Music', '3D Vault', 'Web Audio 3D', 'Unreleased Music', 'Supabase', 'Vercel'],
   authors: [{ name: 'Hidden Vault Team' }],
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Hidden Music',
+  },
   openGraph: {
     title: 'Hidden Music Vault | Kho Âm Nhạc 3D Tối Mật',
     description: 'Nền tảng phát nhạc 3D tương tác theo thời gian thực dành cho các bản nhạc bị cấm & thu hồi.',
@@ -45,6 +52,10 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${outfit.variable} ${dfvnGrafika.variable} dark`}>
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -61,6 +72,23 @@ export default function RootLayout({
           <GlobalPlayerBar />
           <ShortcutsDrawer />
         </PlayerProvider>
+
+        {/* Script tự động đăng ký Service Worker để kích hoạt nút Cài đặt ứng dụng (PWA) */}
+        <Script
+          id="register-service-worker"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                    console.log('SW registration failed: ', err);
+                  });
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );
