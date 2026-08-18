@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Disc3, ShieldAlert } from 'lucide-react';
 import VaultScene from '@/components/3d/VaultScene';
@@ -77,6 +77,60 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     const interval = setInterval(updateMaintenanceTarget, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Handle Album Selection
+  const handleSelectAlbum = useCallback(async (album: Album, updateHistory = true) => {
+    let fullAlbum = album;
+
+    if (!album.tracks || album.tracks.length === 0) {
+      try {
+        const cached = localStorage.getItem(`hidden_vault_album_cache_${album.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.tracks) fullAlbum = parsed;
+        } else {
+          const supabase = createClient();
+          const { data } = await supabase
+            .from('albums')
+            .select('*, tracks(*)')
+            .eq('id', album.id)
+            .maybeSingle();
+          if (data) {
+            if (data.tracks) {
+              data.tracks.sort((a: TrackItem, b: TrackItem) => {
+                return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+              });
+            }
+            fullAlbum = data;
+            try {
+              localStorage.setItem(`hidden_vault_album_cache_${album.id}`, JSON.stringify(data));
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+
+    setSelectedAlbum(fullAlbum);
+    if (fullAlbum.tracks && fullAlbum.tracks.length > 0) {
+      setSelectedTrack(fullAlbum.tracks[0]);
+    }
+    setViewMode('album');
+
+    if (updateHistory && typeof window !== 'undefined') {
+      window.history.pushState({ view: 'album', albumId: album.id }, '', `/album/${album.id}`);
+    }
+  }, []);
+
+  // Handle Back to 3D Vault
+  const handleBackToVault = useCallback((updateHistory = true) => {
+    if (activeZone === 'video') {
+      switchToAudioZone();
+    }
+    setViewMode('vault');
+    if (updateHistory && typeof window !== 'undefined') {
+      window.history.pushState({ view: 'vault' }, '', '/');
+    }
+  }, [activeZone, switchToAudioZone]);
 
   useEffect(() => {
     setMounted(true);
@@ -283,91 +337,40 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [albums, activeZone, switchToAudioZone]);
+  }, [albums, activeZone, switchToAudioZone, handleSelectAlbum, handleBackToVault]);
 
-  // Handle Album Selection
-  const handleSelectAlbum = async (album: Album, updateHistory = true) => {
-    let fullAlbum = album;
-
-    if (!album.tracks || album.tracks.length === 0) {
-      try {
-        const cached = localStorage.getItem(`hidden_vault_album_cache_${album.id}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.tracks) fullAlbum = parsed;
-        } else {
-          const supabase = createClient();
-          const { data } = await supabase
-            .from('albums')
-            .select('*, tracks(*)')
-            .eq('id', album.id)
-            .maybeSingle();
-          if (data) {
-            if (data.tracks) {
-              data.tracks.sort((a: TrackItem, b: TrackItem) => {
-                return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
-              });
-            }
-            fullAlbum = data;
-            try {
-              localStorage.setItem(`hidden_vault_album_cache_${album.id}`, JSON.stringify(data));
-            } catch {}
-          }
-        }
-      } catch {}
-    }
-
-    setSelectedAlbum(fullAlbum);
-    if (fullAlbum.tracks && fullAlbum.tracks.length > 0) {
-      setSelectedTrack(fullAlbum.tracks[0]);
-    }
-    setViewMode('album');
-
-    if (updateHistory && typeof window !== 'undefined') {
-      window.history.pushState({ view: 'album', albumId: album.id }, '', `/album/${album.id}`);
-    }
-  };
-
-  // Handle Back to 3D Vault
-  const handleBackToVault = (updateHistory = true) => {
-    if (activeZone === 'video') {
-      switchToAudioZone();
-    }
-    setViewMode('vault');
-    if (updateHistory && typeof window !== 'undefined') {
-      window.history.pushState({ view: 'vault' }, '', '/');
-    }
-  };
-
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     setUserSession(null);
     await performLogout();
-  };
+  }, []);
 
   const tracks = useMemo(() => selectedAlbum?.tracks || [], [selectedAlbum]);
-  const isCurrentPlayingThisAlbum = currentTrack && tracks.some((t) => t.id === currentTrack.id);
+  const isCurrentPlayingThisAlbum = useMemo(
+    () => (currentTrack && tracks.some((t) => t.id === currentTrack.id)),
+    [currentTrack, tracks]
+  );
 
-  const handlePlayAlbum = () => {
+  const handlePlayAlbum = useCallback(() => {
     if (tracks.length > 0 && selectedAlbum) {
       const trackToPlay = selectedTrack || tracks[0];
       playTrack(trackToPlay, selectedAlbum, tracks);
     }
-  };
+  }, [tracks, selectedAlbum, selectedTrack, playTrack]);
 
-  const handleShufflePlay = () => {
+  const handleShufflePlay = useCallback(() => {
     if (tracks.length > 0 && selectedAlbum) {
       if (!shuffleMode) toggleShuffle();
       const randomIndex = Math.floor(Math.random() * tracks.length);
       playTrack(tracks[randomIndex], selectedAlbum, tracks);
     }
-  };
+  }, [tracks, selectedAlbum, shuffleMode, toggleShuffle, playTrack]);
 
-  const formatDuration = (seconds?: number) => {
+  const formatDuration = useCallback((seconds?: number) => {
     if (!seconds || seconds <= 0) return '03:20';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-  };
+  }, []);
 
   // 0. Initial SSR / Mount placeholder
   if (!mounted) {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession } from '@/lib/authSession';
@@ -20,6 +20,7 @@ interface PlayerContextType {
   isCinematicFxEnabled: boolean;
   activeZone: PlayerZone;
   audioRef: React.RefObject<HTMLAudioElement>;
+  currentTimeRef: React.RefObject<number>;
   analyserRef: React.RefObject<AnalyserNode | null>;
   kickAnalyserRef: React.RefObject<AnalyserNode | null>;
   snareAnalyserRef: React.RefObject<AnalyserNode | null>;
@@ -60,6 +61,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isCinematicFxEnabled, setIsCinematicFxEnabled] = useState(true);
   const [activeZone, setActiveZone] = useState<PlayerZone>('audio');
 
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const currentTimeRef = useRef<number>(0);
+  const lastStateUpdateTimeRef = useRef<number>(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const kickAnalyserRef = useRef<AnalyserNode | null>(null);
+  const snareAnalyserRef = useRef<AnalyserNode | null>(null);
+  const kickTimestampsRef = useRef<number[]>([]);
+  const snareTimestampsRef = useRef<number[]>([]);
+  const isPCMReadyRef = useRef<boolean>(false);
+  const currentProcessingUrlRef = useRef<string>('');
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+
   // Restore player state safely on client mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -83,7 +97,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           if (parsed?.currentTrack) setCurrentTrack(parsed.currentTrack);
           if (parsed?.currentAlbum) setCurrentAlbum(parsed.currentAlbum);
           if (Array.isArray(parsed?.playlist)) setPlaylist(parsed.playlist);
-          if (typeof parsed?.currentTime === 'number') setCurrentTime(parsed.currentTime);
+          if (typeof parsed?.currentTime === 'number') {
+            setCurrentTime(parsed.currentTime);
+            currentTimeRef.current = parsed.currentTime;
+          }
           if (typeof parsed?.volume === 'number') setVolumeState(parsed.volume);
           if (typeof parsed?.shuffleMode === 'boolean') setShuffleMode(parsed.shuffleMode);
           if (parsed?.repeatMode) setRepeatMode(parsed.repeatMode);
@@ -115,7 +132,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             currentTrack,
             currentAlbum,
             playlist,
-            currentTime: Math.floor(currentTime),
+            currentTime: Math.floor(currentTimeRef.current),
             volume,
             shuffleMode,
             repeatMode,
@@ -125,16 +142,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [currentTrack, currentAlbum, playlist, volume, shuffleMode, repeatMode]);
 
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const kickAnalyserRef = useRef<AnalyserNode | null>(null);
-  const snareAnalyserRef = useRef<AnalyserNode | null>(null);
-  const kickTimestampsRef = useRef<number[]>([]);
-  const snareTimestampsRef = useRef<number[]>([]);
-  const isPCMReadyRef = useRef<boolean>(false);
-  const currentProcessingUrlRef = useRef<string>('');
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const rawTrackUrl = currentTrack?.audio_url || '';
   const trackUrl = rawTrackUrl;
 
@@ -146,7 +153,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [currentTrack?.id]);
 
   // Extract Separate Kick & Snare Timestamps from raw PCM AudioBuffer
-  const processPCMBeatMap = async (url: string) => {
+  const processPCMBeatMap = useCallback(async (url: string) => {
     if (!url || typeof window === 'undefined') return;
     currentProcessingUrlRef.current = url;
     try {
@@ -314,9 +321,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         isPCMReadyRef.current = true;
       }
     }
-  };
+  }, []);
 
-  const initAudioAnalyser = () => {
+  const initAudioAnalyser = useCallback(() => {
     if (!audioRef.current || typeof window === 'undefined') return;
     try {
       if (!audioCtxRef.current) {
@@ -369,28 +376,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.warn('AudioAnalyser initialization warning:', err);
     }
-  };
+  }, []);
 
-  const toggleCinematicFx = () => {
+  const toggleCinematicFx = useCallback(() => {
     setIsCinematicFxEnabled((prev) => !prev);
-  };
+  }, []);
 
   // Switch to Audio Zone cleanly
-  const switchToAudioZone = () => {
+  const switchToAudioZone = useCallback(() => {
     setActiveZone('audio');
-  };
+  }, []);
 
-  // Switch to Video Zone cleanly (stops audio completely)
-  const switchToVideoZone = (track?: TrackItem) => {
+  // Switch to Video Zone cleanly (frees RAM, unloads audio decoding buffer completely)
+  const switchToVideoZone = useCallback((track?: TrackItem) => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = '';
+      try {
+        audioRef.current.load();
+      } catch {}
     }
     setIsPlaying(false);
     if (track) {
       setCurrentTrack(track);
     }
     setActiveZone('video');
-  };
+  }, []);
 
   // Global User Interaction to unlock AudioContext
   useEffect(() => {
@@ -455,6 +466,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (activeZone === 'video') {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = '';
+        try {
+          audioRef.current.load();
+        } catch {}
       }
       return;
     }
@@ -500,18 +515,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         nextTrack();
       });
     }
-  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone]);
+  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone, initAudioAnalyser, processPCMBeatMap]);
 
-  const playTrack = (track: TrackItem, album?: Album | null, newPlaylist?: TrackItem[]) => {
+  const playTrack = useCallback((track: TrackItem, album?: Album | null, newPlaylist?: TrackItem[]) => {
     setCurrentTrack(track);
     if (album) setCurrentAlbum(album);
     if (newPlaylist && newPlaylist.length > 0) setPlaylist(newPlaylist);
     setActiveZone('audio');
     setIsPlaying(true);
     setCurrentTime(0);
-  };
+    currentTimeRef.current = 0;
+  }, []);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     if (!currentTrack || !audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -521,9 +537,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
-  };
+  }, [currentTrack, isPlaying]);
 
-  const nextTrack = () => {
+  const seekTo = useCallback((time: number) => {
+    currentTimeRef.current = time;
+    setCurrentTime(time);
+    if (audioRef.current) audioRef.current.currentTime = time;
+  }, []);
+
+  const nextTrack = useCallback(() => {
     if (!playlist || playlist.length === 0 || !currentTrack) return;
 
     if (repeatMode === 'one') {
@@ -541,93 +563,125 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     playTrack(playlist[nextIndex], currentAlbum, playlist);
-  };
+  }, [playlist, currentTrack, repeatMode, shuffleMode, currentAlbum, seekTo, playTrack]);
 
-  const prevTrack = () => {
+  const prevTrack = useCallback(() => {
     if (!playlist || playlist.length === 0 || !currentTrack) return;
 
     const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
     const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length;
     playTrack(playlist[prevIndex], currentAlbum, playlist);
-  };
+  }, [playlist, currentTrack, currentAlbum, playTrack]);
 
-  const seekTo = (time: number) => {
-    setCurrentTime(time);
-    if (audioRef.current) audioRef.current.currentTime = time;
-  };
-
-  const setVolume = (vol: number) => {
+  const setVolume = useCallback((vol: number) => {
     setVolumeState(vol);
-  };
+  }, []);
 
-  const toggleShuffle = () => {
+  const toggleShuffle = useCallback(() => {
     setShuffleMode((prev) => !prev);
-  };
+  }, []);
 
-  const toggleRepeat = () => {
-    if (repeatMode === 'off') setRepeatMode('all');
-    else if (repeatMode === 'all') setRepeatMode('one');
-    else setRepeatMode('off');
-  };
+  const toggleRepeat = useCallback(() => {
+    setRepeatMode((prev) => {
+      if (prev === 'off') return 'all';
+      if (prev === 'all') return 'one';
+      return 'off';
+    });
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({
+      currentTrack,
+      currentAlbum,
+      playlist,
+      isPlaying,
+      currentTime,
+      duration,
+      volume,
+      shuffleMode,
+      repeatMode,
+      isCinematicFxEnabled,
+      activeZone,
+      audioRef,
+      currentTimeRef,
+      analyserRef,
+      kickAnalyserRef,
+      snareAnalyserRef,
+      kickTimestampsRef,
+      snareTimestampsRef,
+      isPCMReadyRef,
+      playTrack,
+      togglePlay,
+      nextTrack,
+      prevTrack,
+      seekTo,
+      setCurrentTime,
+      setDuration,
+      setIsPlaying,
+      setVolume,
+      toggleShuffle,
+      toggleRepeat,
+      toggleCinematicFx,
+      setActiveZone,
+      switchToAudioZone,
+      switchToVideoZone,
+    }),
+    [
+      currentTrack,
+      currentAlbum,
+      playlist,
+      isPlaying,
+      currentTime,
+      duration,
+      volume,
+      shuffleMode,
+      repeatMode,
+      isCinematicFxEnabled,
+      activeZone,
+      playTrack,
+      togglePlay,
+      nextTrack,
+      prevTrack,
+      seekTo,
+      setVolume,
+      toggleShuffle,
+      toggleRepeat,
+      toggleCinematicFx,
+      switchToAudioZone,
+      switchToVideoZone,
+    ]
+  );
 
   return (
-    <PlayerContext.Provider
-      value={{
-        currentTrack,
-        currentAlbum,
-        playlist,
-        isPlaying,
-        currentTime,
-        duration,
-        volume,
-        shuffleMode,
-        repeatMode,
-        isCinematicFxEnabled,
-        activeZone,
-        audioRef,
-        analyserRef,
-        kickAnalyserRef,
-        snareAnalyserRef,
-        kickTimestampsRef,
-        snareTimestampsRef,
-        isPCMReadyRef,
-        playTrack,
-        togglePlay,
-        nextTrack,
-        prevTrack,
-        seekTo,
-        setCurrentTime,
-        setDuration,
-        setIsPlaying,
-        setVolume,
-        toggleShuffle,
-        toggleRepeat,
-        toggleCinematicFx,
-        setActiveZone,
-        switchToAudioZone,
-        switchToVideoZone,
-      }}
-    >
+    <PlayerContext.Provider value={contextValue}>
       {children}
 
-      {/* Global Pure Background HTML5 Audio Element */}
-      {currentTrack && trackUrl && (
+      {/* Global Pure Background HTML5 Audio Element with Throttled State Updates & Preload Metadata */}
+      {currentTrack && trackUrl && activeZone === 'audio' && (
         <audio
           ref={audioRef}
           src={trackUrl}
+          preload="metadata"
           crossOrigin="anonymous"
-          autoPlay={isPlaying && activeZone === 'audio'}
+          autoPlay={isPlaying}
           onPlay={initAudioAnalyser}
           onTimeUpdate={() => {
-            if (audioRef.current && activeZone === 'audio') {
-              setCurrentTime(audioRef.current.currentTime);
+            if (!audioRef.current) return;
+            const cur = audioRef.current.currentTime;
+            currentTimeRef.current = cur;
+
+            // Throttled React state update every 350ms to eliminate 60FPS re-render lag
+            const now = performance.now();
+            if (now - lastStateUpdateTimeRef.current > 350) {
+              lastStateUpdateTimeRef.current = now;
+              setCurrentTime(cur);
             }
           }}
           onLoadedMetadata={() => {
             if (audioRef.current) {
               setDuration(audioRef.current.duration);
-              if (currentTime > 0 && Math.abs(audioRef.current.currentTime - currentTime) > 2) {
-                audioRef.current.currentTime = currentTime;
+              if (currentTimeRef.current > 0 && Math.abs(audioRef.current.currentTime - currentTimeRef.current) > 2) {
+                audioRef.current.currentTime = currentTimeRef.current;
               }
             }
           }}

@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import {
   Play,
   Pause,
   Shuffle,
   Disc3,
-  Music,
   MessageSquare,
   Film,
   ListMusic,
@@ -17,8 +16,6 @@ import {
   SkipBack,
   SkipForward,
   Headphones,
-  Sparkles,
-  ArrowLeft,
 } from 'lucide-react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
@@ -29,7 +26,6 @@ interface VaultSceneProps {
   viewMode?: 'vault' | 'album';
   selectedAlbum?: Album | null;
   onSelectAlbum: (album: Album) => void;
-  // Detail mode controls
   tracks?: TrackItem[];
   selectedTrack?: TrackItem | null;
   setSelectedTrack?: (track: TrackItem) => void;
@@ -43,13 +39,92 @@ interface VaultSceneProps {
   handlePlayAlbum?: () => void;
   handleShufflePlay?: () => void;
   formatDuration?: (seconds?: number) => string;
-  // Video Zone Decoupling & Paywall props
   activeZone?: PlayerZone;
   onSwitchToVideoZone?: (track?: TrackItem) => void;
   onSwitchToAudioZone?: () => void;
   onOpenPaywall?: () => void;
   userSession?: any;
 }
+
+// Memoized Track Item Component to eliminate unnecessary list re-renders
+const TrackItemRow = memo(function TrackItemRow({
+  track,
+  index,
+  isCurrentPlaying,
+  isPlaying,
+  formatDuration,
+  onTrackClick,
+  onRequestVideo,
+}: {
+  track: TrackItem;
+  index: number;
+  isCurrentPlaying: boolean;
+  isPlaying: boolean;
+  formatDuration: (seconds?: number) => string;
+  onTrackClick: (track: TrackItem) => void;
+  onRequestVideo: (track: TrackItem) => void;
+}) {
+  const trackIndex = String(index + 1).padStart(2, '0');
+
+  return (
+    <div
+      onClick={() => onTrackClick(track)}
+      className={`group relative h-12 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+        isCurrentPlaying
+          ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
+          : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
+      }`}
+    >
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-3">
+        <div className="w-6 flex items-center justify-center flex-shrink-0">
+          {isCurrentPlaying && isPlaying ? (
+            <div className="flex items-end gap-[2px] h-3.5">
+              <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '70%', animationDelay: '0ms' }} />
+              <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
+              <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '85%', animationDelay: '300ms' }} />
+            </div>
+          ) : (
+            <>
+              <span className={`text-xs font-mono font-bold group-hover:hidden ${
+                isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
+              }`}>
+                {trackIndex}
+              </span>
+              <Play className="w-3.5 h-3.5 fill-white text-white hidden group-hover:block transition-all" />
+            </>
+          )}
+        </div>
+
+        <span className={`truncate text-xs sm:text-sm font-cyber tracking-wide ${
+          isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
+        }`}>
+          {track.title}
+        </span>
+
+        {track.video_url && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestVideo(track);
+            }}
+            title="Xem Video MV"
+            className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 flex items-center gap-1 flex-shrink-0 transition-all"
+          >
+            <Film className="w-2.5 h-2.5" /> MV
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+        <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
+          isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
+        }`}>
+          {formatDuration(track.duration)}
+        </span>
+      </div>
+    </div>
+  );
+});
 
 export default function VaultScene({
   albums,
@@ -129,7 +204,25 @@ export default function VaultScene({
     }
   }, [selectedAlbum, albums]);
 
-  const activeAlbum = (isDetail && selectedAlbum) ? selectedAlbum : (albums[currentIndex] || albums[0]);
+  // Strict Video Cleanup when returning to Audio Zone
+  useEffect(() => {
+    if (!isVideoZone) {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = '';
+        try {
+          videoRef.current.load();
+        } catch {}
+      }
+      setIsVideoPlaying(false);
+      setVideoCurrentTime(0);
+    }
+  }, [isVideoZone]);
+
+  const activeAlbum = useMemo(
+    () => ((isDetail && selectedAlbum) ? selectedAlbum : (albums[currentIndex] || albums[0])),
+    [isDetail, selectedAlbum, albums, currentIndex]
+  );
 
   // Fullscreen change listener for video
   useEffect(() => {
@@ -148,28 +241,26 @@ export default function VaultScene({
 
   // Smooth 3D Cursor Parallax for Background & Card Tilt (Disabled in detail and video mode)
   useEffect(() => {
+    if (isDetail || isVideoZone) return;
+
+    let rafId: number;
     const handleMouseMove = (e: MouseEvent) => {
-      const { innerWidth, innerHeight } = window;
-      const normX = (e.clientX / innerWidth - 0.5) * 2;
-      const normY = (e.clientY / innerHeight - 0.5) * 2;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const { innerWidth, innerHeight } = window;
+        const normX = (e.clientX / innerWidth - 0.5) * 2;
+        const normY = (e.clientY / innerHeight - 0.5) * 2;
 
-      setMouseOffset({
-        x: normX,
-        y: normY,
+        setMouseOffset({ x: normX, y: normY });
+        setTilt({ x: -normY * 7, y: normX * 7 });
       });
-
-      if (!isDetail && !isVideoZone) {
-        setTilt({
-          x: -normY * 7,
-          y: normX * 7,
-        });
-      } else {
-        setTilt({ x: 0, y: 0 });
-      }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      cancelAnimationFrame(rafId);
+    };
   }, [isDetail, isVideoZone]);
 
   // Vertical Navigation Handlers in 3D Vault Mode (Wheel, Arrow Keys, Touch)
@@ -226,7 +317,7 @@ export default function VaultScene({
   }, [albums.length, isDetail, isVideoZone]);
 
   // Video Gatekeeper check
-  const handleRequestVideoAccess = (track?: TrackItem) => {
+  const handleRequestVideoAccess = useCallback((track?: TrackItem) => {
     const hasAccess = hasVideoSubscription(userSession);
     if (!hasAccess) {
       if (onOpenPaywall) onOpenPaywall();
@@ -240,10 +331,10 @@ export default function VaultScene({
     if (onSwitchToVideoZone) {
       onSwitchToVideoZone(targetTrack || undefined);
     }
-  };
+  }, [userSession, onOpenPaywall, selectedTrack, videoTracks, tracks, onSwitchToVideoZone]);
 
   // Video Controls
-  const toggleVideoPlay = () => {
+  const toggleVideoPlay = useCallback(() => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
       videoRef.current.play().catch(() => {});
@@ -252,16 +343,16 @@ export default function VaultScene({
       videoRef.current.pause();
       setIsVideoPlaying(false);
     }
-  };
+  }, []);
 
-  const handleVideoSeek = (time: number) => {
+  const handleVideoSeek = useCallback((time: number) => {
     setVideoCurrentTime(time);
     if (videoRef.current) {
       videoRef.current.currentTime = time;
     }
-  };
+  }, []);
 
-  const toggleVideoFullscreen = () => {
+  const toggleVideoFullscreen = useCallback(() => {
     const el = videoCardRef.current || videoRef.current;
     if (!el) return;
 
@@ -278,23 +369,28 @@ export default function VaultScene({
         (document as any).webkitExitFullscreen();
       }
     }
-  };
+  }, []);
 
-  const handlePlayNextVideo = () => {
+  const handlePlayNextVideo = useCallback(() => {
     if (videoTracks.length === 0) return;
     const curIdx = videoTracks.findIndex((t) => t.id === selectedVideoTrack?.id);
     const nextIdx = (curIdx + 1) % videoTracks.length;
     setSelectedVideoTrack(videoTracks[nextIdx]);
     setIsVideoPlaying(true);
-  };
+  }, [videoTracks, selectedVideoTrack]);
 
-  const handlePlayPrevVideo = () => {
+  const handlePlayPrevVideo = useCallback(() => {
     if (videoTracks.length === 0) return;
     const curIdx = videoTracks.findIndex((t) => t.id === selectedVideoTrack?.id);
     const prevIdx = (curIdx - 1 + videoTracks.length) % videoTracks.length;
     setSelectedVideoTrack(videoTracks[prevIdx]);
     setIsVideoPlaying(true);
-  };
+  }, [videoTracks, selectedVideoTrack]);
+
+  const handleTrackSelect = useCallback((track: TrackItem) => {
+    if (setSelectedTrack) setSelectedTrack(track);
+    if (playTrack && activeAlbum) playTrack(track, activeAlbum, tracks);
+  }, [setSelectedTrack, playTrack, activeAlbum, tracks]);
 
   if (!activeAlbum) return null;
 
@@ -343,7 +439,7 @@ export default function VaultScene({
       />
 
       {/* ========================================================================= */}
-      {/* 2. CHẾ ĐỘ VIDEO ZONE THEATER (CARD TỶ LỆ 2/3 VỚI NÚT AUDIO NGOÀI KHUNG)     */}
+      {/* 2. CHẾ ĐỘ VIDEO ZONE THEATER (TỐI ƯU HIỆU NĂNG CARD TỶ LỆ 2/3)             */}
       {/* ========================================================================= */}
       {isVideoZone ? (
         <div
@@ -354,7 +450,7 @@ export default function VaultScene({
           className="relative z-20 w-full max-w-6xl h-full flex flex-col items-center justify-center pt-14 pb-6 sm:py-14 px-2 sm:px-4 animate-fadeIn font-mono"
         >
           {/* Main 2/3 Theater Master Container */}
-          <div className="w-full h-full max-h-[84vh] rounded-3xl bg-zinc-950/95 border border-white/20 shadow-[0_25px_80px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-3.5 sm:p-5 flex flex-col overflow-hidden relative">
+          <div className="w-full h-full max-h-[84vh] rounded-3xl bg-zinc-950 border border-white/20 shadow-[0_25px_80px_rgba(0,0,0,0.95)] p-3.5 sm:p-5 flex flex-col overflow-hidden relative">
             
             {/* TOP HEADER OUTSIDE VIDEO FRAME: Info + Audio Zone Button */}
             <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 w-full flex-shrink-0 select-none">
@@ -371,7 +467,13 @@ export default function VaultScene({
               {/* OUTSIDE TOP-RIGHT: AUDIO ZONE RETURN BUTTON */}
               <button
                 onClick={() => {
-                  if (videoRef.current) videoRef.current.pause();
+                  if (videoRef.current) {
+                    videoRef.current.pause();
+                    videoRef.current.src = '';
+                    try {
+                      videoRef.current.load();
+                    } catch {}
+                  }
                   if (onSwitchToAudioZone) onSwitchToAudioZone();
                 }}
                 title="Quay lại Chế độ Âm nhạc (Audio Zone)"
@@ -395,7 +497,7 @@ export default function VaultScene({
                 className="w-full lg:w-2/3 h-full flex flex-col justify-between rounded-2xl bg-black border border-white/15 overflow-hidden relative shadow-2xl group/player select-none"
               >
                 {/* Subtle Top-Left Watermark inside video */}
-                <div className="absolute top-2.5 left-2.5 z-30 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[9px] text-slate-300 font-mono pointer-events-none select-none flex items-center gap-1.5">
+                <div className="absolute top-2.5 left-2.5 z-30 px-2 py-1 rounded-lg bg-black/80 border border-white/10 text-[9px] text-slate-300 font-mono pointer-events-none select-none flex items-center gap-1.5">
                   <Disc3 className="w-3 h-3 text-white animate-spin-slow" />
                   <span>HIDDEN MUSIC MV</span>
                 </div>
@@ -410,6 +512,7 @@ export default function VaultScene({
                     <video
                       ref={videoRef}
                       src={selectedVideoTrack.video_url}
+                      preload="metadata"
                       autoPlay
                       playsInline
                       controls={false}
@@ -455,7 +558,7 @@ export default function VaultScene({
                 </div>
 
                 {/* Bottom Custom Video Controls Bar */}
-                <div className="p-2.5 sm:p-3.5 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-2 z-30">
+                <div className="p-2.5 sm:p-3.5 bg-gradient-to-t from-black via-black/90 to-transparent flex flex-col gap-2 z-30">
                   {/* Video Seekbar */}
                   <div className="flex items-center gap-2.5 w-full">
                     <span className="text-[10px] font-mono text-slate-400 tabular-nums">
@@ -555,7 +658,7 @@ export default function VaultScene({
               </div>
 
               {/* --- RIGHT 1/3: COMPACT PLAYLIST & COMMENTS DECK --- */}
-              <div className="w-full lg:w-1/3 h-full flex flex-col rounded-2xl bg-zinc-900/60 border border-white/10 p-3 sm:p-4 overflow-hidden relative">
+              <div className="w-full lg:w-1/3 h-full flex flex-col rounded-2xl bg-zinc-900/90 border border-white/10 p-3 sm:p-4 overflow-hidden relative">
                 
                 {/* Header: Album thumbnail + Title */}
                 <div className="flex items-center gap-2.5 pb-2.5 border-b border-white/10 flex-shrink-0">
@@ -884,73 +987,18 @@ export default function VaultScene({
                       </p>
                     </div>
                   ) : (
-                    tracks.map((track, idx) => {
-                      const isCurrentPlaying = currentTrack?.id === track.id;
-                      const trackIndex = String(idx + 1).padStart(2, '0');
-
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => {
-                            if (setSelectedTrack) setSelectedTrack(track);
-                            if (playTrack) playTrack(track, activeAlbum, tracks);
-                          }}
-                          className={`group relative h-13 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
-                            isCurrentPlaying
-                              ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
-                              : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-3">
-                            <div className="w-6 flex items-center justify-center flex-shrink-0">
-                              {isCurrentPlaying && isPlaying ? (
-                                <div className="flex items-end gap-[2px] h-3.5">
-                                  <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '70%', animationDelay: '0ms' }} />
-                                  <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '100%', animationDelay: '150ms' }} />
-                                  <span className="w-[3px] bg-white rounded-full animate-bounce" style={{ height: '85%', animationDelay: '300ms' }} />
-                                </div>
-                              ) : (
-                                <>
-                                  <span className={`text-xs font-mono font-bold group-hover:hidden ${
-                                    isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
-                                  }`}>
-                                    {trackIndex}
-                                  </span>
-                                  <Play className="w-3.5 h-3.5 fill-white text-white hidden group-hover:block transition-all" />
-                                </>
-                              )}
-                            </div>
-
-                            <span className={`truncate text-xs sm:text-sm font-cyber tracking-wide ${
-                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
-                            }`}>
-                              {track.title}
-                            </span>
-
-                            {track.video_url && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRequestVideoAccess(track);
-                                }}
-                                title="Xem Video MV"
-                                className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 flex items-center gap-1 flex-shrink-0 transition-all"
-                              >
-                                <Film className="w-2.5 h-2.5" /> MV
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
-                            <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
-                              isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
-                            }`}>
-                              {formatDuration(track.duration)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
+                    tracks.map((track, idx) => (
+                      <TrackItemRow
+                        key={track.id}
+                        track={track}
+                        index={idx}
+                        isCurrentPlaying={currentTrack?.id === track.id}
+                        isPlaying={isPlaying}
+                        formatDuration={formatDuration}
+                        onTrackClick={handleTrackSelect}
+                        onRequestVideo={handleRequestVideoAccess}
+                      />
+                    ))
                   )}
                 </div>
               ) : (
@@ -984,57 +1032,18 @@ export default function VaultScene({
                       </p>
                     </div>
                   ) : (
-                    tracks.map((track, idx) => {
-                      const isCurrentPlaying = currentTrack?.id === track.id;
-                      const trackIndex = String(idx + 1).padStart(2, '0');
-
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => {
-                            if (setSelectedTrack) setSelectedTrack(track);
-                            if (playTrack) playTrack(track, activeAlbum, tracks);
-                          }}
-                          className={`group relative h-12 px-3 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
-                            isCurrentPlaying
-                              ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
-                              : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                            <span className={`text-xs font-mono font-bold ${
-                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-500'
-                            }`}>
-                              {trackIndex}
-                            </span>
-
-                            <span className={`truncate text-xs font-cyber tracking-wide ${
-                              isCurrentPlaying ? 'text-white font-black' : 'text-slate-300 group-hover:text-white font-medium'
-                            }`}>
-                              {track.title}
-                            </span>
-
-                            {track.video_url && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRequestVideoAccess(track);
-                                }}
-                                className="text-[8px] uppercase px-1.5 py-0.2 rounded font-bold bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 flex items-center gap-0.5 flex-shrink-0"
-                              >
-                                <Film className="w-2.5 h-2.5" /> MV
-                              </button>
-                            )}
-                          </div>
-
-                          <span className={`text-[10px] font-mono tabular-nums ${
-                            isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500'
-                          }`}>
-                            {formatDuration(track.duration)}
-                          </span>
-                        </div>
-                      );
-                    })
+                    tracks.map((track, idx) => (
+                      <TrackItemRow
+                        key={track.id}
+                        track={track}
+                        index={idx}
+                        isCurrentPlaying={currentTrack?.id === track.id}
+                        isPlaying={isPlaying}
+                        formatDuration={formatDuration}
+                        onTrackClick={handleTrackSelect}
+                        onRequestVideo={handleRequestVideoAccess}
+                      />
+                    ))
                   )}
                 </div>
               ) : (

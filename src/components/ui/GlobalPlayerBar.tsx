@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import {
   Play,
   Pause,
@@ -20,6 +20,13 @@ import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
 import { hasActiveSession } from '@/lib/authSession';
 
+const formatTime = (secs: number) => {
+  if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
+  const mins = Math.floor(secs / 60);
+  const rem = Math.floor(secs % 60);
+  return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
+};
+
 export default function GlobalPlayerBar() {
   const {
     currentTrack,
@@ -33,6 +40,7 @@ export default function GlobalPlayerBar() {
     repeatMode,
     activeZone,
     audioRef,
+    currentTimeRef,
     analyserRef,
     kickAnalyserRef,
     snareAnalyserRef,
@@ -60,7 +68,13 @@ export default function GlobalPlayerBar() {
   const barContainerRef = useRef<HTMLDivElement | null>(null);
   const fireOverlayRef = useRef<HTMLDivElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
+  const timelineRafIdRef = useRef<number | null>(null);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Direct DOM refs for 60FPS timeline updates without React re-renders
+  const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
+  const seekerInputRef = useRef<HTMLInputElement | null>(null);
+  const isDraggingSeekerRef = useRef<boolean>(false);
 
   const lastKickTimeRef = useRef<number>(0);
   const lastSnareTimeRef = useRef<number>(0);
@@ -115,6 +129,33 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
+  // High-Performance 60FPS Direct DOM Timeline Updater (Zero React Re-render Lag)
+  useEffect(() => {
+    if (!isPlaying || activeZone !== 'video') {
+      if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
+      return;
+    }
+
+    const updateDirectTimeline = () => {
+      if (!isDraggingSeekerRef.current) {
+        const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
+        if (seekerInputRef.current) {
+          seekerInputRef.current.value = String(liveSec);
+        }
+        if (currentTimeTextRef.current) {
+          currentTimeTextRef.current.textContent = formatTime(liveSec);
+        }
+      }
+      timelineRafIdRef.current = requestAnimationFrame(updateDirectTimeline);
+    };
+
+    timelineRafIdRef.current = requestAnimationFrame(updateDirectTimeline);
+
+    return () => {
+      if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
+    };
+  }, [isPlaying, activeZone, currentTimeRef, audioRef]);
+
   // Real-Time Playbar Monochromatic Beat Engine
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
@@ -133,7 +174,7 @@ export default function GlobalPlayerBar() {
       let isLightKick = false;
       let isSnare = false;
       const now = performance.now();
-      const liveCurrentTime = audioRef?.current ? audioRef.current.currentTime : currentTime;
+      const liveCurrentTime = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
       const isPCMReady = isPCMReadyRef?.current ?? false;
       const kickStamps = kickTimestampsRef?.current || [];
@@ -285,7 +326,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showLyrics, showQueue, activeZone, analyserRef, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, isPCMReadyRef, currentTime, audioRef]);
+  }, [isPlaying, showLyrics, showQueue, activeZone, analyserRef, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, isPCMReadyRef, currentTime, audioRef, currentTimeRef]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -297,7 +338,7 @@ export default function GlobalPlayerBar() {
     return getActiveLyricIndex(parsedLyrics, currentTime);
   }, [parsedLyrics, currentTime]);
 
-  // Auto-scroll active lyric line strictly centered vertically
+  // Hardware-accelerated smooth center scroll only triggered when active lyric index changes
   useEffect(() => {
     if (!showLyrics || activeLyricIdx < 0) return;
     const container = lyricsScrollRef.current;
@@ -305,25 +346,21 @@ export default function GlobalPlayerBar() {
 
     const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
     if (activeEl) {
-      const targetScrollTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
-      container.scrollTo({
-        top: Math.max(0, targetScrollTop),
-        behavior: 'smooth',
-      });
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [activeLyricIdx, showLyrics]);
 
   // Volume hover UX handlers
-  const handleVolumeMouseEnter = () => {
+  const handleVolumeMouseEnter = useCallback(() => {
     if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
     setShowVolumeSlider(true);
-  };
+  }, []);
 
-  const handleVolumeMouseLeave = () => {
+  const handleVolumeMouseLeave = useCallback(() => {
     volumeTimeoutRef.current = setTimeout(() => {
       setShowVolumeSlider(false);
     }, 450);
-  };
+  }, []);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -376,14 +413,6 @@ export default function GlobalPlayerBar() {
   if (!mounted || !currentTrack || !isAuth || activeZone === 'video') return null;
 
   const effectiveDuration = duration > 0 && isFinite(duration) ? duration : currentTrack.duration || 0;
-
-  const formatTime = (secs: number) => {
-    if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
-    const mins = Math.floor(secs / 60);
-    const rem = Math.floor(secs % 60);
-    return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
-  };
-
   const hasDrawerOpen = showLyrics || showQueue;
 
   return (
@@ -418,7 +447,7 @@ export default function GlobalPlayerBar() {
             {showLyrics && (
               <div
                 ref={lyricsScrollRef}
-                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-32 sm:py-36 space-y-4"
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-32 sm:py-36 space-y-4 will-change-transform"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
@@ -595,19 +624,42 @@ export default function GlobalPlayerBar() {
               </button>
             </div>
 
-            {/* Inline Current Time */}
-            <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
+            {/* Direct DOM Elapsed Time */}
+            <span
+              ref={currentTimeTextRef}
+              className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0"
+            >
               {formatTime(currentTime)}
             </span>
 
-            {/* Inline Scrubber Timeline */}
+            {/* Direct DOM Scrubber Timeline Range Input */}
             <div className="relative flex-1 flex items-center min-w-[60px] group/seek">
               <input
+                ref={seekerInputRef}
                 type="range"
                 min={0}
                 max={effectiveDuration || 100}
-                value={currentTime}
-                onChange={(e) => seekTo(parseFloat(e.target.value))}
+                defaultValue={currentTime}
+                onMouseDown={() => {
+                  isDraggingSeekerRef.current = true;
+                }}
+                onTouchStart={() => {
+                  isDraggingSeekerRef.current = true;
+                }}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (currentTimeTextRef.current) {
+                    currentTimeTextRef.current.textContent = formatTime(val);
+                  }
+                }}
+                onMouseUp={(e) => {
+                  isDraggingSeekerRef.current = false;
+                  seekTo(parseFloat((e.target as HTMLInputElement).value));
+                }}
+                onTouchEnd={(e) => {
+                  isDraggingSeekerRef.current = false;
+                  seekTo(parseFloat((e.target as HTMLInputElement).value));
+                }}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/15 bg-zinc-900 group-hover/seek:bg-zinc-800 transition-all shadow-inner"
               />
             </div>
