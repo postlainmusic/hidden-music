@@ -32,6 +32,13 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
+      - name: Inject Android Permissions & Config
+        run: |
+          # Cấp quyền truy cập mạng Internet cho Android App
+          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
+          # Cho phép load webview URL trực tiếp
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
+
       - name: Setup Gradle Permission
         run: |
           cd android
