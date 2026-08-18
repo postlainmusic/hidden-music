@@ -8,23 +8,23 @@ export * from './r2Storage';
 
 // Universal Web Crypto Helpers
 async function sha256Hex(data: string | ArrayBuffer | Uint8Array): Promise<string> {
-  const buffer = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const buffer = typeof data === 'string' ? new TextEncoder().encode(data) : (data as unknown as BufferSource);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer as BufferSource);
   return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function hmacSha256Raw(key: string | Uint8Array | ArrayBuffer, data: string | Uint8Array | ArrayBuffer): Promise<Uint8Array> {
   const enc = new TextEncoder();
-  const rawKey = typeof key === 'string' ? enc.encode(key) : key;
-  const rawData = typeof data === 'string' ? enc.encode(data) : data;
+  const rawKey = typeof key === 'string' ? enc.encode(key) : (key as unknown as BufferSource);
+  const rawData = typeof data === 'string' ? enc.encode(data) : (data as unknown as BufferSource);
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    rawKey,
+    rawKey as BufferSource,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   );
-  const sigBuffer = await crypto.subtle.sign('HMAC', cryptoKey, rawData);
+  const sigBuffer = await crypto.subtle.sign('HMAC', cryptoKey, rawData as BufferSource);
   return new Uint8Array(sigBuffer);
 }
 
