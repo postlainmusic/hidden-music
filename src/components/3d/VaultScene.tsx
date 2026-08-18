@@ -376,11 +376,16 @@ export default function VaultScene({
     if (!video) return;
 
     if (video.paused) {
-      video.play().then(() => {
-        setIsVideoPlaying(true);
-      }).catch((err) => {
-        console.warn('Video play note:', err);
-      });
+      const p = video.play();
+      if (p !== undefined) {
+        p.then(() => {
+          setIsVideoPlaying(true);
+        }).catch((err) => {
+          if (err?.name !== 'AbortError') {
+            console.warn('Video play note:', err);
+          }
+        });
+      }
     } else {
       video.pause();
       setIsVideoPlaying(false);

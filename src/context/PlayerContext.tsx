@@ -233,10 +233,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (isPlaying) {
-      audioRef.current.play().catch((err) => {
-        console.warn('Audio play notice:', err);
-        setIsPlaying(false);
-      });
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          if (err?.name !== 'AbortError') {
+            console.warn('Audio play notice:', err);
+            setIsPlaying(false);
+          }
+        });
+      }
     } else {
       audioRef.current.pause();
     }
@@ -281,11 +286,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const togglePlay = useCallback(() => {
     if (!currentTrack || !audioRef.current) return;
     if (isPlaying) {
-      audioRef.current.pause();
       setIsPlaying(false);
     } else {
       setActiveZone('audio');
-      audioRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
   }, [currentTrack, isPlaying]);
