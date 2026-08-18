@@ -103,6 +103,100 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
+  // =========================================================================
+  // INTEGRATE ANDROID / MOBILE SYSTEM MEDIA NOTIFICATION PLAYBAR (MediaSession)
+  // =========================================================================
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator) || !currentTrack) {
+      return;
+    }
+
+    const coverUrl = currentAlbum?.cover_url || '/icon.png';
+    const trackTitle = currentTrack.title || 'Unknown Track';
+    const trackArtist = currentTrack.artist || currentAlbum?.artist || 'POSTLAIN';
+    const albumTitle = currentAlbum?.title || 'Hidden Music Vault';
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: trackTitle,
+      artist: trackArtist,
+      album: albumTitle,
+      artwork: [
+        { src: coverUrl, sizes: '96x96', type: 'image/png' },
+        { src: coverUrl, sizes: '128x128', type: 'image/png' },
+        { src: coverUrl, sizes: '192x192', type: 'image/png' },
+        { src: coverUrl, sizes: '256x256', type: 'image/png' },
+        { src: coverUrl, sizes: '384x384', type: 'image/png' },
+        { src: coverUrl, sizes: '512x512', type: 'image/png' },
+      ],
+    });
+
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+    const handlePlayAction = () => {
+      if (!isPlaying) togglePlay();
+    };
+
+    const handlePauseAction = () => {
+      if (isPlaying) togglePlay();
+    };
+
+    const handlePrevAction = () => {
+      prevTrack();
+    };
+
+    const handleNextAction = () => {
+      nextTrack();
+    };
+
+    const handleSeekToAction = (details: MediaSessionActionDetails) => {
+      if (details.seekTime !== undefined && details.seekTime !== null) {
+        seekTo(details.seekTime);
+      }
+    };
+
+    try {
+      navigator.mediaSession.setActionHandler('play', handlePlayAction);
+      navigator.mediaSession.setActionHandler('pause', handlePauseAction);
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrevAction);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNextAction);
+      navigator.mediaSession.setActionHandler('seekto', handleSeekToAction);
+    } catch {
+      // Ignored for unsupported handlers
+    }
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('seekto', null);
+      } catch {
+        // Cleanup safety
+      }
+    };
+  }, [currentTrack, currentAlbum, isPlaying, togglePlay, prevTrack, nextTrack, seekTo]);
+
+  // Update Media Position State
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) {
+      return;
+    }
+
+    const effectiveDur = duration > 0 && isFinite(duration) ? duration : (currentTrack?.duration || 0);
+    if (effectiveDur > 0 && isFinite(currentTime)) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: effectiveDur,
+          playbackRate: 1.0,
+          position: Math.min(Math.max(0, currentTime), effectiveDur),
+        });
+      } catch {
+        // Fallback for edge cases
+      }
+    }
+  }, [currentTime, duration, currentTrack?.duration]);
+
   // Click outside to close drawers and volume slider
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
@@ -384,14 +478,13 @@ export default function GlobalPlayerBar() {
             </span>
           </div>
 
-          <div className="w-9 h-9" /> {/* Spacer */}
+          <div className="w-9 h-9" />
         </div>
 
         {/* Center Main Viewport: Swappable Artwork / Lyrics / Queue */}
         <div className="flex-1 min-h-0 my-4 flex flex-col items-center justify-center relative overflow-hidden">
           {expandedTab === 'player' && (
             <div className="w-full flex flex-col items-center justify-center animate-fadeIn">
-              {/* Spinning Disc & Artwork */}
               <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-white/20 bg-zinc-950 flex items-center justify-center">
                 {currentAlbum?.cover_url ? (
                   <img
@@ -474,7 +567,6 @@ export default function GlobalPlayerBar() {
 
         {/* Bottom Controls Area */}
         <div className="w-full flex flex-col gap-4 flex-shrink-0">
-          {/* Track Info */}
           <div className="flex items-center justify-between">
             <div className="flex flex-col min-w-0 pr-4">
               <h3 className="text-lg font-cyber font-extrabold text-white truncate uppercase tracking-wide">
@@ -485,7 +577,6 @@ export default function GlobalPlayerBar() {
               </p>
             </div>
 
-            {/* Quick Lyrics / Queue Switchers */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => setExpandedTab((prev) => (prev === 'lyrics' ? 'player' : 'lyrics'))}
@@ -510,7 +601,6 @@ export default function GlobalPlayerBar() {
             </div>
           </div>
 
-          {/* Expanded Seeker Slider */}
           <div className="w-full flex flex-col gap-1.5">
             <div className="relative w-full flex items-center">
               <input
@@ -548,7 +638,6 @@ export default function GlobalPlayerBar() {
             </div>
           </div>
 
-          {/* Master Playback Controls */}
           <div className="flex items-center justify-between px-2 pt-1">
             <button
               onClick={toggleShuffle}
