@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPayOSConfig, verifyPayOSWebhookData } from '@/lib/payos';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify webhook signature
-    const isValid = verifyPayOSWebhookData(body.data, body.signature, checksumKey);
+    const isValid = await verifyPayOSWebhookData(body.data, body.signature, checksumKey);
     if (!isValid) {
       console.warn('Invalid payOS webhook signature received');
       return NextResponse.json({ success: false, message: 'Chữ ký webhook không hợp lệ' }, { status: 400 });

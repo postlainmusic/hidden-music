@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+export const runtime = 'edge';
+
 function getSupabaseServerClient(cookieStore: any, response: NextResponse) {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://muemwfqynfljpmvxmpep.supabase.co';
   const supabaseUrl = rawUrl.replace('muemwfqynfljpmvxmpepsb', 'muemwfqynfljpmvxmpep');

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPayOSPaymentInfo } from '@/lib/payos';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {

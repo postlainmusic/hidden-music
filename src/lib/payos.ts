@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 export interface PayOSPaymentItem {
   name: string;
   quantity: number;
@@ -60,30 +58,47 @@ export function getPayOSConfig() {
 }
 
 /**
+ * Universal Web Crypto HMAC SHA-256 for Edge and Node.js Runtimes
+ */
+async function computeHmacSha256(key: string, data: string): Promise<string> {
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(data));
+  const hashArray = Array.from(new Uint8Array(signatureBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * Generate HMAC SHA256 Signature for PayOS payment link creation
  */
-export function generatePayOSSignature(data: {
+export async function generatePayOSSignature(data: {
   amount: number;
   cancelUrl: string;
   description: string;
   orderCode: number;
   returnUrl: string;
-}, checksumKey: string): string {
+}, checksumKey: string): Promise<string> {
   const dataString = `amount=${data.amount}&cancelUrl=${data.cancelUrl}&description=${data.description}&orderCode=${data.orderCode}&returnUrl=${data.returnUrl}`;
-  return crypto.createHmac('sha256', checksumKey).update(dataString).digest('hex');
+  return computeHmacSha256(checksumKey, dataString);
 }
 
 /**
  * Verify PayOS Webhook signature
  */
-export function verifyPayOSWebhookData(data: Record<string, any>, signature: string, checksumKey: string): boolean {
+export async function verifyPayOSWebhookData(data: Record<string, any>, signature: string, checksumKey: string): Promise<boolean> {
   try {
     const sortedKeys = Object.keys(data).sort();
     const signString = sortedKeys
       .map((key) => `${key}=${data[key] !== null && data[key] !== undefined ? data[key] : ''}`)
       .join('&');
 
-    const expectedSignature = crypto.createHmac('sha256', checksumKey).update(signString).digest('hex');
+    const expectedSignature = await computeHmacSha256(checksumKey, signString);
     return expectedSignature === signature;
   } catch (err) {
     console.error('Error verifying payOS webhook signature:', err);
@@ -109,7 +124,7 @@ export async function createPayOSPaymentLink(params: CreatePaymentLinkParams): P
     .trim()
     .slice(0, 25);
 
-  const signature = generatePayOSSignature(
+  const signature = await generatePayOSSignature(
     {
       amount: params.amount,
       cancelUrl: params.cancelUrl,

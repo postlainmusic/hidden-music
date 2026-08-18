@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPayOSPaymentLink, getPayOSConfig } from '@/lib/payos';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
