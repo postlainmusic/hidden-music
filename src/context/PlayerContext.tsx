@@ -5,15 +5,15 @@ import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession } from '@/lib/authSession';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
-import { analyzeTrackBeatGrid, getCachedBeatGrid, BeatGridResult } from '@/lib/audioBeatEngine';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
-interface PlayerContextType {
+export interface PlayerContextType {
   currentTrack: TrackItem | null;
   currentAlbum: Album | null;
   playlist: TrackItem[];
   isPlaying: boolean;
+  isBuffering: boolean;
   currentTime: number;
   duration: number;
   volume: number;
@@ -23,12 +23,6 @@ interface PlayerContextType {
   activeZone: PlayerZone;
   audioRef: React.RefObject<HTMLAudioElement>;
   currentTimeRef: React.RefObject<number>;
-  analyserRef: React.RefObject<AnalyserNode | null>;
-  kickAnalyserRef: React.RefObject<AnalyserNode | null>;
-  snareAnalyserRef: React.RefObject<AnalyserNode | null>;
-  kickTimestampsRef: React.RefObject<number[]>;
-  snareTimestampsRef: React.RefObject<number[]>;
-  isPCMReadyRef: React.RefObject<boolean>;
   playTrack: (track: TrackItem, album?: Album | null, playlist?: TrackItem[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -55,6 +49,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
   const [playlist, setPlaylist] = useState<TrackItem[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState<number>(0.8);
@@ -66,15 +61,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentTimeRef = useRef<number>(0);
   const lastStateUpdateTimeRef = useRef<number>(0);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const kickAnalyserRef = useRef<AnalyserNode | null>(null);
-  const snareAnalyserRef = useRef<AnalyserNode | null>(null);
-  const kickTimestampsRef = useRef<number[]>([]);
-  const snareTimestampsRef = useRef<number[]>([]);
-  const isPCMReadyRef = useRef<boolean>(false);
-  const currentProcessingUrlRef = useRef<string>('');
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   // Restore player state safely on client mount
   useEffect(() => {
@@ -150,260 +136,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return getMediaCdnUrl(rawTrackUrl);
   }, [rawTrackUrl]);
 
-  // Reset beat map states and load cached beat grid on track change
-  useEffect(() => {
-    kickTimestampsRef.current = [];
-    snareTimestampsRef.current = [];
-    isPCMReadyRef.current = false;
+  // Compute Next Track for Preloading (Zero-Gap Playback)
+  const nextTrackItem = useMemo(() => {
+    if (!playlist || playlist.length <= 1 || !currentTrack) return null;
+    const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
+    if (currentIndex === -1) return null;
+    const nextIdx = (currentIndex + 1) % playlist.length;
+    return playlist[nextIdx];
+  }, [playlist, currentTrack]);
 
-    if (!currentTrack?.id || !trackUrl) return;
-
-    // Instant local cache retrieval
-    getCachedBeatGrid(currentTrack.id).then((cached) => {
-      if (cached && cached.timestamps.length > 0) {
-        kickTimestampsRef.current = cached.timestamps;
-        isPCMReadyRef.current = true;
-      }
-    });
-
-    // Run automated beat extraction in background
-    analyzeTrackBeatGrid(trackUrl, currentTrack.id).then((result) => {
-      if (result && result.timestamps.length > 0) {
-        kickTimestampsRef.current = result.timestamps;
-        isPCMReadyRef.current = true;
-      }
-    });
-  }, [currentTrack?.id, trackUrl]);
-
-  // Extract Separate Kick & Snare Timestamps from raw PCM AudioBuffer (Legacy & Secondary Engine)
-  const processPCMBeatMap = useCallback(async (url: string) => {
-    if (!url || typeof window === 'undefined') return;
-    currentProcessingUrlRef.current = url;
-    try {
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        audioCtxRef.current = new AudioCtx();
-      }
-      const response = await fetch(url);
-      const arrayBuffer = await response.arrayBuffer();
-      if (currentProcessingUrlRef.current !== url) return;
-
-      const audioBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
-      if (currentProcessingUrlRef.current !== url) return;
-
-      const sampleRate = audioBuffer.sampleRate;
-      const channelData = audioBuffer.getChannelData(0);
-      const len = channelData.length;
-
-      // 1. Digital 55Hz Biquad Bandpass Filter for Kick Sub-Punch
-      const f0K = 55, QK = 3.5;
-      const w0K = (2 * Math.PI * f0K) / sampleRate;
-      const alphaK = Math.sin(w0K) / (2 * QK);
-      const B0K = alphaK / (1 + alphaK), B2K = -alphaK / (1 + alphaK);
-      const A1K = (-2 * Math.cos(w0K)) / (1 + alphaK), A2K = (1 - alphaK) / (1 + alphaK);
-
-      const filteredKick = new Float32Array(len);
-      let x1K = 0, x2K = 0, y1K = 0, y2K = 0;
-      for (let i = 0; i < len; i++) {
-        const x0 = channelData[i];
-        const y0 = B0K * x0 + B2K * x2K - A1K * y1K - A2K * y2K;
-        x2K = x1K; x1K = x0; y2K = y1K; y1K = y0;
-        filteredKick[i] = y0;
-      }
-
-      // 2. Digital 3200Hz Biquad Bandpass Filter for Snare / Clap High Crack
-      const f0S = 3200, QS = 1.8;
-      const w0S = (2 * Math.PI * f0S) / sampleRate;
-      const alphaS = Math.sin(w0S) / (2 * QS);
-      const B0S = alphaS / (1 + alphaS), B2S = -alphaS / (1 + alphaS);
-      const A1S = (-2 * Math.cos(w0S)) / (1 + alphaS), A2S = (1 - alphaS) / (1 + alphaS);
-
-      const filteredSnare = new Float32Array(len);
-      let x1S = 0, x2S = 0, y1S = 0, y2S = 0;
-      for (let i = 0; i < len; i++) {
-        const x0 = channelData[i];
-        const y0 = B0S * x0 + B2S * x2S - A1S * y1S - A2S * y2S;
-        x2S = x1S; x1S = x0; y2S = y1S; y1S = y0;
-        filteredSnare[i] = y0;
-      }
-
-      // 3. Digital 600Hz Mid-Range Guard Filter
-      const f0M = 600, QM = 1.0;
-      const w0M = (2 * Math.PI * f0M) / sampleRate;
-      const alphaM = Math.sin(w0M) / (2 * QM);
-      const B0M = alphaM / (1 + alphaM), B2M = -alphaM / (1 + alphaM);
-      const A1M = (-2 * Math.cos(w0M)) / (1 + alphaM), A2M = (1 - alphaM) / (1 + alphaM);
-
-      const filteredMid = new Float32Array(len);
-      let x1M = 0, x2M = 0, y1M = 0, y2M = 0;
-      for (let i = 0; i < len; i++) {
-        const x0 = channelData[i];
-        const y0 = B0M * x0 + B2M * x2M - A1M * y1M - A2M * y2M;
-        x2M = x1M; x1M = x0; y2M = y1M; y1M = y0;
-        filteredMid[i] = y0;
-      }
-
-      const frameSize = Math.floor(sampleRate * 0.02); // 20ms frame
-      const totalFrames = Math.floor(len / frameSize);
-
-      let maxEnergyK = 0;
-      let maxEnergyS = 0;
-      let maxEnergyM = 0;
-      for (let f = 0; f < totalFrames; f++) {
-        const start = f * frameSize;
-        let sumK = 0, sumS = 0, sumM = 0;
-        for (let i = 0; i < frameSize; i++) {
-          const k = filteredKick[start + i];
-          const s = filteredSnare[start + i];
-          const m = filteredMid[start + i];
-          sumK += k * k;
-          sumS += s * s;
-          sumM += m * m;
-        }
-        const eK = Math.sqrt(sumK / frameSize);
-        const eS = Math.sqrt(sumS / frameSize);
-        const eM = Math.sqrt(sumM / frameSize);
-        if (eK > maxEnergyK) maxEnergyK = eK;
-        if (eS > maxEnergyS) maxEnergyS = eS;
-        if (eM > maxEnergyM) maxEnergyM = eM;
-      }
-
-      const hasRealKickDrums = maxEnergyK >= 0.080 && (maxEnergyM === 0 || maxEnergyK / maxEnergyM >= 0.30);
-      const hasRealSnares = maxEnergyS >= 0.080 && (maxEnergyM === 0 || maxEnergyS / maxEnergyM >= 0.28);
-
-      const kickStamps: number[] = [];
-      const snareStamps: number[] = [];
-
-      if (hasRealKickDrums || hasRealSnares) {
-        let prevKickE = 0, smoothKickTrans = 0, lastKickSec = -1;
-        let prevSnareE = 0, smoothSnareTrans = 0, lastSnareSec = -1;
-
-        for (let f = 0; f < totalFrames; f++) {
-          const start = f * frameSize;
-          let sumK = 0, sumS = 0, sumM = 0;
-          for (let i = 0; i < frameSize; i++) {
-            const k = filteredKick[start + i];
-            const s = filteredSnare[start + i];
-            const m = filteredMid[start + i];
-            sumK += k * k;
-            sumS += s * s;
-            sumM += m * m;
-          }
-          const eK = Math.sqrt(sumK / frameSize);
-          const eS = Math.sqrt(sumS / frameSize);
-          const eM = Math.sqrt(sumM / frameSize);
-
-          const deltaK = Math.max(0, eK - prevKickE);
-          const deltaS = Math.max(0, eS - prevSnareE);
-          prevKickE = eK;
-          prevSnareE = eS;
-
-          smoothKickTrans = smoothKickTrans * 0.85 + deltaK * 0.15;
-          smoothSnareTrans = smoothSnareTrans * 0.85 + deltaS * 0.15;
-
-          const threshK = Math.max(0.026, smoothKickTrans * 1.8);
-          const threshS = Math.max(0.032, smoothSnareTrans * 1.9);
-          const curSec = (f * frameSize) / sampleRate;
-
-          if (
-            hasRealKickDrums &&
-            deltaK > threshK &&
-            deltaK > 0.026 &&
-            eK > maxEnergyK * 0.50 &&
-            eK > 0.065 &&
-            eK >= eM * 0.48 &&
-            (curSec - lastKickSec > 0.16)
-          ) {
-            lastKickSec = curSec;
-            kickStamps.push(Number(curSec.toFixed(3)));
-          }
-
-          if (
-            hasRealSnares &&
-            deltaS > threshS &&
-            deltaS > 0.032 &&
-            eS > maxEnergyS * 0.50 &&
-            eS > 0.068 &&
-            eS >= eM * 0.42 &&
-            (curSec - lastSnareSec > 0.16)
-          ) {
-            lastSnareSec = curSec;
-            snareStamps.push(Number(curSec.toFixed(3)));
-          }
-        }
-      }
-
-      if (currentProcessingUrlRef.current === url) {
-        kickTimestampsRef.current = kickStamps;
-        snareTimestampsRef.current = snareStamps;
-        isPCMReadyRef.current = true;
-      }
-    } catch (e) {
-      console.warn('PCM Beat map generation note:', e);
-      if (currentProcessingUrlRef.current === url) {
-        isPCMReadyRef.current = true;
-      }
-    }
-  }, []);
-
-  const initAudioAnalyser = useCallback(() => {
-    if (!audioRef.current || typeof window === 'undefined') return;
-    try {
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        audioCtxRef.current = new AudioCtx();
-      }
-      if (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted') {
-        audioCtxRef.current.resume().catch(() => {});
-      }
-      if (!sourceRef.current && audioCtxRef.current) {
-        const audioCtx = audioCtxRef.current;
-        const source = audioCtx.createMediaElementSource(audioRef.current);
-
-        // 1. Full Spectrum Master Analyser
-        const masterAnalyser = audioCtx.createAnalyser();
-        masterAnalyser.fftSize = 256;
-        masterAnalyser.smoothingTimeConstant = 0.15;
-
-        // 2. High-Q Trap Sub-Punch Kick Filter (Peak @ 58Hz, Band 45Hz-75Hz, Q=2.8)
-        const kickFilter = audioCtx.createBiquadFilter();
-        kickFilter.type = 'bandpass';
-        kickFilter.frequency.value = 58;
-        kickFilter.Q.value = 2.8;
-
-        const kickAnalyser = audioCtx.createAnalyser();
-        kickAnalyser.fftSize = 256;
-        kickAnalyser.smoothingTimeConstant = 0.02; // Instantaneous 60fps transient response
-
-        // 3. Snare & Male Vocal Guard Filter (Peak @ 350Hz, Q=1.5)
-        const snareFilter = audioCtx.createBiquadFilter();
-        snareFilter.type = 'bandpass';
-        snareFilter.frequency.value = 350;
-        snareFilter.Q.value = 1.5;
-
-        const snareAnalyser = audioCtx.createAnalyser();
-        snareAnalyser.fftSize = 256;
-        snareAnalyser.smoothingTimeConstant = 0.05;
-
-        // Connect Audio Graph
-        source.connect(masterAnalyser);
-        source.connect(kickFilter);
-        kickFilter.connect(kickAnalyser);
-
-        source.connect(snareFilter);
-        snareFilter.connect(snareAnalyser);
-
-        source.connect(audioCtx.destination);
-
-        analyserRef.current = masterAnalyser;
-        kickAnalyserRef.current = kickAnalyser;
-        snareAnalyserRef.current = snareAnalyser;
-        sourceRef.current = source;
-      }
-    } catch (err) {
-      console.warn('AudioAnalyser initialization warning:', err);
-    }
-  }, []);
+  const nextTrackUrl = useMemo(() => {
+    if (!nextTrackItem?.audio_url) return '';
+    return getMediaCdnUrl(nextTrackItem.audio_url);
+  }, [nextTrackItem]);
 
   const toggleCinematicFx = useCallback(() => {
     setIsCinematicFxEnabled((prev) => !prev);
@@ -414,7 +159,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setActiveZone('audio');
   }, []);
 
-  // Switch to Video Zone cleanly (frees RAM, unloads audio decoding buffer completely)
+  // Switch to Video Zone cleanly (frees RAM, unloads audio stream completely)
   const switchToVideoZone = useCallback((track?: TrackItem) => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -424,31 +169,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     }
     setIsPlaying(false);
+    setIsBuffering(false);
     if (track) {
       setCurrentTrack(track);
     }
     setActiveZone('video');
-  }, []);
-
-  // Global User Interaction to unlock AudioContext
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const unlockAudioCtx = () => {
-      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume().catch(() => {});
-      }
-    };
-
-    window.addEventListener('click', unlockAudioCtx, { passive: true });
-    window.addEventListener('touchstart', unlockAudioCtx, { passive: true });
-    window.addEventListener('keydown', unlockAudioCtx, { passive: true });
-
-    return () => {
-      window.removeEventListener('click', unlockAudioCtx);
-      window.removeEventListener('touchstart', unlockAudioCtx);
-      window.removeEventListener('keydown', unlockAudioCtx);
-    };
   }, []);
 
   // Hard Refresh Handler
@@ -467,7 +192,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         try {
           localStorage.clear();
           sessionStorage.clear();
-          document.cookie = "hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          document.cookie = 'hidden_vault_admin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
           const supabase = createClient();
           await supabase.auth.signOut().catch(() => {});
         } catch (err) {
@@ -483,7 +208,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleHardRefresh, true);
   }, []);
 
-  // Sync Volume
+  // Sync Volume to Native Audio
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
@@ -508,8 +233,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (isPlaying) {
-      initAudioAnalyser();
-      processPCMBeatMap(trackUrl);
       audioRef.current.play().catch((err) => {
         console.warn('Audio play blocked by browser policy:', err);
         setIsPlaying(false);
@@ -524,9 +247,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         title: currentTrack.title,
         artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
         album: currentAlbum?.title || 'Hidden Music Vault',
-        artwork: currentAlbum?.cover_url ? [
-          { src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' },
-        ] : [],
+        artwork: currentAlbum?.cover_url
+          ? [{ src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' }]
+          : [],
       });
 
       navigator.mediaSession.setActionHandler('play', () => {
@@ -542,7 +265,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         nextTrack();
       });
     }
-  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone, initAudioAnalyser, processPCMBeatMap]);
+  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone]);
 
   const playTrack = useCallback((track: TrackItem, album?: Album | null, newPlaylist?: TrackItem[]) => {
     setCurrentTrack(track);
@@ -550,18 +273,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (newPlaylist && newPlaylist.length > 0) setPlaylist(newPlaylist);
     setActiveZone('audio');
     setIsPlaying(true);
+    setIsBuffering(false);
     setCurrentTime(0);
     currentTimeRef.current = 0;
-    if (audioCtxRef.current && (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')) {
-      audioCtxRef.current.resume().catch(() => {});
-    }
   }, []);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack || !audioRef.current) return;
-    if (audioCtxRef.current && (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')) {
-      audioCtxRef.current.resume().catch(() => {});
-    }
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -628,6 +346,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentAlbum,
       playlist,
       isPlaying,
+      isBuffering,
       currentTime,
       duration,
       volume,
@@ -637,12 +356,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       activeZone,
       audioRef,
       currentTimeRef,
-      analyserRef,
-      kickAnalyserRef,
-      snareAnalyserRef,
-      kickTimestampsRef,
-      snareTimestampsRef,
-      isPCMReadyRef,
       playTrack,
       togglePlay,
       nextTrack,
@@ -664,6 +377,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentAlbum,
       playlist,
       isPlaying,
+      isBuffering,
       currentTime,
       duration,
       volume,
@@ -689,21 +403,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider value={contextValue}>
       {children}
 
-      {/* Permanent Singleton Background HTML5 Audio Element with Fixed MediaElementSource */}
+      {/* Lightweight Native HTML5 Audio Engine (Instant Streaming, No WebAudio Overhead) */}
       <audio
         ref={audioRef}
         src={activeZone === 'audio' && currentTrack ? trackUrl : undefined}
         preload="auto"
-        crossOrigin="anonymous"
-        onPlay={() => {
-          initAudioAnalyser();
-        }}
+        onWaiting={() => setIsBuffering(true)}
+        onPlaying={() => setIsBuffering(false)}
+        onCanPlay={() => setIsBuffering(false)}
+        onCanPlayThrough={() => setIsBuffering(false)}
         onTimeUpdate={() => {
           if (!audioRef.current) return;
           const cur = audioRef.current.currentTime;
           currentTimeRef.current = cur;
 
-          // Throttled React state update every 350ms to eliminate 60FPS re-render lag
+          // Throttled React state update every 350ms to eliminate re-render lag
           const now = performance.now();
           if (now - lastStateUpdateTimeRef.current > 350) {
             lastStateUpdateTimeRef.current = now;
@@ -720,10 +434,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }}
         onEnded={nextTrack}
         onError={(e) => {
+          setIsBuffering(false);
           console.warn('Audio playback note:', currentTrack?.title, e);
         }}
         className="hidden"
       />
+
+      {/* Hidden Preloader for Next Track (Zero-Gap Instant Playback) */}
+      {activeZone === 'audio' && nextTrackUrl && (
+        <audio src={nextTrackUrl} preload="auto" className="hidden" />
+      )}
     </PlayerContext.Provider>
   );
 }

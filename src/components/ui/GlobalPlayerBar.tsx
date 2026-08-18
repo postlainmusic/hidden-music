@@ -16,6 +16,7 @@ import {
   Disc3,
   Mic2,
   X,
+  Loader2,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
@@ -34,6 +35,7 @@ export default function GlobalPlayerBar() {
     currentAlbum,
     playlist,
     isPlaying,
+    isBuffering,
     currentTime,
     duration,
     volume,
@@ -42,12 +44,6 @@ export default function GlobalPlayerBar() {
     activeZone,
     audioRef,
     currentTimeRef,
-    analyserRef,
-    kickAnalyserRef,
-    snareAnalyserRef,
-    kickTimestampsRef,
-    snareTimestampsRef,
-    isPCMReadyRef,
     playTrack,
     togglePlay,
     nextTrack,
@@ -66,9 +62,6 @@ export default function GlobalPlayerBar() {
 
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
-  const barContainerRef = useRef<HTMLDivElement | null>(null);
-  const fireOverlayRef = useRef<HTMLDivElement | null>(null);
-  const animFrameIdRef = useRef<number | null>(null);
   const timelineRafIdRef = useRef<number | null>(null);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const volumeSliderRef = useRef<HTMLDivElement | null>(null);
@@ -78,19 +71,6 @@ export default function GlobalPlayerBar() {
   const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const seekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
-
-  // Dedicated Kick Detection Refs for Player Bar (Restored from commit 73210c3 / 6608957)
-  const lastKickTimeRef = useRef<number>(0);
-  const lastSnareTimeRef = useRef<number>(0);
-  const lastFiredKickIndexRef = useRef<number>(-1);
-  const lastFiredSnareIndexRef = useRef<number>(-1);
-  const barFlashIntensityRef = useRef<number>(0);
-  const barScaleRef = useRef<number>(1);
-  const isHeavyKickRef = useRef<boolean>(false);
-  const prevKickPunchRef = useRef<number>(0);
-  const smoothedKickPunchRef = useRef<number>(0);
-  const prevSnarePunchRef = useRef<number>(0);
-  const smoothedSnarePunchRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -108,12 +88,6 @@ export default function GlobalPlayerBar() {
       window.removeEventListener('storage', handleAuthChange);
     };
   }, []);
-
-  // Reset fired indices on track change
-  useEffect(() => {
-    lastFiredKickIndexRef.current = -1;
-    lastFiredSnareIndexRef.current = -1;
-  }, [currentTrack?.id]);
 
   // Click outside to close drawers and volume slider
   useEffect(() => {
@@ -160,184 +134,6 @@ export default function GlobalPlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef]);
 
-  const prevLiveTimeRef = useRef<number>(0);
-
-  // Real-Time Playbar Monochromatic Beat Engine (Restored from commit 73210c3 / 6608957):
-  // - HEAVY KICK: Nảy cực mạnh (scale 1.055) + Chớp trắng sáng rực rỡ
-  // - LIGHT KICK: Nảy nhẹ (scale 1.025) + Chớp trắng mờ tinh tế
-  // - SNARE: Chỉ chớp trắng mờ (scale 1.0 không nảy)
-  useEffect(() => {
-    if (!isPlaying || activeZone !== 'audio') {
-      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-      if (fireOverlayRef.current) fireOverlayRef.current.style.opacity = '0';
-      if (barContainerRef.current) {
-        barContainerRef.current.style.transform = 'scale(1)';
-        barContainerRef.current.style.boxShadow = '';
-        barContainerRef.current.style.borderColor = '';
-      }
-      return;
-    }
-
-    const analyzeFrame = () => {
-      let isHeavyKick = false;
-      let isLightKick = false;
-      let isSnare = false;
-      const now = performance.now();
-      const liveCurrentTime = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : currentTime);
-
-      // Handle user seeking forward/backward
-      if (Math.abs(liveCurrentTime - prevLiveTimeRef.current) > 0.35) {
-        lastFiredKickIndexRef.current = -1;
-        lastFiredSnareIndexRef.current = -1;
-      }
-      prevLiveTimeRef.current = liveCurrentTime;
-
-      // =========================================================================
-      // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING (MATHEMATICALLY ACCURATE)
-      // =========================================================================
-      const kickStamps = kickTimestampsRef?.current || [];
-      const hasPCMBeatMap = kickStamps.length > 0;
-
-      if (hasPCMBeatMap) {
-        // High-Speed Localized Kick Detection from PCM
-        const startIdx = Math.max(0, lastFiredKickIndexRef.current - 1);
-        for (let i = startIdx; i < kickStamps.length; i++) {
-          const stamp = kickStamps[i];
-          const diff = liveCurrentTime - stamp;
-          if (diff < -0.15) break; // Future beat, break early for 60FPS efficiency
-          if (diff >= -0.024 && diff <= 0.038 && i !== lastFiredKickIndexRef.current) {
-            lastFiredKickIndexRef.current = i;
-            isHeavyKick = true;
-            lastKickTimeRef.current = now;
-            break;
-          }
-        }
-
-        // Snare Detection from PCM
-        const snareStamps = snareTimestampsRef?.current || [];
-        if (!isHeavyKick && snareStamps.length > 0) {
-          const startSnareIdx = Math.max(0, lastFiredSnareIndexRef.current - 1);
-          for (let i = startSnareIdx; i < snareStamps.length; i++) {
-            const stamp = snareStamps[i];
-            const diff = liveCurrentTime - stamp;
-            if (diff < -0.15) break;
-            if (diff >= -0.024 && diff <= 0.038 && i !== lastFiredSnareIndexRef.current) {
-              lastFiredSnareIndexRef.current = i;
-              isSnare = true;
-              lastSnareTimeRef.current = now;
-              break;
-            }
-          }
-        }
-      } else {
-        // =========================================================================
-        // [2] DEDICATED 58Hz HARDWARE BIQUAD FILTER DETECTION (ZERO MASTER SPILL)
-        // =========================================================================
-        if (kickAnalyserRef?.current) {
-          try {
-            const arr = new Uint8Array(kickAnalyserRef.current.frequencyBinCount);
-            kickAnalyserRef.current.getByteFrequencyData(arr);
-            const kickSub = (arr[0] + arr[1] + arr[2]) / 3;
-
-            const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
-            prevKickPunchRef.current = kickSub;
-            smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.80 + deltaKick * 0.20;
-            const kickThreshold = Math.max(9.0, smoothedKickPunchRef.current * 1.45);
-
-            if (deltaKick > kickThreshold && kickSub > 32 && (now - lastKickTimeRef.current > 150)) {
-              if (kickSub > 70 || deltaKick > 22) {
-                isHeavyKick = true;
-              } else {
-                isLightKick = true;
-              }
-              lastKickTimeRef.current = now;
-            }
-          } catch {}
-        }
-
-        // Dedicated 350Hz Snare Filter
-        if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
-          try {
-            const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
-            snareAnalyserRef.current.getByteFrequencyData(arr);
-            const snareMid = (arr[1] + arr[2] + arr[3]) / 3;
-
-            const deltaSnare = Math.max(0, snareMid - prevSnarePunchRef.current);
-            prevSnarePunchRef.current = snareMid;
-            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.80 + deltaSnare * 0.20;
-            const snareThreshold = Math.max(10.0, smoothedSnarePunchRef.current * 1.5);
-
-            if (deltaSnare > snareThreshold && snareMid > 35 && (now - lastSnareTimeRef.current > 150) && (now - lastKickTimeRef.current > 100)) {
-              isSnare = true;
-              lastSnareTimeRef.current = now;
-            }
-          } catch {}
-        }
-      }
-
-      if (isHeavyKick) {
-        isHeavyKickRef.current = true;
-        barScaleRef.current = 1.055;
-        barFlashIntensityRef.current = 1.0;
-        if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
-        }
-      } else if (isLightKick) {
-        isHeavyKickRef.current = false;
-        barScaleRef.current = 1.025;
-        barFlashIntensityRef.current = 0.60;
-        if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.60), rgba(255, 255, 255, 0.30))';
-        }
-      } else if (isSnare) {
-        isHeavyKickRef.current = false;
-        barFlashIntensityRef.current = 0.45;
-        if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15))';
-        }
-      } else {
-        barFlashIntensityRef.current *= 0.70;
-        barScaleRef.current = barScaleRef.current + (1.0 - barScaleRef.current) * 0.32;
-      }
-
-      if (barFlashIntensityRef.current < 0.01) barFlashIntensityRef.current = 0;
-      if (Math.abs(barScaleRef.current - 1.0) < 0.001) barScaleRef.current = 1.0;
-
-      if (barContainerRef.current) {
-        const scaleVal = showLyrics || showQueue ? 1.0 : barScaleRef.current;
-        barContainerRef.current.style.transform = `scale(${scaleVal.toFixed(4)})`;
-
-        if (barFlashIntensityRef.current > 0.05) {
-          const alpha = barFlashIntensityRef.current;
-          const isHeavy = isHeavyKickRef.current;
-
-          if (isHeavy) {
-            barContainerRef.current.style.boxShadow = `0 16px 45px rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)}), inset 0 0 25px rgba(255, 255, 255, ${(alpha * 0.30).toFixed(2)})`;
-            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.90).toFixed(2)})`;
-          } else {
-            barContainerRef.current.style.boxShadow = `0 10px 30px rgba(255, 255, 255, ${(alpha * 0.25).toFixed(2)})`;
-            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.50).toFixed(2)})`;
-          }
-        } else {
-          barContainerRef.current.style.boxShadow = '';
-          barContainerRef.current.style.borderColor = '';
-        }
-
-        if (fireOverlayRef.current) {
-          fireOverlayRef.current.style.opacity = barFlashIntensityRef.current.toFixed(3);
-        }
-      }
-
-      animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
-    };
-
-    animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
-
-    return () => {
-      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-    };
-  }, [isPlaying, showLyrics, showQueue, activeZone, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTimeRef, audioRef, currentTime]);
-
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
     return parseLrc(currentTrack.lyrics);
@@ -356,117 +152,132 @@ export default function GlobalPlayerBar() {
 
     const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
     if (activeEl) {
-      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const containerHeight = container.clientHeight;
+      const elOffsetTop = activeEl.offsetTop;
+      const elHeight = activeEl.clientHeight;
+      const targetScroll = elOffsetTop - containerHeight / 2 + elHeight / 2;
+
+      container.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: 'smooth',
+      });
     }
   }, [activeLyricIdx, showLyrics]);
 
-  // Volume hover & drag UX handlers
-  const handleVolumeMouseEnter = useCallback(() => {
-    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-    setShowVolumeSlider(true);
-  }, []);
-
-  const handleVolumeMouseLeave = useCallback(() => {
-    if (isDraggingVolumeRef.current) return;
-    volumeTimeoutRef.current = setTimeout(() => {
-      setShowVolumeSlider(false);
-    }, 550);
-  }, []);
-
-  const updateVolumeFromPosition = useCallback((clientY: number) => {
-    if (!volumeSliderRef.current) return;
-    const rect = volumeSliderRef.current.getBoundingClientRect();
-    const rawRatio = (rect.bottom - clientY) / rect.height;
-    const clamped = Math.max(0, Math.min(1, rawRatio));
-    setVolume(Math.round(clamped * 100) / 100);
-  }, [setVolume]);
-
-  const handleVolumeDragStart = useCallback((clientY: number) => {
-    isDraggingVolumeRef.current = true;
-    updateVolumeFromPosition(clientY);
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDraggingVolumeRef.current) {
-        updateVolumeFromPosition(e.clientY);
-      }
-    };
-
-    const handleMouseUp = () => {
-      isDraggingVolumeRef.current = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  }, [updateVolumeFromPosition]);
-
-  const handleVolumeTouchStart = useCallback((e: React.TouchEvent) => {
-    isDraggingVolumeRef.current = true;
-    if (e.touches[0]) {
-      updateVolumeFromPosition(e.touches[0].clientY);
-    }
-  }, [updateVolumeFromPosition]);
-
-  const handleVolumeTouchMove = useCallback((e: React.TouchEvent) => {
-    if (isDraggingVolumeRef.current && e.touches[0]) {
-      updateVolumeFromPosition(e.touches[0].clientY);
-    }
-  }, [updateVolumeFromPosition]);
-
-  const handleVolumeTouchEnd = useCallback(() => {
-    isDraggingVolumeRef.current = false;
-  }, []);
-
-  // Global Keyboard Shortcuts
+  // Keyboard shortcut listener (Space: Play/Pause, L: Lyrics, Q: Queue, Left/Right: Seek 5s)
   useEffect(() => {
-    if (activeZone !== 'audio') return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
+      const target = e.target as HTMLElement;
       if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
       ) {
         return;
       }
 
-      const key = e.key.toLowerCase();
-      if (e.code === 'Space' || e.key === ' ') {
+      if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        nextTrack();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        prevTrack();
-      } else if (key === 'l') {
+      } else if (e.code === 'KeyL') {
         e.preventDefault();
         setShowLyrics((prev) => !prev);
         setShowQueue(false);
-      } else if (key === 'q') {
+      } else if (e.code === 'KeyQ') {
         e.preventDefault();
         setShowQueue((prev) => !prev);
         setShowLyrics(false);
-      } else if (key === 's') {
+      } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        toggleShuffle();
-      } else if (key === 'r') {
+        const cur = currentTimeRef?.current ?? currentTime;
+        seekTo(Math.min(duration, cur + 5));
+      } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
-        toggleRepeat();
+        const cur = currentTimeRef?.current ?? currentTime;
+        seekTo(Math.max(0, cur - 5));
+      } else if (e.code === 'Escape') {
+        setShowLyrics(false);
+        setShowQueue(false);
+        setShowVolumeSlider(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, nextTrack, prevTrack, toggleShuffle, toggleRepeat, activeZone]);
+  }, [togglePlay, seekTo, currentTime, duration, currentTimeRef]);
 
-  // If in Video Zone, unmounted, no current track, or not authenticated -> hide playbar
-  if (!mounted || !currentTrack || !isAuth || activeZone === 'video') return null;
+  // iOS Vertical Capsule Volume Slider Drag Logic
+  const calculateVolumeFromClientY = useCallback(
+    (clientY: number) => {
+      if (!volumeSliderRef.current) return;
+      const rect = volumeSliderRef.current.getBoundingClientRect();
+      const height = rect.height;
+      const offsetY = rect.bottom - clientY;
+      const ratio = Math.max(0, Math.min(1, offsetY / height));
+      setVolume(Number(ratio.toFixed(2)));
+    },
+    [setVolume]
+  );
+
+  const handleVolumeDragStart = useCallback(
+    (clientY: number) => {
+      isDraggingVolumeRef.current = true;
+      calculateVolumeFromClientY(clientY);
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isDraggingVolumeRef.current) return;
+        calculateVolumeFromClientY(e.clientY);
+      };
+
+      const handleMouseUp = () => {
+        isDraggingVolumeRef.current = false;
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    },
+    [calculateVolumeFromClientY]
+  );
+
+  const handleVolumeTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      isDraggingVolumeRef.current = true;
+      if (e.touches[0]) calculateVolumeFromClientY(e.touches[0].clientY);
+    },
+    [calculateVolumeFromClientY]
+  );
+
+  const handleVolumeTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isDraggingVolumeRef.current || !e.touches[0]) return;
+      calculateVolumeFromClientY(e.touches[0].clientY);
+    },
+    [calculateVolumeFromClientY]
+  );
+
+  const handleVolumeTouchEnd = useCallback(() => {
+    isDraggingVolumeRef.current = false;
+  }, []);
+
+  const handleVolumeMouseEnter = () => {
+    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+    setShowVolumeSlider(true);
+  };
+
+  const handleVolumeMouseLeave = () => {
+    volumeTimeoutRef.current = setTimeout(() => {
+      if (!isDraggingVolumeRef.current) {
+        setShowVolumeSlider(false);
+      }
+    }, 450);
+  };
+
+  // Only render if mounted, authenticated, and in Audio Zone with an active track
+  if (!mounted || !isAuth || activeZone !== 'audio' || !currentTrack) {
+    return null;
+  }
 
   const effectiveDuration = duration > 0 && isFinite(duration) ? duration : currentTrack.duration || 0;
   const hasDrawerOpen = showLyrics || showQueue;
@@ -521,10 +332,10 @@ export default function GlobalPlayerBar() {
                         key={idx}
                         data-active-lyric={isActive ? 'true' : 'false'}
                         onClick={() => seekTo(line.time)}
-                        className={`cursor-pointer transition-all duration-300 px-4 select-none ${
+                        className={`transition-all duration-300 cursor-pointer font-serif tracking-wide select-none ${
                           isActive
-                            ? 'text-white font-black text-base sm:text-lg scale-105 drop-shadow-[0_0_15px_rgba(255,255,255,0.9)] opacity-100'
-                            : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm font-medium opacity-60 hover:opacity-100'
+                            ? 'text-white text-base sm:text-lg md:text-xl font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.9)] scale-105 opacity-100 py-1'
+                            : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm opacity-50 hover:opacity-80'
                         }`}
                       >
                         {line.text}
@@ -537,55 +348,59 @@ export default function GlobalPlayerBar() {
 
             {showQueue && (
               <div
-                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar py-2 space-y-1"
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar space-y-1.5 py-2 pr-1"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
                 }}
               >
-                {playlist.map((track, idx) => {
-                  const isCurrent = track.id === currentTrack.id;
-                  return (
-                    <div
-                      key={track.id}
-                      onClick={() => playTrack(track, currentAlbum, playlist)}
-                      className={`px-3 py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
-                        isCurrent
-                          ? 'bg-white/15 border-white text-white shadow-lg'
-                          : 'bg-white/5 border-transparent hover:bg-white/10 text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-[10px] text-slate-500 font-bold">{String(idx + 1).padStart(2, '0')}</span>
-                        <span className="text-xs font-cyber truncate">{track.title}</span>
+                {playlist.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs uppercase tracking-widest">
+                    Hàng chờ phát đang trống
+                  </div>
+                ) : (
+                  playlist.map((track, idx) => {
+                    const isCur = track.id === currentTrack.id;
+                    return (
+                      <div
+                        key={track.id || idx}
+                        onClick={() => playTrack(track, currentAlbum, playlist)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isCur
+                            ? 'bg-white/15 border-white text-white font-bold shadow-md'
+                            : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-[10px] font-mono text-slate-400 w-5 text-center flex-shrink-0">
+                            {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
+                          </span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs truncate uppercase">{track.title}</span>
+                            <span className="text-[10px] text-slate-400 truncate">
+                              {track.artist || currentAlbum?.artist || 'VAULT ARTIST'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 flex-shrink-0 ml-2">
+                          {formatTime(track.duration || 0)}
+                        </span>
                       </div>
-                      <span className="text-[10px] font-mono tabular-nums text-slate-400">
-                        {formatTime(track.duration)}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* 2. PURE AUDIO SINGLE-ROW PLAYBAR CONTAINER (FLUSH SEAMLESSLY ATTACHED) */}
+      {/* 2. DOCK PLAYBAR (ELEGANT MONOCHROMATIC MONOLITH DOCK) */}
       <div
-        ref={barContainerRef}
-        className={`relative w-full max-w-5xl bg-zinc-950/98 border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl px-3.5 sm:px-5 py-2 sm:py-2.5 pointer-events-auto will-change-transform transition-all font-mono select-none z-10 ${
-          hasDrawerOpen ? 'rounded-b-3xl rounded-t-none border-t-0 -mt-[1px]' : 'rounded-3xl'
+        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-visible transition-all duration-200 ${
+          hasDrawerOpen ? '-mt-[1px] rounded-t-none border-t-0' : ''
         }`}
       >
-        {/* Monochromatic Flash Overlay */}
-        <div
-          ref={fireOverlayRef}
-          className={`absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-75 ${
-            hasDrawerOpen ? 'rounded-b-3xl rounded-t-none' : 'rounded-3xl'
-          }`}
-        />
-
         {/* STRICT SINGLE-ROW HORIZONTAL LAYOUT */}
         <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full">
           
@@ -599,7 +414,10 @@ export default function GlobalPlayerBar() {
                   className={`w-full h-full object-cover ${isPlaying ? 'scale-105' : ''} transition-transform duration-500`}
                 />
               ) : (
-                <Disc3 className="w-full h-full p-2 text-white/50 animate-spin-slow" />
+                <Disc3
+                  className="w-full h-full p-2 text-white/50 animate-spin"
+                  style={{ animationPlayState: isPlaying ? 'running' : 'paused', animationDuration: '4s' }}
+                />
               )}
             </div>
 
@@ -640,13 +458,15 @@ export default function GlobalPlayerBar() {
                 <SkipBack className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
               </button>
 
-              {/* Play / Pause Master Button */}
+              {/* Play / Pause Master Button with Loading Indicator */}
               <button
                 onClick={togglePlay}
-                title={isPlaying ? 'Tạm dừng' : 'Phát'}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
+                title={isBuffering ? 'Đang tải âm thanh...' : isPlaying ? 'Tạm dừng' : 'Phát'}
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 flex-shrink-0"
               >
-                {isPlaying ? (
+                {isBuffering ? (
+                  <Loader2 className="w-4 h-4 sm:w-4.5 sm:h-4.5 animate-spin" />
+                ) : isPlaying ? (
                   <Pause className="w-4 h-4 sm:w-4.5 sm:h-4.5 fill-current" />
                 ) : (
                   <Play className="w-4 h-4 sm:w-4.5 sm:h-4.5 fill-current ml-0.5" />

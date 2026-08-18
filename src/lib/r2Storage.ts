@@ -88,10 +88,9 @@ export function getMediaCdnUrl(
   options?: { secure?: boolean; expiresInSeconds?: number }
 ): string {
   if (!keyOrUrl) return '';
-  if (keyOrUrl.startsWith('/api/stream')) return keyOrUrl;
 
   const cleanKey = extractCleanKey(keyOrUrl);
-  if (!cleanKey) return '';
+  if (!cleanKey) return keyOrUrl;
 
   // If already an external third-party streaming URL (e.g. YouTube or external audio)
   if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
@@ -101,8 +100,7 @@ export function getMediaCdnUrl(
   }
 
   const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
-  const directR2Url = `${baseGateway}/${cleanKey}`;
-  return `/api/stream?url=${encodeURIComponent(directR2Url)}`;
+  return `${baseGateway}/${cleanKey}`;
 }
 
 /**
