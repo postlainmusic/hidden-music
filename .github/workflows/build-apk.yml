@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-twa:
-    name: Build TWA APK
+    name: Build TWA Native APK
     runs-on: ubuntu-latest
 
     steps:
@@ -24,44 +24,142 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Bubblewrap CLI
-        run: npm install -g @bubblewrap/cli
-
-      - name: Pre-configure Bubblewrap Environment
+      - name: Scaffold Pure Google TWA Project
         run: |
-          mkdir -p ~/.bubblewrap
-          cat << EOF > ~/.bubblewrap/config.json
-          {
-            "jdkPath": "$JAVA_HOME",
-            "androidSdkPath": "$ANDROID_HOME"
+          mkdir -p twa-app/app/src/main/res/values
+          mkdir -p twa-app/app/src/main/res/xml
+          mkdir -p twa-app/gradle/wrapper
+
+          # 1. settings.gradle
+          cat << 'EOF' > twa-app/settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "HiddenMusicTWA"
+          include ':app'
+          EOF
+
+          # 2. Root build.gradle
+          cat << 'EOF' > twa-app/build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-      - name: Generate Keystore for Signing
-        run: |
-          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=PostLain, OU=Music, O=HiddenMusic, L=DaLat, S=LamDong, C=VN"
+          # 3. App build.gradle
+          cat << 'EOF' > twa-app/app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
 
-      - name: Generate Android Project & Build APK
+          android {
+              namespace 'com.postlain.hiddenmusic'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.postlain.hiddenmusic"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0.0"
+                  manifestPlaceholders = [
+                      hostName: "music.postlain.com",
+                      defaultUrl: "https://music.postlain.com",
+                      assetStatements: '[{ "relation": ["delegate_permission/common.handle_all_urls"], "target": {"namespace": "android_app", "package_name": "com.postlain.hiddenmusic", "sha256_cert_fingerprints": ["FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"]}}]'
+                  ]
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+                  debug {
+                      applicationIdSuffix ""
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+          }
+          EOF
+
+          # 4. AndroidManifest.xml (TWA Activity từ Google)
+          cat << 'EOF' > twa-app/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="Hidden Music"
+                  android:theme="@android:style/Theme.Translucent.NoTitleBar">
+
+                  <meta-data
+                      android:name="asset_statements"
+                      android:value="${assetStatements}" />
+
+                  <activity
+                      android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+                      android:exported="true"
+                      android:label="Hidden Music">
+
+                      <meta-data
+                          android:name="android.support.customtabs.trusted.DEFAULT_URL"
+                          android:value="${defaultUrl}" />
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                      <intent-filter android:autoVerify="true">
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data
+                              android:scheme="https"
+                              android:host="${hostName}" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 5. Strings & Colors
+          cat << 'EOF' > twa-app/app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">Hidden Music</string>
+          </resources>
+          EOF
+
+      - name: Build TWA APK with Gradle
         run: |
-          bubblewrap init --manifest=https://music.postlain.com/manifest.json --directory=twa-project
-          cd twa-project
-          chmod +x ./gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=../android.keystore \
-            -Pandroid.injected.signing.store.password=android \
-            -Pandroid.injected.signing.key.alias=android \
-            -Pandroid.injected.signing.key.password=android || ./gradlew assembleDebug
+          cd twa-app
+          gradle wrapper
+          ./gradlew assembleDebug --stacktrace
 
       - name: Prepare APK Binary
         run: |
-          find . -name "*.apk" -exec cp {} ./hidden-music.apk \;
+          cp twa-app/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
@@ -78,7 +176,7 @@ jobs:
           body: |
             ## 🎵 Hidden Music Vault - Trusted Web Activity (TWA)
             
-            Bản build Android chuẩn TWA (sử dụng engine Chrome gốc của máy, cực nhẹ, full màn hình).
+            Bản build Android Native TWA chính thức của Google (sử dụng Chromium engine của hệ thống, siêu nhẹ, không dính lỗi WebView).
           draft: false
           prerelease: false
           files: ./hidden-music.apk
