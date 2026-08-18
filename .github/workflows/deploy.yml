@@ -37,15 +37,13 @@ jobs:
         run: npm install --prefer-offline --no-audit --legacy-peer-deps
 
       - name: Build Next.js with Cloudflare Adapter
-        run: npx @cloudflare/next-on-pages --skip-type-checking
+        run: npx @cloudflare/next-on-pages
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1
-          NPM_CONFIG_LEGACY_PEER_DEPS: "true"
 
       - name: Publish Direct to Cloudflare Pages
         run: npx wrangler pages deploy .vercel/output/static --project-name=hidden-music --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          NPM_CONFIG_LEGACY_PEER_DEPS: "true"
