@@ -1,0 +1,23 @@
+{
+  "appId": "com.postlain.hiddenmusic",
+  "appName": "Hidden Music",
+  "webDir": "public",
+  "server": {
+    "url": "https://music.postlain.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#000000"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#000000",
+      "showSpinner": false
+    }
+  }
+}
