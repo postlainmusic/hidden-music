@@ -1,4 +1,4 @@
-name: Build Android APK & Publish Release
+name: Build TWA Android APK & Publish Release
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build APK and Create Release
+  build-twa:
+    name: Build TWA APK
     runs-on: ubuntu-latest
 
     steps:
@@ -21,115 +21,50 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit --legacy-peer-deps
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
 
-      - name: Initialize Capacitor Android Platform
+      - name: Generate Keystore for Signing
         run: |
-          npx cap add android || true
-          npx cap sync android
+          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=PostLain, OU=Music, O=HiddenMusic, L=DaLat, S=LamDong, C=VN"
 
-      - name: Configure Network Security & Manifest
+      - name: Build TWA Project
         run: |
-          mkdir -p android/app/src/main/res/xml
-          cat << 'EOF' > android/app/src/main/res/xml/network_security_config.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="true">
-                  <trust-anchors>
-                      <certificates src="system" />
-                      <certificates src="user" />
-                  </trust-anchors>
-              </base-config>
-              <domain-config cleartextTrafficPermitted="true">
-                  <domain includeSubdomains="true">music.postlain.com</domain>
-                  <domain includeSubdomains="true">postlain.com</domain>
-              </domain-config>
-          </network-security-config>
-          EOF
-
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="true"
-                  android:networkSecurityConfig="@xml/network_security_config">
-
-                  <activity
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
-                      android:name=".MainActivity"
-                      android:label="@string/title_activity_main"
-                      android:theme="@style/AppTheme.NoActionBarLaunch"
-                      android:launchMode="singleTask"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-
-                  </activity>
-
-                  <provider
-                      android:name="androidx.core.content.FileProvider"
-                      android:authorities="${applicationId}.fileprovider"
-                      android:exported="false"
-                      android:grantUriPermissions="true">
-                      <meta-data
-                          android:name="android.support.FILE_PROVIDER_PATHS"
-                          android:resource="@xml/file_paths"></meta-data>
-                  </provider>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Setup Gradle Permission
-        run: |
-          cd android
-          chmod +x ./gradlew
-
-      - name: Build Android Debug APK
-        run: |
-          cd android
-          ./gradlew assembleDebug --stacktrace
+          bubblewrap build --manifest=twa-manifest.json --skipPwaValidation
+        env:
+          KEYSTORE_PASSWORD: android
+          KEY_PASSWORD: android
 
       - name: Prepare APK Binary
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
+          cp app-release-signed.apk ./hidden-music.apk || cp app-debug.apk ./hidden-music.apk || cp *.apk ./hidden-music.apk
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: HiddenMusic-Android-APK
+          name: HiddenMusic-TWA-Android-APK
           path: ./hidden-music.apk
           retention-days: 14
 
-      - name: Create or Update GitHub Release
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Hidden Music Vault Android (Latest)"
+          name: "Hidden Music Vault TWA Android (Latest)"
           body: |
-            ## 🎵 Hidden Music Vault - Android Native App
+            ## 🎵 Hidden Music Vault - Trusted Web Activity (TWA)
             
-            Bản build ứng dụng Android Native kết nối trực tiếp với [music.postlain.com](https://music.postlain.com).
+            Bản build Android chuẩn TWA của Google (sử dụng Chromium engine gốc, siêu nhẹ, không lỗi mạng).
           draft: false
           prerelease: false
           files: ./hidden-music.apk
