@@ -1,0 +1,43 @@
+{
+  "packageId": "com.postlain.hiddenmusic",
+  "host": "music.postlain.com",
+  "name": "Hidden Music Vault",
+  "launcherName": "Hidden Music",
+  "display": "standalone",
+  "themeColor": "#09090D",
+  "themeColorDark": "#09090D",
+  "navigationColor": "#09090D",
+  "navigationColorDark": "#09090D",
+  "navigationDividerColor": "#00000000",
+  "navigationDividerColorDark": "#00000000",
+  "backgroundColor": "#09090D",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://music.postlain.com/icon-512.png",
+  "maskableIconUrl": "https://music.postlain.com/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://music.postlain.com/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false
+}
