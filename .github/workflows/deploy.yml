@@ -32,9 +32,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
 
-          - name: Install Dependencies
+      - name: Install Dependencies
         run: npm install --prefer-offline --no-audit
-
 
       - name: Build Next.js with Cloudflare Adapter
         run: npx @cloudflare/next-on-pages
