@@ -1,11 +1,14 @@
-name: Build Android APK
+name: Build Android APK & Publish Release
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build-apk:
-    name: Build Android Package
+  build-and-release:
+    name: Build APK and Create Release
     runs-on: ubuntu-latest
 
     steps:
@@ -32,11 +35,11 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
-      - name: Inject Android Permissions & Config
+      - name: Inject Android Permissions & Network Config
         run: |
-          # Cấp quyền truy cập mạng Internet cho Android App
+          # Cấp quyền truy cập Internet và trạng thái mạng
           sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
-          # Cho phép load webview URL trực tiếp
+          # Cho phép nạp webview từ URL trực tiếp
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
 
       - name: Setup Gradle Permission
@@ -49,9 +52,32 @@ jobs:
           cd android
           ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK Artifact
+      - name: Prepare APK Binary
+        run: |
+          # Sao chép và đổi tên file thành hidden-music.apk để link tải đẹp mắt
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
+
+      - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: HiddenMusic-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ./hidden-music.apk
           retention-days: 14
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Hidden Music Vault Android (Latest)"
+          body: |
+            ## 🎵 Hidden Music Vault - Android Native App
+            
+            Bản build ứng dụng Android Native chính thức kết nối trực tiếp với máy chủ [music.postlain.com](https://music.postlain.com).
+            
+            - **Cập nhật:** Tự động đồng bộ với web live
+            - **Tải file trực tiếp:** Bấm vào `hidden-music.apk` bên dưới.
+          draft: false
+          prerelease: false
+          files: ./hidden-music.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
