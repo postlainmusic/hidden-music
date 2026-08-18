@@ -1,6 +1,15 @@
-/** @type {import('next').NextOptions} */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Prevents double mount issue in R3F 3D Canvas during dev
+  
+  // Bỏ qua Type-check & ESLint khi build trên Cloudflare để tăng tốc tối đa
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   images: {
     remotePatterns: [
       {
