@@ -358,8 +358,13 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
       setUserSession(stored);
     };
 
+    const handleOpenPaywallGlobal = () => {
+      setIsPaywallOpen(true);
+    };
+
     window.addEventListener('vault_profile_updated', handleCustomSessionChange);
     window.addEventListener('vault_auth_change', handleCustomSessionChange);
+    window.addEventListener('open_vault_paywall', handleOpenPaywallGlobal);
 
     return () => {
       clearTimeout(timeoutTimer);
@@ -371,6 +376,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
       }
       window.removeEventListener('vault_profile_updated', handleCustomSessionChange);
       window.removeEventListener('vault_auth_change', handleCustomSessionChange);
+      window.removeEventListener('open_vault_paywall', handleOpenPaywallGlobal);
     };
   }, [initialAlbumId]);
 

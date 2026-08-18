@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   User,
   LogOut,
@@ -10,11 +10,14 @@ import {
   X,
   Sparkles,
   MessageSquare,
-  Send,
-  HelpCircle,
-  Flame,
+  Crown,
+  Zap,
+  ShieldCheck,
+  Film,
   Music2,
-  Bug
+  Lock,
+  Unlock,
+  Calendar,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/types/database';
@@ -23,7 +26,8 @@ import {
   getStoredUserSession,
   setStoredUserSession,
   clearAllStoredSessions,
-  performLogout
+  performLogout,
+  hasVideoSubscription,
 } from '@/lib/authSession';
 
 interface ProfileModalProps {
@@ -114,6 +118,28 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
 
     loadProfile();
   }, [isOpen]);
+
+  // Subscription Plan Analysis
+  const isUserAdmin = useMemo(() => {
+    return profile?.role === 'admin' || user?.role === 'admin' || user?.email === 'admin@hiddenvault.com';
+  }, [profile, user]);
+
+  const isVipPaid = useMemo(() => {
+    if (isUserAdmin) return true;
+    if (hasVideoSubscription(user)) return true;
+    if (profile?.is_video_paid || profile?.has_video_subscription) return true;
+    if (profile?.plan === 'vip' || profile?.plan === 'premium') return true;
+    if (user?.plan === 'vip' || user?.plan === 'premium') return true;
+    if (typeof window !== 'undefined' && localStorage.getItem('hidden_vault_video_pass') === 'true') return true;
+    return false;
+  }, [isUserAdmin, user, profile]);
+
+  const planCategory = useMemo<'admin' | 'lifetime' | 'monthly' | 'free'>(() => {
+    if (isUserAdmin) return 'admin';
+    if (profile?.plan === 'vip' || user?.plan === 'vip') return 'monthly';
+    if (profile?.plan === 'premium' || user?.plan === 'premium' || isVipPaid) return 'lifetime';
+    return 'free';
+  }, [isUserAdmin, profile, user, isVipPaid]);
 
   if (!isOpen) return null;
 
@@ -256,16 +282,14 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
     await performLogout();
   };
 
-  const isUserAdmin = profile?.role === 'admin' || user?.email === 'admin@hiddenvault.com';
-
   return (
     <div
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-start justify-center sm:justify-end p-3 sm:pt-16 sm:pr-8 md:pr-14 select-none font-mono text-white transition-opacity duration-300"
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-start justify-center sm:justify-end p-3 sm:pt-16 sm:pr-8 md:pr-14 select-none font-mono text-white transition-opacity duration-300"
     >
-      <div className="bw-panel w-full max-w-[380px] rounded-3xl p-4 sm:p-5 border border-white/25 shadow-[0_20px_70px_rgba(0,0,0,0.85)] relative space-y-4 max-h-[88vh] overflow-y-auto font-mono animate-vaultPopOut bg-[#0c0c10]/95 backdrop-blur-2xl">
+      <div className="bw-panel w-full max-w-[400px] rounded-3xl p-4 sm:p-5 border border-white/25 shadow-[0_25px_80px_rgba(0,0,0,0.95)] relative space-y-4 max-h-[90vh] overflow-y-auto no-scrollbar font-mono animate-vaultPopOut bg-[#0c0c10]/95 backdrop-blur-2xl">
         
         {/* Header Bar */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -282,7 +306,7 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
                 {activeTab === 'profile' ? 'HỒ SƠ CÁ NHÂN' : 'GỬI GÓP Ý & BÁO LỖI'}
               </h3>
               <p className="text-[9px] text-slate-400 font-mono">
-                {activeTab === 'profile' ? 'Thông tin tài khoản' : 'Đóng góp ý kiến cho Vault'}
+                {activeTab === 'profile' ? 'Thông tin & Gói đăng ký' : 'Đóng góp ý kiến cho Vault'}
               </p>
             </div>
           </div>
@@ -331,7 +355,7 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
           </button>
         </div>
 
-        {/* TAB 1: PROFILE TAB */}
+        {/* TAB 1: PROFILE & SUBSCRIPTION TAB */}
         {activeTab === 'profile' && (
           <>
             {/* Message Status */}
@@ -358,38 +382,38 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
                 <span>ĐANG TẢI HỒ SƠ...</span>
               </div>
             ) : (
-              <form onSubmit={handleSave} className="space-y-4 text-xs">
-                {/* User Identity Card */}
-                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/15 space-y-3">
+              <form onSubmit={handleSave} className="space-y-3.5 text-xs">
+                {/* 1. User Identity Card */}
+                <div className="p-3 rounded-2xl bg-white/5 border border-white/15 space-y-3">
                   <div className="flex items-center gap-3">
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
                         alt="Avatar"
-                        className="w-12 h-12 rounded-2xl border-2 border-white/30 object-cover shadow-md"
+                        className="w-11 h-11 rounded-2xl border-2 border-white/30 object-cover shadow-md"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-2xl bg-white/10 border-2 border-white/20 flex items-center justify-center text-white font-extrabold text-base">
+                      <div className="w-11 h-11 rounded-2xl bg-white/10 border-2 border-white/20 flex items-center justify-center text-white font-extrabold text-base">
                         {(displayName.charAt(0) || 'V').toUpperCase()}
                       </div>
                     )}
 
-                    <div className="space-y-1 truncate min-w-0 flex-1">
+                    <div className="space-y-0.5 truncate min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-extrabold text-xs text-white truncate font-cyber">
                           {displayName || 'Vault Listener'}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded-full text-[8px] font-extrabold bg-white text-black uppercase tracking-wider">
-                          {isUserAdmin ? 'ADMIN' : 'VAULT MEMBER'}
+                        <span className="px-1.5 py-0.2 rounded-full text-[8px] font-extrabold bg-white text-black uppercase tracking-wider">
+                          {isUserAdmin ? 'ADMIN' : isVipPaid ? 'VIP' : 'MEMBER'}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 truncate">{user?.email || 'member@hiddenvault.com'}</p>
+                      <p className="text-[10px] text-slate-400 truncate font-mono">{user?.email || 'member@hiddenvault.com'}</p>
                     </div>
                   </div>
 
                   {/* Display Name Input */}
                   <div>
-                    <label className="block text-[10px] uppercase text-slate-400 mb-1 font-bold">
+                    <label className="block text-[9px] uppercase text-slate-400 mb-1 font-bold">
                       Tên hiển thị / Handle
                     </label>
                     <div className="relative">
@@ -398,14 +422,113 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
                         placeholder="VD: LUCIINGO"
-                        className="w-full bg-black/60 border border-white/20 rounded-xl px-3 py-2 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors uppercase font-bold tracking-wider"
+                        className="w-full bg-black/60 border border-white/20 rounded-xl px-3 py-1.5 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors uppercase font-bold tracking-wider"
                       />
-                      <User className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <User className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
+                {/* 2. DEDICATED SUBSCRIPTION STATUS CARD */}
+                <div className="p-3.5 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/20 space-y-2.5 relative overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      {planCategory === 'admin' ? (
+                        <ShieldCheck className="w-4 h-4 text-white" />
+                      ) : planCategory === 'lifetime' ? (
+                        <Crown className="w-4 h-4 text-amber-300" />
+                      ) : planCategory === 'monthly' ? (
+                        <Zap className="w-4 h-4 text-yellow-300" />
+                      ) : (
+                        <Music2 className="w-4 h-4 text-slate-400" />
+                      )}
+                      <span className="text-[10px] font-extrabold uppercase font-cyber tracking-widest text-white">
+                        GÓI ĐĂNG KÝ HIỆN TẠI
+                      </span>
+                    </div>
+
+                    {/* Plan Badge */}
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider font-mono border ${
+                      planCategory === 'admin'
+                        ? 'bg-white text-black border-white shadow-md'
+                        : planCategory === 'lifetime'
+                        ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                        : planCategory === 'monthly'
+                        ? 'bg-yellow-400/20 text-yellow-300 border-yellow-400/40'
+                        : 'bg-white/10 text-slate-300 border-white/15'
+                    }`}>
+                      {planCategory === 'admin'
+                        ? '👑 QUẢN TRỊ VIÊN'
+                        : planCategory === 'lifetime'
+                        ? '✨ TRỌN ĐỜI VIP'
+                        : planCategory === 'monthly'
+                        ? '⚡ GÓI THÁNG VIP'
+                        : '🎵 MIỄN PHÍ'}
+                    </span>
+                  </div>
+
+                  {/* Plan Features & Access Details */}
+                  <div className="space-y-1.5 text-[10px] text-slate-300 font-mono">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Film className="w-3 h-3 text-slate-400" />
+                        Video Zone (MV Hiếm):
+                      </span>
+                      <span className={`font-bold flex items-center gap-1 ${isVipPaid ? 'text-white' : 'text-slate-500'}`}>
+                        {isVipPaid ? (
+                          <>
+                            <Unlock className="w-3 h-3 text-white" />
+                            ĐÃ MỞ KHÓA
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3 h-3 text-slate-500" />
+                            CHƯA MỞ KHÓA
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Music2 className="w-3 h-3 text-slate-400" />
+                        Chất lượng Âm thanh:
+                      </span>
+                      <span className="font-bold text-white">Lossless FLAC Master</span>
+                    </div>
+
+                    {isVipPaid && (
+                      <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[9px] text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-500" />
+                          Thời hạn:
+                        </span>
+                        <span className="font-bold text-white uppercase">
+                          {planCategory === 'admin' || planCategory === 'lifetime'
+                            ? 'Vĩnh viễn (Lifetime)'
+                            : '30 ngày'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* If Free User: Show Upgrade Call to Action */}
+                  {!isVipPaid && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        window.dispatchEvent(new CustomEvent('open_vault_paywall'));
+                      }}
+                      className="w-full mt-1.5 py-2 px-3 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                    >
+                      <Crown className="w-3.5 h-3.5 fill-black" />
+                      <span>MỞ KHÓA VIDEO ZONE (VOUCHER / PAYOS)</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* 3. Action Buttons */}
                 <div className="pt-1 space-y-2">
                   <button
                     type="submit"
@@ -451,61 +574,52 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
               </div>
             )}
 
-            {/* Category Selector */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="block text-[10px] uppercase text-slate-400 font-bold">
                 Danh mục góp ý
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { id: 'feature', label: 'Tính năng mới', icon: Flame },
-                  { id: 'music_request', label: 'Yêu cầu nhạc/MV', icon: Music2 },
-                  { id: 'bug', label: 'Báo lỗi / Bug', icon: Bug },
-                  { id: 'other', label: 'Ý kiến khác', icon: HelpCircle },
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const isSelected = feedbackCategory === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setFeedbackCategory(item.id as any)}
-                      className={`p-2 rounded-xl text-left border flex items-center gap-1.5 transition-all text-[10px] font-bold ${
-                        isSelected
-                          ? 'bg-white text-black border-white shadow-md'
-                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                      }`}
-                    >
-                      <Icon className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </button>
-                  );
-                })}
+                  { id: 'feature', label: 'TÍNH NĂNG MỚI' },
+                  { id: 'bug', label: 'BÁO LỖI / BUG' },
+                  { id: 'music_request', label: 'YÊU CẦU NHẠC / MV' },
+                  { id: 'other', label: 'GÓP Ý KHÁC' },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setFeedbackCategory(cat.id as any)}
+                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                      feedbackCategory === cat.id
+                        ? 'bg-white text-black border-white shadow-md'
+                        : 'bg-black/50 border-white/15 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Feedback Textarea */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="block text-[10px] uppercase text-slate-400 font-bold">
                 Nội dung chi tiết
               </label>
               <textarea
-                rows={4}
                 value={feedbackContent}
                 onChange={(e) => setFeedbackContent(e.target.value)}
-                placeholder="Nhập ý kiến đóng góp, bài hát muốn lưu trữ, hoặc lỗi bạn gặp phải..."
-                className="w-full bg-black/60 border border-white/20 rounded-xl p-3 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors resize-none leading-relaxed"
+                placeholder="Nhập chi tiết ý kiến, bài hát muốn bổ sung hoặc lỗi bạn gặp phải..."
+                rows={4}
+                className="w-full bg-black/60 border border-white/20 rounded-xl p-2.5 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
               />
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
-              disabled={feedbackSending || !feedbackContent.trim()}
-              className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
+              disabled={feedbackSending}
+              className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>{feedbackSending ? 'ĐANG GỬI GÓP Ý...' : 'GỬI ĐẾN BAN QUẢN TRỊ'}</span>
+              <span>{feedbackSending ? 'ĐANG GỬI Ý KIẾN...' : 'GỬI GÓP Ý TỚI ADMIN'}</span>
             </button>
           </form>
         )}
@@ -514,4 +628,3 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
     </div>
   );
 }
-
