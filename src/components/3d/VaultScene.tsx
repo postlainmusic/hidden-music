@@ -479,7 +479,7 @@ export default function VaultScene({
   if (!activeAlbum) return null;
 
   return (
-    <div className="w-full h-full absolute inset-0 z-0 bg-[#09090d] flex items-center justify-center overflow-hidden px-3 sm:px-6 md:px-8 select-none">
+    <div className="w-full h-full absolute inset-0 z-0 bg-[#09090d] flex items-center justify-center overflow-hidden px-2 sm:px-6 md:px-8 select-none">
       
       {/* 1A. VAULT 3D COSMIC SKY (PERSISTENT SHARED BACKGROUND) */}
       <div
@@ -891,7 +891,7 @@ export default function VaultScene({
       {/* 3. CHẾ ĐỘ AUDIO ZONE (PERSISTENT CONTAINER - ZERO GHOST BORDER)           */}
       {/* ========================================================================= */}
       <div
-        className={`relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden transition-all duration-300 ${
+        className={`relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center justify-center pt-2 sm:pt-6 pb-20 sm:pb-22 overflow-hidden transition-all duration-300 border-none outline-none shadow-none ${
           !isVideoZone
             ? 'opacity-100 scale-100 pointer-events-auto'
             : 'opacity-0 scale-95 pointer-events-none'
@@ -900,12 +900,12 @@ export default function VaultScene({
         
         {/* PHYSICAL ALBUM DECK */}
         <div
-          className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20"
+          className="flex flex-col items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform z-20 border-none outline-none"
           style={{
             transform: isDetail
               ? (typeof window !== 'undefined' && window.innerWidth >= 1024
                   ? 'translateX(-280px) scale(1.02)'
-                  : 'translateY(-10px) scale(0.94)')
+                  : 'translateY(-6px) scale(0.96)')
               : `rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg) scale(${isHovered ? 1.03 : 1.0})`,
             perspective: '1000px',
             transformStyle: 'preserve-3d',
@@ -923,34 +923,34 @@ export default function VaultScene({
                 else handlePlayAlbum();
               }
             }}
-            className={`cursor-pointer transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] p-4 sm:p-5 md:p-6 w-[280px] sm:w-[320px] md:w-[350px] flex flex-col items-center select-none ${
+            className={`cursor-pointer transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] p-2 sm:p-5 md:p-6 w-[260px] sm:w-[320px] md:w-[350px] flex flex-col items-center select-none ${
               isDetail
-                ? 'bg-transparent border-0 shadow-none backdrop-blur-none'
+                ? 'bg-transparent border-0 border-transparent shadow-none backdrop-blur-none'
                 : 'rounded-3xl bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl'
             }`}
           >
             {/* Sleeve & Sliding Vinyl Disc */}
-            <div className="relative mx-auto flex items-center justify-center w-[210px] h-[210px] sm:w-[240px] sm:h-[240px] overflow-visible">
+            <div className="relative mx-auto flex items-center justify-center w-[190px] h-[190px] sm:w-[240px] sm:h-[240px] overflow-visible">
               {/* Grooved Vinyl Record */}
               <div
-                className="absolute w-[180px] h-[180px] sm:w-[210px] sm:h-[210px] rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/25 shadow-2xl flex items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none z-0 will-change-transform"
+                className="absolute w-[165px] h-[165px] sm:w-[210px] sm:h-[210px] rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-white/25 shadow-2xl flex items-center justify-center transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none z-0 will-change-transform"
                 style={{
                   transform: (isDetail || isHovered || (isCurrentPlayingThisAlbum && isPlaying))
-                    ? (isDetail ? 'translateX(60px) rotate(180deg)' : 'translateX(26px) rotate(180deg)')
+                    ? (isDetail ? 'translateX(50px) rotate(180deg)' : 'translateX(26px) rotate(180deg)')
                     : 'translateX(0px) rotate(0deg)',
                   boxShadow: (isDetail || isHovered)
                     ? '0 20px 45px rgba(0,0,0,0.95), inset 0 0 20px rgba(255,255,255,0.1)'
                     : 'none',
                 }}
               >
-                <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
-                  <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
-                    <div className="w-full h-full rounded-full border border-white/10 p-2.5 flex items-center justify-center">
-                      <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner ${
+                <div className="w-full h-full rounded-full border border-white/10 p-2 sm:p-2.5 flex items-center justify-center">
+                  <div className="w-full h-full rounded-full border border-white/10 p-2 sm:p-2.5 flex items-center justify-center">
+                    <div className="w-full h-full rounded-full border border-white/10 p-2 sm:p-2.5 flex items-center justify-center">
+                      <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner ${
                         isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
                       }`}>
                         <img src={getCoverCdnUrl(activeAlbum.cover_url)} alt="" className="w-full h-full object-cover rounded-full" />
-                        <div className="absolute w-3.5 h-3.5 rounded-full bg-black border border-white/60" />
+                        <div className="absolute w-3 sm:w-3.5 h-3 sm:h-3.5 rounded-full bg-black border border-white/60" />
                       </div>
                     </div>
                   </div>
@@ -959,9 +959,9 @@ export default function VaultScene({
 
               {/* Cover Artwork Sleeve */}
               <div
-                className="relative z-10 w-[190px] h-[190px] sm:w-[220px] sm:h-[220px] rounded-2xl overflow-hidden shadow-[0_20px_45px_rgba(0,0,0,0.95)] border border-white/20 bg-zinc-950 flex-shrink-0 transition-transform duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform"
+                className="relative z-10 w-[170px] h-[170px] sm:w-[220px] sm:h-[220px] rounded-2xl overflow-hidden shadow-[0_20px_45px_rgba(0,0,0,0.95)] border border-white/20 bg-zinc-950 flex-shrink-0 transition-transform duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform"
                 style={{
-                  transform: (isDetail || isHovered) ? 'translateX(-20px)' : 'translateX(0px)',
+                  transform: (isDetail || isHovered) ? 'translateX(-16px)' : 'translateX(0px)',
                 }}
               >
                 <img
@@ -986,11 +986,11 @@ export default function VaultScene({
             </div>
 
             {/* Album Title & Artist */}
-            <div className="flex flex-col items-center text-center mt-4 w-full">
-              <h2 className="text-xl sm:text-2xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
+            <div className="flex flex-col items-center text-center mt-3 sm:mt-4 w-full">
+              <h2 className="text-lg sm:text-2xl font-black font-cyber text-white tracking-wider truncate uppercase w-full">
                 {activeAlbum.title}
               </h2>
-              <p className="text-xs sm:text-sm font-mono text-zinc-300 font-bold tracking-widest uppercase mt-1">
+              <p className="text-[11px] sm:text-sm font-mono text-zinc-300 font-bold tracking-widest uppercase mt-0.5 sm:mt-1">
                 {activeAlbum.artist || 'VAULT ARTIST'}
               </p>
             </div>
@@ -1096,7 +1096,7 @@ export default function VaultScene({
             transform: isDetail ? 'translateX(190px)' : 'translateX(300px)',
           }}
         >
-          <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
+          <div className="dark-neumorph-card p-2 sm:p-3 md:p-4 h-full flex flex-col w-full overflow-hidden shadow-2xl relative border border-white/10">
             {albumTab === 'tracks' ? (
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 animate-fadeIn" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {tracks.length === 0 ? (
@@ -1133,15 +1133,15 @@ export default function VaultScene({
           </div>
         </div>
 
-        {/* MOBILE PLAYLIST & COMMENTS */}
+        {/* MOBILE PLAYLIST & COMMENTS (CLEAN ISOLATED VIEW) */}
         <div
-          className={`lg:hidden w-full max-w-md h-[290px] xs:h-[320px] sm:h-[360px] flex flex-col font-mono transition-all duration-500 will-change-transform z-10 mt-2 ${
+          className={`lg:hidden w-full max-w-md h-[270px] xs:h-[300px] sm:h-[340px] flex flex-col font-mono transition-all duration-500 will-change-transform z-10 mt-3 border-0 outline-none ${
             isDetail
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 translate-y-6 pointer-events-none hidden'
           }`}
         >
-          <div className="dark-neumorph-card p-2 sm:p-3 h-full flex flex-col w-full overflow-hidden shadow-2xl relative">
+          <div className="dark-neumorph-card p-2 sm:p-3 h-full flex flex-col w-full overflow-hidden shadow-2xl relative border border-white/10 rounded-2xl">
             {albumTab === 'tracks' ? (
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1 select-none no-scrollbar px-0.5 py-0.5 animate-fadeIn" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {tracks.length === 0 ? (
