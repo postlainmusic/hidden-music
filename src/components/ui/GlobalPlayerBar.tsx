@@ -55,8 +55,7 @@ export default function GlobalPlayerBar() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
-  const mobileLyricsScrollRef = useRef<HTMLDivElement | null>(null);
-  const desktopLyricsScrollRef = useRef<HTMLDivElement | null>(null);
+  const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
   const barContainerRef = useRef<HTMLDivElement | null>(null);
   const fireOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -227,14 +226,14 @@ export default function GlobalPlayerBar() {
 
       if (isHeavyKick) {
         isHeavyKickRef.current = true;
-        barScaleRef.current = 1.04;
+        barScaleRef.current = 1.035;
         barFlashIntensityRef.current = 1.0;
         if (fireOverlayRef.current) {
           fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
         }
       } else if (isLightKick) {
         isHeavyKickRef.current = false;
-        barScaleRef.current = 1.02;
+        barScaleRef.current = 1.018;
         barFlashIntensityRef.current = 0.55;
         if (fireOverlayRef.current) {
           fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25))';
@@ -298,24 +297,20 @@ export default function GlobalPlayerBar() {
     return getActiveLyricIndex(parsedLyrics, currentTime);
   }, [parsedLyrics, currentTime]);
 
-  // Auto-scroll active lyric line in lyrics drawer
+  // Auto-scroll active lyric line strictly centered vertically
   useEffect(() => {
-    if (!showLyrics) return;
+    if (!showLyrics || activeLyricIdx < 0) return;
+    const container = lyricsScrollRef.current;
+    if (!container) return;
 
-    const scrollToActive = (container: HTMLDivElement | null) => {
-      if (!container) return;
-      const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
-      if (activeEl) {
-        const targetScrollTop = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
-        container.scrollTo({
-          top: Math.max(0, targetScrollTop),
-          behavior: 'smooth',
-        });
-      }
-    };
-
-    scrollToActive(mobileLyricsScrollRef.current);
-    scrollToActive(desktopLyricsScrollRef.current);
+    const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
+    if (activeEl) {
+      const targetScrollTop = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
+      container.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth',
+      });
+    }
   }, [activeLyricIdx, showLyrics]);
 
   // Volume hover UX handlers
@@ -394,15 +389,13 @@ export default function GlobalPlayerBar() {
   return (
     <div
       ref={playerRootRef}
-      className={`fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none transition-all duration-300 ${
-        hasDrawerOpen ? 'px-2 sm:px-4 pb-2 sm:pb-3' : 'px-3 sm:px-6 md:px-8 pb-3 sm:pb-5'
-      }`}
+      className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none px-3 sm:px-6 md:px-8 pb-3 sm:pb-5 transition-all duration-300"
     >
-      {/* 1. EXPANDABLE DRAWER: LYRICS & QUEUE */}
+      {/* 1. ATTACHED DRAWER: LYRICS & QUEUE (FLUSH ATTACHED TO TOP OF PLAYBAR) */}
       {hasDrawerOpen && (
-        <div className="w-full max-w-5xl h-[340px] sm:h-[400px] mb-2 rounded-3xl bg-zinc-950/95 border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-4 sm:p-6 flex flex-col relative overflow-hidden pointer-events-auto animate-fadeIn font-mono">
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+        <div className="w-full max-w-5xl h-[320px] sm:h-[380px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/95 shadow-[0_-15px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-4 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto animate-fadeIn font-mono">
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-white/10 flex-shrink-0">
             <div className="flex items-center gap-2">
               {showLyrics ? <Mic2 className="w-4 h-4 text-white" /> : <ListMusic className="w-4 h-4 text-white" />}
               <span className="text-xs uppercase font-extrabold tracking-widest text-white font-cyber">
@@ -420,10 +413,17 @@ export default function GlobalPlayerBar() {
             </button>
           </div>
 
-          {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto mt-3 pr-1 no-scrollbar select-none">
+          {/* Drawer Body - Zero Scrollbar on both X & Y */}
+          <div className="flex-1 min-h-0 relative overflow-hidden select-none">
             {showLyrics && (
-              <div ref={desktopLyricsScrollRef} className="h-full overflow-y-auto space-y-4 text-center py-8">
+              <div
+                ref={lyricsScrollRef}
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-32 sm:py-36 space-y-4"
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                }}
+              >
                 {parsedLyrics.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs uppercase tracking-widest">
                     Chưa có lời bài hát cho tác phẩm này
@@ -436,10 +436,10 @@ export default function GlobalPlayerBar() {
                         key={idx}
                         data-active-lyric={isActive ? 'true' : 'false'}
                         onClick={() => seekTo(line.time)}
-                        className={`cursor-pointer transition-all duration-200 ${
+                        className={`cursor-pointer transition-all duration-300 px-4 select-none ${
                           isActive
-                            ? 'text-white font-bold text-base sm:text-lg scale-105 drop-shadow-[0_0_12px_rgba(255,255,255,0.8)]'
-                            : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm font-normal'
+                            ? 'text-white font-black text-base sm:text-lg scale-105 drop-shadow-[0_0_15px_rgba(255,255,255,0.9)] opacity-100'
+                            : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm font-medium opacity-60 hover:opacity-100'
                         }`}
                       >
                         {line.text}
@@ -451,7 +451,13 @@ export default function GlobalPlayerBar() {
             )}
 
             {showQueue && (
-              <div className="space-y-1">
+              <div
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar py-2 space-y-1"
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                }}
+              >
                 {playlist.map((track, idx) => {
                   const isCurrent = track.id === currentTrack.id;
                   return (
@@ -480,20 +486,27 @@ export default function GlobalPlayerBar() {
         </div>
       )}
 
-      {/* 2. PURE AUDIO ELONGATED PLAYBAR CONTAINER */}
+      {/* 2. PURE AUDIO SINGLE-ROW PLAYBAR CONTAINER */}
       <div
         ref={barContainerRef}
-        className="relative w-full max-w-5xl rounded-3xl bg-zinc-950/95 border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl px-4 sm:px-6 py-2.5 sm:py-3.5 flex flex-col gap-1.5 pointer-events-auto will-change-transform transition-all font-mono select-none"
+        className={`relative w-full max-w-5xl bg-zinc-950/95 border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.95)] backdrop-blur-2xl px-3.5 sm:px-5 py-2 sm:py-2.5 pointer-events-auto will-change-transform transition-all font-mono select-none ${
+          hasDrawerOpen ? 'rounded-b-3xl rounded-t-none border-t-white/10' : 'rounded-3xl'
+        }`}
       >
         {/* Monochromatic Flash Overlay */}
-        <div ref={fireOverlayRef} className="absolute inset-0 rounded-3xl pointer-events-none opacity-0 transition-opacity duration-75" />
+        <div
+          ref={fireOverlayRef}
+          className={`absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-75 ${
+            hasDrawerOpen ? 'rounded-b-3xl rounded-t-none' : 'rounded-3xl'
+          }`}
+        />
 
-        {/* Top / Main Controls Row */}
-        <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
+        {/* STRICT SINGLE-ROW HORIZONTAL LAYOUT */}
+        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full">
           
           {/* Left: Track Information & Album Cover */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 max-w-[200px] xs:max-w-[240px] sm:max-w-[280px]">
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-lg">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[140px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0">
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-lg">
               {currentAlbum?.cover_url ? (
                 <img
                   src={currentAlbum.cover_url}
@@ -506,77 +519,108 @@ export default function GlobalPlayerBar() {
             </div>
 
             <div className="flex flex-col min-w-0">
-              <span className="text-xs sm:text-sm font-cyber font-extrabold text-white truncate uppercase tracking-wide">
+              <span className="text-[11px] sm:text-xs font-cyber font-extrabold text-white truncate uppercase tracking-wide">
                 {currentTrack.title}
               </span>
-              <span className="text-[10px] sm:text-xs text-slate-400 font-mono font-bold truncate uppercase mt-0.5">
+              <span className="text-[9px] sm:text-[10px] text-slate-400 font-mono font-bold truncate uppercase mt-0.5">
                 {currentTrack.artist || currentAlbum?.artist || 'VAULT ARTIST'}
               </span>
             </div>
           </div>
 
-          {/* Center: Audio Playback Control Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-            {/* Shuffle Button */}
-            <button
-              onClick={toggleShuffle}
-              title={shuffleMode ? 'Tắt trộn bài' : 'Bật trộn bài'}
-              className={`p-2 rounded-full border transition-all ${
-                shuffleMode
-                  ? 'bg-white text-black border-white shadow-md'
-                  : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/15'
-              }`}
-            >
-              <Shuffle className="w-3.5 h-3.5" />
-            </button>
+          {/* Center: Controls + Inline Elongated Timeline (All on the same line) */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            
+            {/* Playback Controls Cluster */}
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+              {/* Shuffle Button */}
+              <button
+                onClick={toggleShuffle}
+                title={shuffleMode ? 'Tắt trộn bài' : 'Bật trộn bài'}
+                className={`p-1.5 sm:p-2 rounded-full border transition-all ${
+                  shuffleMode
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/15'
+                }`}
+              >
+                <Shuffle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              </button>
 
-            {/* Previous Track */}
-            <button
-              onClick={prevTrack}
-              title="Bài trước"
-              className="p-2 rounded-full bg-white/5 hover:bg-white/20 text-white border border-white/10 transition-all hover:scale-105 active:scale-95"
-            >
-              <SkipBack className="w-4 h-4 fill-current" />
-            </button>
+              {/* Previous Track */}
+              <button
+                onClick={prevTrack}
+                title="Bài trước"
+                className="p-1.5 sm:p-2 rounded-full bg-white/5 hover:bg-white/20 text-white border border-white/10 transition-all hover:scale-105 active:scale-95"
+              >
+                <SkipBack className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
+              </button>
 
-            {/* Play / Pause Master Button */}
-            <button
-              onClick={togglePlay}
-              title={isPlaying ? 'Tạm dừng' : 'Phát'}
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
-            >
-              {isPlaying ? (
-                <Pause className="w-5 h-5 fill-current" />
-              ) : (
-                <Play className="w-5 h-5 fill-current ml-0.5" />
-              )}
-            </button>
+              {/* Play / Pause Master Button */}
+              <button
+                onClick={togglePlay}
+                title={isPlaying ? 'Tạm dừng' : 'Phát'}
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
+              >
+                {isPlaying ? (
+                  <Pause className="w-4 h-4 sm:w-4.5 sm:h-4.5 fill-current" />
+                ) : (
+                  <Play className="w-4 h-4 sm:w-4.5 sm:h-4.5 fill-current ml-0.5" />
+                )}
+              </button>
 
-            {/* Next Track */}
-            <button
-              onClick={nextTrack}
-              title="Bài kế tiếp"
-              className="p-2 rounded-full bg-white/5 hover:bg-white/20 text-white border border-white/10 transition-all hover:scale-105 active:scale-95"
-            >
-              <SkipForward className="w-4 h-4 fill-current" />
-            </button>
+              {/* Next Track */}
+              <button
+                onClick={nextTrack}
+                title="Bài kế tiếp"
+                className="p-1.5 sm:p-2 rounded-full bg-white/5 hover:bg-white/20 text-white border border-white/10 transition-all hover:scale-105 active:scale-95"
+              >
+                <SkipForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
+              </button>
 
-            {/* Repeat Button */}
-            <button
-              onClick={toggleRepeat}
-              title={`Lặp: ${repeatMode}`}
-              className={`p-2 rounded-full border transition-all ${
-                repeatMode !== 'off'
-                  ? 'bg-white text-black border-white shadow-md'
-                  : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/15'
-              }`}
-            >
-              {repeatMode === 'one' ? <Repeat1 className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
-            </button>
+              {/* Repeat Button */}
+              <button
+                onClick={toggleRepeat}
+                title={`Lặp: ${repeatMode}`}
+                className={`p-1.5 sm:p-2 rounded-full border transition-all ${
+                  repeatMode !== 'off'
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/15'
+                }`}
+              >
+                {repeatMode === 'one' ? (
+                  <Repeat1 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                ) : (
+                  <Repeat className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                )}
+              </button>
+            </div>
+
+            {/* Inline Current Time */}
+            <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
+              {formatTime(currentTime)}
+            </span>
+
+            {/* Inline Scrubber Timeline */}
+            <div className="relative flex-1 flex items-center min-w-[60px] group/seek">
+              <input
+                type="range"
+                min={0}
+                max={effectiveDuration || 100}
+                value={currentTime}
+                onChange={(e) => seekTo(parseFloat(e.target.value))}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/15 bg-zinc-900 group-hover/seek:bg-zinc-800 transition-all shadow-inner"
+              />
+            </div>
+
+            {/* Inline Total Duration */}
+            <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
+              {formatTime(effectiveDuration)}
+            </span>
+
           </div>
 
           {/* Right: Drawer Triggers & Volume Slider */}
-          <div className="flex items-center gap-1.5 sm:gap-2 justify-end flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 justify-end flex-shrink-0">
             {/* Lyrics Drawer Toggle */}
             <button
               onClick={() => {
@@ -584,13 +628,13 @@ export default function GlobalPlayerBar() {
                 setShowQueue(false);
               }}
               title="Lời bài hát (L)"
-              className={`p-2 rounded-full border transition-all ${
+              className={`p-1.5 sm:p-2 rounded-full border transition-all ${
                 showLyrics
                   ? 'bg-white text-black border-white shadow-md'
                   : 'bg-white/5 text-slate-300 border-white/10 hover:text-white hover:bg-white/15'
               }`}
             >
-              <Mic2 className="w-3.5 h-3.5" />
+              <Mic2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
 
             {/* Queue Drawer Toggle */}
@@ -600,13 +644,13 @@ export default function GlobalPlayerBar() {
                 setShowLyrics(false);
               }}
               title="Danh sách phát (Q)"
-              className={`p-2 rounded-full border transition-all ${
+              className={`p-1.5 sm:p-2 rounded-full border transition-all ${
                 showQueue
                   ? 'bg-white text-black border-white shadow-md'
                   : 'bg-white/5 text-slate-300 border-white/10 hover:text-white hover:bg-white/15'
               }`}
             >
-              <ListMusic className="w-3.5 h-3.5" />
+              <ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
 
             {/* Volume Control with Popover */}
@@ -618,15 +662,15 @@ export default function GlobalPlayerBar() {
               <button
                 onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
                 title={volume > 0 ? 'Tắt tiếng' : 'Bật tiếng'}
-                className="p-2 rounded-full bg-white/5 hover:bg-white/20 text-slate-300 hover:text-white border border-white/10 transition-all"
+                className="p-1.5 sm:p-2 rounded-full bg-white/5 hover:bg-white/20 text-slate-300 hover:text-white border border-white/10 transition-all"
               >
-                {volume > 0 ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                {volume > 0 ? <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <VolumeX className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
               </button>
 
               {/* Volume Slider Popover */}
               {showVolumeSlider && (
-                <div className="absolute bottom-11 right-0 p-3 rounded-2xl bg-zinc-950 border border-white/20 shadow-2xl flex flex-col items-center gap-2 animate-fadeIn z-50">
-                  <span className="text-[10px] text-slate-400 font-mono">{Math.round(volume * 100)}%</span>
+                <div className="absolute bottom-10 right-0 p-2.5 rounded-2xl bg-zinc-950 border border-white/20 shadow-2xl flex flex-col items-center gap-1.5 animate-fadeIn z-50">
+                  <span className="text-[9px] text-slate-400 font-mono">{Math.round(volume * 100)}%</span>
                   <input
                     type="range"
                     min={0}
@@ -634,35 +678,13 @@ export default function GlobalPlayerBar() {
                     step={0.01}
                     value={volume}
                     onChange={(e) => setVolume(parseFloat(e.target.value))}
-                    className="w-24 h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-zinc-800"
+                    className="w-20 h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-zinc-800"
                   />
                 </div>
               )}
             </div>
           </div>
 
-        </div>
-
-        {/* Bottom: ELONGATED FULL-WIDTH SEEKBAR TIMELINE */}
-        <div className="flex items-center gap-2.5 sm:gap-3 w-full pt-1">
-          <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
-            {formatTime(currentTime)}
-          </span>
-
-          <div className="relative flex-1 flex items-center group/seek">
-            <input
-              type="range"
-              min={0}
-              max={effectiveDuration || 100}
-              value={currentTime}
-              onChange={(e) => seekTo(parseFloat(e.target.value))}
-              className="w-full h-1.5 sm:h-2 rounded-full appearance-none cursor-pointer border border-white/15 bg-zinc-900 group-hover/seek:bg-zinc-800 transition-all shadow-inner"
-            />
-          </div>
-
-          <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 tabular-nums flex-shrink-0">
-            {formatTime(effectiveDuration)}
-          </span>
         </div>
 
       </div>
