@@ -1,4 +1,4 @@
-name: Build TWA Android APK & Publish Release
+name: Build Android APK & Publish Release
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ permissions:
   contents: write
 
 jobs:
-  build-twa:
-    name: Build TWA Native APK
+  build-apk:
+    name: Build Native Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -16,159 +16,87 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          gradle-version: 8.5
+          node-version: 20
+          cache: 'npm'
 
-      - name: Scaffold Pure Google TWA Project
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit --legacy-peer-deps
+
+      - name: Sync Capacitor Android
         run: |
-          mkdir -p twa-app/app/src/main/res/values
-          mkdir -p twa-app/app/src/main/res/xml
-          mkdir -p twa-app/gradle/wrapper
+          npx cap add android || true
+          npx cap sync android
 
-          # 1. settings.gradle
-          cat << 'EOF' > twa-app/settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "HiddenMusicTWA"
-          include ':app'
-          EOF
-
-          # 2. Root build.gradle
-          cat << 'EOF' > twa-app/build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
-          EOF
-
-          # 3. App build.gradle
-          cat << 'EOF' > twa-app/app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.postlain.hiddenmusic'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "com.postlain.hiddenmusic"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0.0"
-                  manifestPlaceholders = [
-                      hostName: "music.postlain.com",
-                      defaultUrl: "https://music.postlain.com",
-                      assetStatements: '[{ "relation": ["delegate_permission/common.handle_all_urls"], "target": {"namespace": "android_app", "package_name": "com.postlain.hiddenmusic", "sha256_cert_fingerprints": ["FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"]}}]'
-                  ]
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-                  debug {
-                      applicationIdSuffix ""
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-
-          dependencies {
-              implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
-          }
-          EOF
-
-          # 4. AndroidManifest.xml (TWA Activity từ Google)
-          cat << 'EOF' > twa-app/app/src/main/AndroidManifest.xml
+      - name: Patch Network Permissions and Config
+        run: |
+          # Ghi đè file AndroidManifest hoàn chỉnh có đầy đủ quyền mạng
+          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
               <application
                   android:allowBackup="true"
-                  android:icon="@android:drawable/sym_def_app_icon"
-                  android:label="Hidden Music"
-                  android:theme="@android:style/Theme.Translucent.NoTitleBar">
-
-                  <meta-data
-                      android:name="asset_statements"
-                      android:value="${assetStatements}" />
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true">
 
                   <activity
-                      android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
-                      android:exported="true"
-                      android:label="Hidden Music">
-
-                      <meta-data
-                          android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                          android:value="${defaultUrl}" />
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                      android:name=".MainActivity"
+                      android:label="@string/title_activity_main"
+                      android:theme="@style/AppTheme.NoActionBarLaunch"
+                      android:launchMode="singleTask"
+                      android:exported="true">
 
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
 
-                      <intent-filter android:autoVerify="true">
-                          <action android:name="android.intent.action.VIEW" />
-                          <category android:name="android.intent.category.DEFAULT" />
-                          <category android:name="android.intent.category.BROWSABLE" />
-                          <data
-                              android:scheme="https"
-                              android:host="${hostName}" />
-                      </intent-filter>
                   </activity>
+
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths" />
+                  </provider>
               </application>
           </manifest>
           EOF
 
-          # 5. Strings & Colors
-          cat << 'EOF' > twa-app/app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">Hidden Music</string>
-          </resources>
-          EOF
-
-      - name: Build TWA APK with Gradle
+      - name: Build Debug APK
         run: |
-          cd twa-app
-          gradle assembleDebug --stacktrace
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Prepare APK Binary
         run: |
-          cp twa-app/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: HiddenMusic-TWA-Android-APK
+          name: HiddenMusic-Android-APK
           path: ./hidden-music.apk
           retention-days: 14
 
@@ -176,11 +104,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Hidden Music Vault TWA Android (Latest)"
+          name: "Hidden Music Vault Android (Latest)"
           body: |
-            ## 🎵 Hidden Music Vault - Trusted Web Activity (TWA)
-            
-            Bản build Android Native TWA chính thức của Google (sử dụng Chromium engine của hệ thống, siêu nhẹ, không dính lỗi WebView).
+            ## 🎵 Hidden Music Vault - Android App
+            Bản build Android Native kết nối trực tiếp với máy chủ [music.postlain.com](https://music.postlain.com).
           draft: false
           prerelease: false
           files: ./hidden-music.apk
