@@ -109,6 +109,7 @@ jobs:
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
               <application
                   android:allowBackup="true"
@@ -141,7 +142,12 @@ jobs:
           package com.postlain.hiddenmusic;
 
           import android.annotation.SuppressLint;
+          import android.net.http.SslError;
           import android.os.Bundle;
+          import android.webkit.SslErrorHandler;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceError;
+          import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
@@ -162,11 +168,26 @@ jobs:
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
                   settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                  settings.setUserAgentString(settings.getUserAgentString() + " MobileApp/1.0");
 
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("https://music.postlain.com");
+                  webView.setWebChromeClient(new WebChromeClient());
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                          handler.proceed();
+                      }
+
+                      @Override
+                      public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                          super.onReceivedError(view, request, error);
+                      }
+                  });
+
+                  webView.loadUrl("https://hiddenmusic.postlain.com");
               }
 
               @Override
@@ -203,7 +224,7 @@ jobs:
           name: "Hidden Music Vault Android (Latest)"
           body: |
             ## 🎵 Hidden Music Vault - Native Android APK
-            Bản build Native WebView Android kết nối trực tiếp [music.postlain.com](https://music.postlain.com).
+            Bản build Native WebView Android kết nối trực tiếp [hiddenmusic.postlain.com](https://hiddenmusic.postlain.com).
           draft: false
           prerelease: false
           files: ./hidden-music.apk
