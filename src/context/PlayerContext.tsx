@@ -341,33 +341,44 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const audioCtx = audioCtxRef.current;
         const source = audioCtx.createMediaElementSource(audioRef.current);
 
-        // Master Analyser Node
+        // 1. Full Spectrum Master Analyser
         const masterAnalyser = audioCtx.createAnalyser();
-        masterAnalyser.fftSize = 512;
-        masterAnalyser.smoothingTimeConstant = 0.82;
+        masterAnalyser.fftSize = 256;
+        masterAnalyser.smoothingTimeConstant = 0.15;
 
-        // Dedicated Low-Pass Filter strictly isolating 30Hz - 120Hz (Kick / 808 sub-bass)
+        // 2. High-Q Trap Sub-Punch Kick Filter (Peak @ 58Hz, Band 45Hz-75Hz, Q=2.8)
         const kickFilter = audioCtx.createBiquadFilter();
-        kickFilter.type = 'lowpass';
-        kickFilter.frequency.value = 120;
-        kickFilter.Q.value = 1.0;
+        kickFilter.type = 'bandpass';
+        kickFilter.frequency.value = 58;
+        kickFilter.Q.value = 2.8;
 
-        // Kick Analyser Node
         const kickAnalyser = audioCtx.createAnalyser();
-        kickAnalyser.fftSize = 512;
-        kickAnalyser.smoothingTimeConstant = 0.82;
+        kickAnalyser.fftSize = 256;
+        kickAnalyser.smoothingTimeConstant = 0.02; // Instantaneous 60fps transient response
 
-        // Connect graph:
-        // Audio -> Master Analyser -> Speakers
+        // 3. Snare & Male Vocal Guard Filter (Peak @ 350Hz, Q=1.5)
+        const snareFilter = audioCtx.createBiquadFilter();
+        snareFilter.type = 'bandpass';
+        snareFilter.frequency.value = 350;
+        snareFilter.Q.value = 1.5;
+
+        const snareAnalyser = audioCtx.createAnalyser();
+        snareAnalyser.fftSize = 256;
+        snareAnalyser.smoothingTimeConstant = 0.05;
+
+        // Connect Audio Graph
         source.connect(masterAnalyser);
-        masterAnalyser.connect(audioCtx.destination);
-
-        // Audio -> Low-Pass Filter -> Kick Analyser (isolated analysis stream)
         source.connect(kickFilter);
         kickFilter.connect(kickAnalyser);
 
+        source.connect(snareFilter);
+        snareFilter.connect(snareAnalyser);
+
+        source.connect(audioCtx.destination);
+
         analyserRef.current = masterAnalyser;
         kickAnalyserRef.current = kickAnalyser;
+        snareAnalyserRef.current = snareAnalyser;
         sourceRef.current = source;
       }
     } catch (err) {

@@ -44,6 +44,10 @@ export default function GlobalPlayerBar() {
     currentTimeRef,
     analyserRef,
     kickAnalyserRef,
+    snareAnalyserRef,
+    kickTimestampsRef,
+    snareTimestampsRef,
+    isPCMReadyRef,
     playTrack,
     togglePlay,
     nextTrack,
@@ -74,12 +78,19 @@ export default function GlobalPlayerBar() {
   const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const seekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
+
+  // Dedicated Kick Detection Refs for Player Bar (Restored from commit 73210c3 / 6608957)
   const lastKickTimeRef = useRef<number>(0);
-  const bassHistoryRef = useRef<number[]>([]);
-  const prevInstantEnergyRef = useRef<number>(0);
+  const lastSnareTimeRef = useRef<number>(0);
+  const lastFiredKickIndexRef = useRef<number>(-1);
+  const lastFiredSnareIndexRef = useRef<number>(-1);
   const barFlashIntensityRef = useRef<number>(0);
   const barScaleRef = useRef<number>(1);
   const isHeavyKickRef = useRef<boolean>(false);
+  const prevKickPunchRef = useRef<number>(0);
+  const smoothedKickPunchRef = useRef<number>(0);
+  const prevSnarePunchRef = useRef<number>(0);
+  const smoothedSnarePunchRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -98,10 +109,10 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Reset beat state on track change
+  // Reset fired indices on track change
   useEffect(() => {
-    bassHistoryRef.current = [];
-    prevInstantEnergyRef.current = 0;
+    lastFiredKickIndexRef.current = -1;
+    lastFiredSnareIndexRef.current = -1;
   }, [currentTrack?.id]);
 
   // Click outside to close drawers and volume slider
@@ -149,7 +160,10 @@ export default function GlobalPlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef]);
 
-  // High-Precision Low-Pass Dynamic Kick Detection Engine (30Hz - 120Hz)
+  // Real-Time Playbar Monochromatic Beat Engine (Restored from commit 73210c3 / 6608957):
+  // - HEAVY KICK: Nảy cực mạnh (scale 1.055) + Chớp trắng sáng rực rỡ
+  // - LIGHT KICK: Nảy nhẹ (scale 1.025) + Chớp trắng mờ tinh tế
+  // - SNARE: Chỉ chớp trắng mờ (scale 1.0 không nảy)
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -159,88 +173,116 @@ export default function GlobalPlayerBar() {
         barContainerRef.current.style.boxShadow = '';
         barContainerRef.current.style.borderColor = '';
       }
-      bassHistoryRef.current = [];
-      prevInstantEnergyRef.current = 0;
       return;
     }
 
     const analyzeFrame = () => {
+      let isHeavyKick = false;
+      let isLightKick = false;
+      let isSnare = false;
       const now = performance.now();
-      let beatDetected = false;
-      let kickStrength = 0;
+      const liveCurrentTime = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
-      const activeNode = kickAnalyserRef?.current || analyserRef?.current;
-      if (activeNode) {
-        try {
-          const freqData = new Uint8Array(activeNode.frequencyBinCount);
-          activeNode.getByteFrequencyData(freqData);
+      // =========================================================================
+      // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING (MATHEMATICALLY ACCURATE)
+      // =========================================================================
+      const kickStamps = kickTimestampsRef?.current || [];
+      const hasPCMBeatMap = kickStamps.length > 0;
 
-          // Dedicated 30Hz - 120Hz Sub-Bass / Kick Energy
-          // fftSize 512 gives Bin 0 = 0-86Hz, Bin 1 = 86-172Hz (isolated by 120Hz lowpass filter)
-          const instantEnergy = (freqData[0] * 1.6 + freqData[1] * 1.1) / 2.7;
-
-          if (instantEnergy >= 16) {
-            // Update sliding history buffer (40 frames ~ 0.65s window)
-            const history = bassHistoryRef.current;
-            history.push(instantEnergy);
-            if (history.length > 40) history.shift();
-
-            // Calculate Moving Average Energy
-            let energySum = 0;
-            for (let i = 0; i < history.length; i++) {
-              energySum += history[i];
-            }
-            const averageEnergy = energySum / history.length;
-
-            // Dynamic Threshold: current energy must exceed average energy by at least 1.25x
-            const dynamicThreshold = Math.max(30, averageEnergy * 1.25);
-            const isRising = instantEnergy > prevInstantEnergyRef.current;
-            const delta = instantEnergy - prevInstantEnergyRef.current;
-            const timeSinceLastKick = now - lastKickTimeRef.current;
-
-            // Trigger Kick Beat:
-            // 1. InstantEnergy > 1.25 * AverageEnergy
-            // 2. Rising slope (delta > 6)
-            // 3. Debounce cooldown: 190ms (prevents multi-trigger on single kick)
-            if (
-              instantEnergy > dynamicThreshold &&
-              isRising &&
-              delta > 6 &&
-              timeSinceLastKick > 190
-            ) {
-              beatDetected = true;
-              lastKickTimeRef.current = now;
-              kickStrength = Math.min(1.0, Math.max(0.35, (instantEnergy - dynamicThreshold) / 32 + 0.4));
-              isHeavyKickRef.current = kickStrength > 0.72;
-            }
-          } else {
-            // Audio silent or bridge/intro without drums -> clean decay
-            if (bassHistoryRef.current.length > 0) {
-              bassHistoryRef.current.shift();
-            }
+      if (hasPCMBeatMap) {
+        // Kick Detection from PCM
+        for (let i = 0; i < kickStamps.length; i++) {
+          const diff = liveCurrentTime - kickStamps[i];
+          if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
+            lastFiredKickIndexRef.current = i;
+            isHeavyKick = true;
+            lastKickTimeRef.current = now;
+            break;
           }
-
-          prevInstantEnergyRef.current = instantEnergy;
-        } catch (e) {
-          // Ignore transient read error
         }
-      }
 
-      // Apply Reactivity or Smooth Natural Spring Decay
-      if (beatDetected) {
-        barScaleRef.current = 1.0 + kickStrength * 0.038;
-        barFlashIntensityRef.current = kickStrength;
-        if (fireOverlayRef.current) {
-          if (isHeavyKickRef.current) {
-            fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.65))';
-          } else {
-            fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.20))';
+        // Snare Detection from PCM
+        const snareStamps = snareTimestampsRef?.current || [];
+        if (!isHeavyKick) {
+          for (let i = 0; i < snareStamps.length; i++) {
+            const diff = liveCurrentTime - snareStamps[i];
+            if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredSnareIndexRef.current) {
+              lastFiredSnareIndexRef.current = i;
+              isSnare = true;
+              lastSnareTimeRef.current = now;
+              break;
+            }
           }
         }
       } else {
-        // Natural exponential decay (fast, punchy, zero lingering jitter)
-        barFlashIntensityRef.current *= 0.74;
-        barScaleRef.current += (1.0 - barScaleRef.current) * 0.26;
+        // =========================================================================
+        // [2] DEDICATED 58Hz HARDWARE BIQUAD FILTER DETECTION (ZERO MASTER SPILL)
+        // =========================================================================
+        if (kickAnalyserRef?.current) {
+          try {
+            const arr = new Uint8Array(kickAnalyserRef.current.frequencyBinCount);
+            kickAnalyserRef.current.getByteFrequencyData(arr);
+            const kickSub = (arr[0] + arr[1] + arr[2]) / 3;
+
+            const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
+            prevKickPunchRef.current = kickSub;
+            smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.80 + deltaKick * 0.20;
+            const kickThreshold = Math.max(9.0, smoothedKickPunchRef.current * 1.45);
+
+            if (deltaKick > kickThreshold && kickSub > 32 && (now - lastKickTimeRef.current > 150)) {
+              if (kickSub > 70 || deltaKick > 22) {
+                isHeavyKick = true;
+              } else {
+                isLightKick = true;
+              }
+              lastKickTimeRef.current = now;
+            }
+          } catch {}
+        }
+
+        // Dedicated 350Hz Snare Filter
+        if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
+          try {
+            const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
+            snareAnalyserRef.current.getByteFrequencyData(arr);
+            const snareMid = (arr[1] + arr[2] + arr[3]) / 3;
+
+            const deltaSnare = Math.max(0, snareMid - prevSnarePunchRef.current);
+            prevSnarePunchRef.current = snareMid;
+            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.80 + deltaSnare * 0.20;
+            const snareThreshold = Math.max(10.0, smoothedSnarePunchRef.current * 1.5);
+
+            if (deltaSnare > snareThreshold && snareMid > 35 && (now - lastSnareTimeRef.current > 150) && (now - lastKickTimeRef.current > 100)) {
+              isSnare = true;
+              lastSnareTimeRef.current = now;
+            }
+          } catch {}
+        }
+      }
+
+      if (isHeavyKick) {
+        isHeavyKickRef.current = true;
+        barScaleRef.current = 1.055;
+        barFlashIntensityRef.current = 1.0;
+        if (fireOverlayRef.current) {
+          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
+        }
+      } else if (isLightKick) {
+        isHeavyKickRef.current = false;
+        barScaleRef.current = 1.025;
+        barFlashIntensityRef.current = 0.60;
+        if (fireOverlayRef.current) {
+          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.60), rgba(255, 255, 255, 0.30))';
+        }
+      } else if (isSnare) {
+        isHeavyKickRef.current = false;
+        barFlashIntensityRef.current = 0.45;
+        if (fireOverlayRef.current) {
+          fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15))';
+        }
+      } else {
+        barFlashIntensityRef.current *= 0.70;
+        barScaleRef.current = barScaleRef.current + (1.0 - barScaleRef.current) * 0.32;
       }
 
       if (barFlashIntensityRef.current < 0.01) barFlashIntensityRef.current = 0;
@@ -255,11 +297,11 @@ export default function GlobalPlayerBar() {
           const isHeavy = isHeavyKickRef.current;
 
           if (isHeavy) {
-            barContainerRef.current.style.boxShadow = `0 16px 45px rgba(255, 255, 255, ${(alpha * 0.42).toFixed(2)}), inset 0 0 25px rgba(255, 255, 255, ${(alpha * 0.25).toFixed(2)})`;
-            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.85).toFixed(2)})`;
+            barContainerRef.current.style.boxShadow = `0 16px 45px rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)}), inset 0 0 25px rgba(255, 255, 255, ${(alpha * 0.30).toFixed(2)})`;
+            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.90).toFixed(2)})`;
           } else {
-            barContainerRef.current.style.boxShadow = `0 10px 30px rgba(255, 255, 255, ${(alpha * 0.22).toFixed(2)})`;
-            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.45).toFixed(2)})`;
+            barContainerRef.current.style.boxShadow = `0 10px 30px rgba(255, 255, 255, ${(alpha * 0.25).toFixed(2)})`;
+            barContainerRef.current.style.borderColor = `rgba(255, 255, 255, ${(alpha * 0.50).toFixed(2)})`;
           }
         } else {
           barContainerRef.current.style.boxShadow = '';
@@ -279,7 +321,7 @@ export default function GlobalPlayerBar() {
     return () => {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, showLyrics, showQueue, activeZone, kickAnalyserRef, analyserRef]);
+  }, [isPlaying, showLyrics, showQueue, activeZone, kickAnalyserRef, snareAnalyserRef, kickTimestampsRef, snareTimestampsRef, currentTimeRef, audioRef, currentTime]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
