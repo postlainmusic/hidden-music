@@ -160,6 +160,8 @@ export default function GlobalPlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef]);
 
+  const prevLiveTimeRef = useRef<number>(0);
+
   // Real-Time Playbar Monochromatic Beat Engine (Restored from commit 73210c3 / 6608957):
   // - HEAVY KICK: Nảy cực mạnh (scale 1.055) + Chớp trắng sáng rực rỡ
   // - LIGHT KICK: Nảy nhẹ (scale 1.025) + Chớp trắng mờ tinh tế
@@ -183,6 +185,13 @@ export default function GlobalPlayerBar() {
       const now = performance.now();
       const liveCurrentTime = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : currentTime);
 
+      // Handle user seeking forward/backward
+      if (Math.abs(liveCurrentTime - prevLiveTimeRef.current) > 0.35) {
+        lastFiredKickIndexRef.current = -1;
+        lastFiredSnareIndexRef.current = -1;
+      }
+      prevLiveTimeRef.current = liveCurrentTime;
+
       // =========================================================================
       // [1] EXACT ONE-SHOT PCM TIMESTAMPS MATCHING (MATHEMATICALLY ACCURATE)
       // =========================================================================
@@ -190,10 +199,13 @@ export default function GlobalPlayerBar() {
       const hasPCMBeatMap = kickStamps.length > 0;
 
       if (hasPCMBeatMap) {
-        // Kick Detection from PCM
-        for (let i = 0; i < kickStamps.length; i++) {
-          const diff = liveCurrentTime - kickStamps[i];
-          if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
+        // High-Speed Localized Kick Detection from PCM
+        const startIdx = Math.max(0, lastFiredKickIndexRef.current - 1);
+        for (let i = startIdx; i < kickStamps.length; i++) {
+          const stamp = kickStamps[i];
+          const diff = liveCurrentTime - stamp;
+          if (diff < -0.15) break; // Future beat, break early for 60FPS efficiency
+          if (diff >= -0.024 && diff <= 0.038 && i !== lastFiredKickIndexRef.current) {
             lastFiredKickIndexRef.current = i;
             isHeavyKick = true;
             lastKickTimeRef.current = now;
@@ -203,10 +215,13 @@ export default function GlobalPlayerBar() {
 
         // Snare Detection from PCM
         const snareStamps = snareTimestampsRef?.current || [];
-        if (!isHeavyKick) {
-          for (let i = 0; i < snareStamps.length; i++) {
-            const diff = liveCurrentTime - snareStamps[i];
-            if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredSnareIndexRef.current) {
+        if (!isHeavyKick && snareStamps.length > 0) {
+          const startSnareIdx = Math.max(0, lastFiredSnareIndexRef.current - 1);
+          for (let i = startSnareIdx; i < snareStamps.length; i++) {
+            const stamp = snareStamps[i];
+            const diff = liveCurrentTime - stamp;
+            if (diff < -0.15) break;
+            if (diff >= -0.024 && diff <= 0.038 && i !== lastFiredSnareIndexRef.current) {
               lastFiredSnareIndexRef.current = i;
               isSnare = true;
               lastSnareTimeRef.current = now;

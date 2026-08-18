@@ -5,6 +5,7 @@ import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession } from '@/lib/authSession';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
+import { analyzeTrackBeatGrid, getCachedBeatGrid, BeatGridResult } from '@/lib/audioBeatEngine';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
@@ -149,14 +150,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return getMediaCdnUrl(rawTrackUrl);
   }, [rawTrackUrl]);
 
-  // Reset beat map states on track change
+  // Reset beat map states and load cached beat grid on track change
   useEffect(() => {
     kickTimestampsRef.current = [];
     snareTimestampsRef.current = [];
     isPCMReadyRef.current = false;
-  }, [currentTrack?.id]);
 
-  // Extract Separate Kick & Snare Timestamps from raw PCM AudioBuffer
+    if (!currentTrack?.id || !trackUrl) return;
+
+    // Instant local cache retrieval
+    getCachedBeatGrid(currentTrack.id).then((cached) => {
+      if (cached && cached.timestamps.length > 0) {
+        kickTimestampsRef.current = cached.timestamps;
+        isPCMReadyRef.current = true;
+      }
+    });
+
+    // Run automated beat extraction in background
+    analyzeTrackBeatGrid(trackUrl, currentTrack.id).then((result) => {
+      if (result && result.timestamps.length > 0) {
+        kickTimestampsRef.current = result.timestamps;
+        isPCMReadyRef.current = true;
+      }
+    });
+  }, [currentTrack?.id, trackUrl]);
+
+  // Extract Separate Kick & Snare Timestamps from raw PCM AudioBuffer (Legacy & Secondary Engine)
   const processPCMBeatMap = useCallback(async (url: string) => {
     if (!url || typeof window === 'undefined') return;
     currentProcessingUrlRef.current = url;
