@@ -40,9 +40,11 @@ import {
   Shield,
   Cloud,
   Link2,
-  Users
+  Users,
+  Ticket
 } from 'lucide-react';
 import AdminUserManagement from '@/components/admin/AdminUserManagement';
+import AdminVoucherManagement from '@/components/admin/AdminVoucherManagement';
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
@@ -70,7 +72,7 @@ export default function AdminPage() {
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
 
-  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks' | 'users'>('albums');
+  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks' | 'users' | 'vouchers'>('albums');
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -1577,6 +1579,8 @@ export default function AdminPage() {
                 ? `Hộp thư góp ý & Báo lỗi từ thành viên Vault`
                 : adminTab === 'users'
                 ? `Quản lý người dùng & Cấp quyền Video VIP trực tiếp`
+                : adminTab === 'vouchers'
+                ? `Quản lý mã Voucher & Passcode kích hoạt Video VIP`
                 : openedAlbumId && activeAlbum
                 ? `Browsing Album Archive: ${activeAlbum.title}`
                 : `Supabase Encrypted Albums List`}
@@ -1620,6 +1624,21 @@ export default function AdminPage() {
             >
               <Users className="w-3.5 h-3.5" />
               <span>QUẢN LÝ USER</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAdminTab('vouchers');
+                setStatusMsg(null);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                adminTab === 'vouchers'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Ticket className="w-3.5 h-3.5" />
+              <span>VOUCHER / PASSCODE</span>
             </button>
 
             <button
@@ -2315,6 +2334,15 @@ export default function AdminPage() {
       {adminTab === 'users' && (
         <div className="max-w-6xl mx-auto relative z-10 animate-fadeIn">
           <AdminUserManagement onNotify={setStatusMsg} />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 5: VOUCHER / PASSCODE MANAGEMENT TAB                                 */}
+      {/* ========================================================================= */}
+      {adminTab === 'vouchers' && (
+        <div className="max-w-6xl mx-auto relative z-10 animate-fadeIn">
+          <AdminVoucherManagement onNotify={setStatusMsg} />
         </div>
       )}
 

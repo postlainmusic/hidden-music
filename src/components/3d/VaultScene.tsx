@@ -457,7 +457,7 @@ export default function VaultScene({
             e.preventDefault();
             return false;
           }}
-          className="relative z-20 w-full max-w-6xl h-full flex flex-col items-center justify-center pt-14 pb-6 sm:py-14 px-2 sm:px-4 animate-fadeIn font-mono"
+          className="relative z-20 w-full max-w-6xl h-full flex flex-col items-center justify-center pt-14 pb-6 sm:py-14 px-2 sm:px-4 animate-zoneFadeIn font-mono"
         >
           {/* Main 2/3 Theater Master Container */}
           <div className="w-full h-full max-h-[84vh] rounded-3xl bg-zinc-950 border border-white/20 shadow-[0_25px_80px_rgba(0,0,0,0.95)] p-3.5 sm:p-5 flex flex-col overflow-hidden relative">
@@ -781,7 +781,7 @@ export default function VaultScene({
         /* ========================================================================= */
         /* 3. CHẾ ĐỘ AUDIO ZONE (3D MONOLITH & ALBUM DETAIL)                         */
         /* ========================================================================= */
-        <div className="relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden">
+        <div className="relative z-10 w-full max-w-[1400px] h-full flex flex-col lg:flex-row items-center justify-center pt-10 sm:pt-14 pb-20 sm:pb-22 overflow-hidden animate-zoneFadeInSubtle">
           
           {/* PHYSICAL ALBUM DECK */}
           <div

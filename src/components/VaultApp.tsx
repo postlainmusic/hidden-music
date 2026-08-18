@@ -536,8 +536,8 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
         </div>
       )}
 
-      {/* Footer (Hidden in Video Zone) */}
-      {activeZone !== 'video' && <Footer isFixed={true} />}
+      {/* Footer (Visible only in 3D Vault root, hidden in Audio Zone / Album player & Video Zone) */}
+      {viewMode === 'vault' && activeZone !== 'video' && <Footer isFixed={true} />}
     </main>
   );
 }

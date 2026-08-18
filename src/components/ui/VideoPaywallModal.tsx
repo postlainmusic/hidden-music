@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   X,
   Lock,
-  Zap,
   ShieldCheck,
   Crown,
   Disc3,
@@ -19,6 +18,7 @@ import {
   Check,
   RefreshCw,
   CreditCard,
+  Ticket,
 } from 'lucide-react';
 import {
   activateVideoSubscription,
@@ -108,36 +108,50 @@ export default function VideoPaywallModal({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleInstantActivate = () => {
-    setIsActivating(true);
-    setPasscodeError(null);
-
-    setTimeout(() => {
-      activateVideoSubscription();
-      setActiveSuccess(true);
-      setIsActivating(false);
-
-      setTimeout(() => {
-        if (onSuccess) onSuccess();
-        onClose();
-        setActiveSuccess(false);
-      }, 700);
-    }, 400);
-  };
-
-  const handlePasscodeSubmit = (e: React.FormEvent) => {
+  const handlePasscodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = passcodeInput.trim().toUpperCase();
     if (!code) {
-      setPasscodeError('Vui lòng nhập mã kích hoạt.');
+      setPasscodeError('Vui lòng nhập mã Voucher / Passcode.');
       return;
     }
 
-    const validCodes = ['VIP', 'VIP2026', 'LUCIIPASS', 'LUCIINGO1108', 'VAULT2026', 'PREMIUM', 'TESTPASS'];
-    if (validCodes.includes(code) || code.startsWith('VAULT-') || code.length >= 6) {
-      handleInstantActivate();
-    } else {
-      setPasscodeError('Mã kích hoạt không đúng hoặc đã hết hạn.');
+    setIsActivating(true);
+    setPasscodeError(null);
+
+    try {
+      const session = getStoredUserSession();
+      const res = await fetch('/api/vouchers/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          userId: session?.id,
+          email: session?.email,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        // Activate local subscription and refresh user session
+        activateVideoSubscription();
+        await refreshUserProfile();
+        setActiveSuccess(true);
+        setIsActivating(false);
+
+        setTimeout(() => {
+          if (onSuccess) onSuccess();
+          onClose();
+          setActiveSuccess(false);
+        }, 900);
+      } else {
+        throw new Error(data.error || 'Mã kích hoạt không đúng hoặc đã hết hạn.');
+      }
+    } catch (err: any) {
+      console.warn('Voucher submit note:', err);
+      setPasscodeError(err.message || 'Mã kích hoạt không đúng hoặc đã hết hạn.');
+      setIsActivating(false);
     }
   };
 
@@ -455,18 +469,11 @@ export default function VideoPaywallModal({
                 )}
               </button>
 
-              {/* Quick Trial & Voucher Form */}
+              {/* Voucher / Passcode Activation Form (Quick Trial removed) */}
               <div className="pt-3 border-t border-white/10 space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Hoặc kích hoạt bằng mã Passcode / Voucher:</span>
-                  <button
-                    onClick={handleInstantActivate}
-                    disabled={isActivating}
-                    className="text-white hover:underline font-bold flex items-center gap-1"
-                  >
-                    <Zap className="w-3 h-3 text-yellow-400" />
-                    <span>DÙNG THỬ NHANH</span>
-                  </button>
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-bold">
+                  <Ticket className="w-3.5 h-3.5 text-white" />
+                  <span>Kích hoạt bằng mã Passcode / Voucher:</span>
                 </div>
 
                 <form onSubmit={handlePasscodeSubmit} className="flex items-center gap-2">
@@ -475,18 +482,26 @@ export default function VideoPaywallModal({
                     value={passcodeInput}
                     onChange={(e) => setPasscodeInput(e.target.value)}
                     placeholder="Nhập mã voucher (vd: VIP2026)"
-                    className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white transition-all font-mono"
+                    className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white transition-all font-mono uppercase"
                   />
                   <button
                     type="submit"
-                    className="px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white text-white hover:text-black text-xs font-bold font-mono transition-all border border-white/20"
+                    disabled={isActivating}
+                    className="px-4 py-2 rounded-xl bg-white text-black hover:bg-zinc-200 text-xs font-black font-mono transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md flex-shrink-0"
                   >
-                    ÁP DỤNG
+                    {isActivating ? (
+                      <>
+                        <Disc3 className="w-3.5 h-3.5 animate-spin text-black" />
+                        <span>XỬ LÝ...</span>
+                      </>
+                    ) : (
+                      <span>ÁP DỤNG</span>
+                    )}
                   </button>
                 </form>
 
                 {passcodeError && (
-                  <p className="text-[11px] text-red-400 font-mono text-center">{passcodeError}</p>
+                  <p className="text-[11px] text-rose-400 font-mono text-center">{passcodeError}</p>
                 )}
               </div>
             </div>

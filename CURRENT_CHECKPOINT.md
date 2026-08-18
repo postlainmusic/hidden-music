@@ -1,28 +1,29 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
 > **Thời gian cập nhật**: 18/08/2026
-> **Trạng thái**: Tích hợp trọn vẹn Cổng thanh toán tự động payOS (VietQR) cho Gói Video VIP Pass & Mở khóa Video Zone.
+> **Trạng thái**: Hoàn thiện Hệ thống Voucher / Passcode, Admin Voucher Manager, Tắt Footer Audio Zone & Tối ưu hiệu ứng chuyển cảnh mượt mà.
 
 ---
 
 ## 🎯 CÁC HẠNG MỤC ĐÃ HOÀN THÀNH:
-1. **Tích hợp payOS Payment Gateway**:
-   - Cấu hình Environment Variables (`PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`, `NEXT_PUBLIC_APP_URL`).
-   - Thư viện client `src/lib/payos.ts` hỗ trợ tạo link thanh toán, tra cứu trạng thái và xác thực chữ ký HMAC SHA256.
-   - API endpoints:
-     - `POST /api/payos/create-payment`: Khởi tạo đơn hàng (Gói Tháng 49k / Gói Trọn Đời 199k).
-     - `GET /api/payos/check-payment`: Polling kiểm tra trạng thái thanh toán & cập nhật quyền Supabase.
-     - `POST /api/payos/webhook`: Nhận callback xác thực tự động từ payOS.
-2. **Giao diện Thanh toán VietQR Thông minh**:
-   - Hiển thị trực tiếp mã VietQR kèm số tiền, số tài khoản, ngân hàng và nội dung chuyển khoản với nút sao chép 1 chạm trong `VideoPaywallModal.tsx`.
-   - Hệ thống tự động kiểm tra (polling 2.5s) và kích hoạt tức thì khi người dùng hoàn tất chuyển khoản.
-   - Nút "MỞ TRANG PAYOS" cho phép người dùng mở trang thanh toán chính thức nếu muốn.
-   - Xử lý chuyển hướng URL return (`?payment=success&orderCode=...`) trong `VaultApp.tsx`.
-3. **Phân tách 2 vùng Audio Zone & Video Zone**:
-   - Single-line Playbar siêu gọn gàng, Lời bài hát Gothic auto-scroll cố định tâm.
-   - Video Zone Theater Card 2/3 với controls căn giữa, nút quay về Audio Zone và cơ chế chống tải Video.
+1. **Hệ thống Voucher / Passcode & Loại bỏ Dùng thử nhanh**:
+   - Loại bỏ nút "DÙNG THỬ NHANH" (icon tia sét) trong `VideoPaywallModal.tsx`.
+   - Giữ lại ô nhập Voucher / Passcode với nút "ÁP DỤNG".
+   - API `/api/vouchers/redeem` xác thực mã trực tiếp từ bảng `vouchers` Supabase (kiểm tra trạng thái kích hoạt, ngày hết hạn, giới hạn số lượt sử dụng) và tự động nâng cấp VIP cho user.
+   - Thêm tab **"QUẢN LÝ VOUCHER / PASSCODE"** trong Admin Portal (`src/components/admin/AdminVoucherManagement.tsx`):
+     + Form tạo mã: Tự nhập hoặc sinh mã ngẫu nhiên, chọn Gói tháng / Trọn đời VIP, thiết lập số lượt dùng tối đa, hạn sử dụng.
+     + Danh sách mã: Hiển thị Code (nút Copy), Loại gói, Số lượt dùng/tối đa, Trạng thái (Active/Expired/Disabled), Nút Bật/Tắt và Xóa.
+     + API quản lý `/api/admin/vouchers` (GET list, POST create/toggle/delete).
+2. **Tắt Footer trong Audio Zone**:
+   - Ẩn toàn bộ thanh Footer thông tin hệ thống (System Mode, Encryption, Terms...) khi người dùng ở giao diện Audio Zone (`viewMode === 'album'`) và Video Zone.
+   - Footer chỉ hiển thị ở giao diện trang chủ 3D Vault (`viewMode === 'vault'`).
+   - Đảm bảo layout thông thoáng, không che khuất Player Controls.
+3. **Tối ưu hiệu ứng chuyển cảnh (Audio Zone <-> Video Zone)**:
+   - Thêm hiệu ứng chuyển động mượt mà `animate-zoneFadeIn` và `animate-zoneFadeInSubtle` (Fade kết hợp Scale & Slide nhẹ nhàng).
+   - Tối ưu đồng bộ luồng âm thanh/video: Tạm dừng âm thanh sạch sẽ khi vào Video Zone, dọn dẹp bộ nhớ đệm video khi quay lại Audio Zone, tránh tình trạng giật/khựng âm thanh.
 
 ---
 
 ## 🚀 CÁC BƯỚC TIẾP THEO:
-1. Commit & push code lên GitHub main để Vercel CI/CD tự động deploy.
+1. Commit & push toàn bộ codebase lên GitHub repository (`main`) để Vercel CI/CD tự động deploy.
+

@@ -106,5 +106,23 @@ ALTER TABLE public.feedbacks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Open access feedbacks" ON public.feedbacks;
 CREATE POLICY "Open access feedbacks" ON public.feedbacks FOR ALL USING (true) WITH CHECK (true);
 
--- 6. Reload PostgREST schema cache
+-- 6. Create vouchers table (Passcode / Promo codes for VIP Activation)
+CREATE TABLE IF NOT EXISTS public.vouchers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  plan_type TEXT NOT NULL DEFAULT 'lifetime' CHECK (plan_type IN ('monthly', 'lifetime')),
+  max_uses INTEGER DEFAULT 1,
+  used_count INTEGER DEFAULT 0,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_by TEXT
+);
+
+ALTER TABLE public.vouchers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Open access vouchers" ON public.vouchers;
+CREATE POLICY "Open access vouchers" ON public.vouchers FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. Reload PostgREST schema cache
 NOTIFY pgrst, 'reload schema';
+

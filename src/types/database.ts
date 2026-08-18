@@ -93,3 +93,19 @@ export interface AlbumCommentItem {
   created_at: string;
   updated_at?: string;
 }
+
+// Voucher / Passcode System
+export type VoucherPlanType = 'monthly' | 'lifetime';
+
+export interface VoucherItem {
+  id: string;
+  code: string;
+  plan_type: VoucherPlanType;
+  max_uses: number; // 0 for unlimited uses
+  used_count: number;
+  expires_at: string | null; // ISO string or null for permanent
+  is_active: boolean;
+  created_at: string;
+  created_by?: string | null;
+}
+
