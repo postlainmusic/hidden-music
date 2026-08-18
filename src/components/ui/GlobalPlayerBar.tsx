@@ -85,6 +85,9 @@ export default function GlobalPlayerBar() {
   const lastFiredSnareIndexRef = useRef<number>(-1);
   const prevKickPunchRef = useRef<number>(0);
   const smoothedKickPunchRef = useRef<number>(0);
+  const runningBassAvgRef = useRef<number>(50);
+  const runningBassVarRef = useRef<number>(15);
+  const runningSnareAvgRef = useRef<number>(40);
   const prevSnarePunchRef = useRef<number>(0);
   const smoothedSnarePunchRef = useRef<number>(0);
   const barFlashIntensityRef = useRef<number>(0);
@@ -159,7 +162,7 @@ export default function GlobalPlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef]);
 
-  // Real-Time Playbar Monochromatic Beat Engine
+  // Real-Time Playbar Monochromatic Beat Engine with Adaptive Dynamic Threshold
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -183,11 +186,82 @@ export default function GlobalPlayerBar() {
       const kickStamps = kickTimestampsRef?.current || [];
       const snareStamps = snareTimestampsRef?.current || [];
 
-      if (isPCMReady) {
+      // 1. Primary Engine: Live Analyser Real-Time Dynamic Spectral Flux
+      let hasRealAnalyserData = false;
+      if (kickAnalyserRef?.current || analyserRef?.current) {
+        try {
+          const activeNode = kickAnalyserRef?.current || analyserRef?.current;
+          if (activeNode) {
+            const arr = new Uint8Array(activeNode.frequencyBinCount);
+            activeNode.getByteFrequencyData(arr);
+
+            // Sub-bass frequency band (~20Hz - 120Hz)
+            const subBass = (arr[0] * 1.2 + arr[1] * 1.1 + arr[2] * 0.9 + arr[3] * 0.7) / 3.9;
+
+            if (subBass > 0) {
+              hasRealAnalyserData = true;
+
+              // Exponential moving average for baseline and dynamic variance
+              runningBassAvgRef.current = runningBassAvgRef.current * 0.92 + subBass * 0.08;
+              const variance = Math.abs(subBass - runningBassAvgRef.current);
+              runningBassVarRef.current = runningBassVarRef.current * 0.92 + variance * 0.08;
+
+              const deltaKick = Math.max(0, subBass - prevKickPunchRef.current);
+              prevKickPunchRef.current = subBass;
+
+              // Dynamic adaptive threshold scaling with song's real-time loudness
+              const dynamicThreshold = runningBassAvgRef.current + Math.max(8.0, runningBassVarRef.current * 1.25);
+              const dynamicDeltaThreshold = Math.max(7.0, runningBassVarRef.current * 0.75);
+
+              if (
+                ((subBass > dynamicThreshold && deltaKick > dynamicDeltaThreshold) || deltaKick > dynamicDeltaThreshold * 1.8) &&
+                subBass >= 28 &&
+                now - lastKickTimeRef.current > 135
+              ) {
+                const punchRatio = (subBass - runningBassAvgRef.current) / Math.max(18, runningBassVarRef.current * 2.0);
+                if (punchRatio > 0.6 || deltaKick > 22) {
+                  isHeavyKick = true;
+                } else {
+                  isLightKick = true;
+                }
+                lastKickTimeRef.current = now;
+              }
+            }
+          }
+
+          // Snare / Clap high-frequency transient detection
+          if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
+            const snareArr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
+            snareAnalyserRef.current.getByteFrequencyData(snareArr);
+            const snareHigh = (snareArr[1] + snareArr[2] + snareArr[3] + snareArr[4]) / 4;
+
+            if (snareHigh > 0) {
+              runningSnareAvgRef.current = runningSnareAvgRef.current * 0.92 + snareHigh * 0.08;
+              const deltaSnare = Math.max(0, snareHigh - prevSnarePunchRef.current);
+              prevSnarePunchRef.current = snareHigh;
+
+              if (
+                deltaSnare > Math.max(12.0, runningSnareAvgRef.current * 0.35) &&
+                snareHigh >= 35 &&
+                now - lastSnareTimeRef.current > 150 &&
+                now - lastKickTimeRef.current > 100
+              ) {
+                isSnare = true;
+                lastSnareTimeRef.current = now;
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore transient analyser read error
+        }
+      }
+
+      // 2. Secondary Engine: Exact PCM Beat Map Timestamps fallback
+      if (!hasRealAnalyserData && isPCMReady) {
         if (kickStamps.length > 0) {
           for (let i = 0; i < kickStamps.length; i++) {
             const diff = liveCurrentTime - kickStamps[i];
-            if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredKickIndexRef.current) {
+            if (diff >= -0.025 && diff <= 0.040 && i !== lastFiredKickIndexRef.current) {
               lastFiredKickIndexRef.current = i;
               isHeavyKick = true;
               lastKickTimeRef.current = now;
@@ -199,7 +273,7 @@ export default function GlobalPlayerBar() {
         if (!isHeavyKick && snareStamps.length > 0) {
           for (let i = 0; i < snareStamps.length; i++) {
             const diff = liveCurrentTime - snareStamps[i];
-            if (diff >= -0.022 && diff <= 0.035 && i !== lastFiredSnareIndexRef.current) {
+            if (diff >= -0.025 && diff <= 0.040 && i !== lastFiredSnareIndexRef.current) {
               lastFiredSnareIndexRef.current = i;
               isSnare = true;
               lastSnareTimeRef.current = now;
@@ -207,78 +281,19 @@ export default function GlobalPlayerBar() {
             }
           }
         }
-      } else {
-        let masterMidEnergy = 0;
-        if (analyserRef?.current) {
-          try {
-            const masterArr = new Uint8Array(analyserRef.current.frequencyBinCount);
-            analyserRef.current.getByteFrequencyData(masterArr);
-            masterMidEnergy = (masterArr[2] + masterArr[3] + masterArr[4] + masterArr[5] + masterArr[6]) / 5;
-          } catch {}
-        }
-
-        if (kickAnalyserRef?.current) {
-          try {
-            const arr = new Uint8Array(kickAnalyserRef.current.frequencyBinCount);
-            kickAnalyserRef.current.getByteFrequencyData(arr);
-            const kickSub = (arr[0] + arr[1]) / 2;
-
-            const deltaKick = Math.max(0, kickSub - prevKickPunchRef.current);
-            prevKickPunchRef.current = kickSub;
-            smoothedKickPunchRef.current = smoothedKickPunchRef.current * 0.8 + deltaKick * 0.2;
-            const kickThreshold = Math.max(16.0, smoothedKickPunchRef.current * 1.5);
-
-            if (
-              deltaKick > kickThreshold &&
-              kickSub >= 80 &&
-              kickSub >= masterMidEnergy * 0.85 &&
-              now - lastKickTimeRef.current > 160
-            ) {
-              if (kickSub > 120 || deltaKick > 28) {
-                isHeavyKick = true;
-              } else {
-                isLightKick = true;
-              }
-              lastKickTimeRef.current = now;
-            }
-          } catch {}
-        }
-
-        if (!isHeavyKick && !isLightKick && snareAnalyserRef?.current) {
-          try {
-            const arr = new Uint8Array(snareAnalyserRef.current.frequencyBinCount);
-            snareAnalyserRef.current.getByteFrequencyData(arr);
-            const snareHigh = (arr[1] + arr[2] + arr[3]) / 3;
-
-            const deltaSnare = Math.max(0, snareHigh - prevSnarePunchRef.current);
-            prevSnarePunchRef.current = snareHigh;
-            smoothedSnarePunchRef.current = smoothedSnarePunchRef.current * 0.8 + deltaSnare * 0.2;
-            const snareThreshold = Math.max(18.0, smoothedSnarePunchRef.current * 1.6);
-
-            if (
-              deltaSnare > snareThreshold &&
-              snareHigh >= 85 &&
-              now - lastSnareTimeRef.current > 170 &&
-              now - lastKickTimeRef.current > 120
-            ) {
-              isSnare = true;
-              lastSnareTimeRef.current = now;
-            }
-          } catch {}
-        }
       }
 
       if (isHeavyKick) {
         isHeavyKickRef.current = true;
-        barScaleRef.current = 1.035;
+        barScaleRef.current = 1.038;
         barFlashIntensityRef.current = 1.0;
         if (fireOverlayRef.current) {
           fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.70))';
         }
       } else if (isLightKick) {
         isHeavyKickRef.current = false;
-        barScaleRef.current = 1.018;
-        barFlashIntensityRef.current = 0.55;
+        barScaleRef.current = 1.022;
+        barFlashIntensityRef.current = 0.65;
         if (fireOverlayRef.current) {
           fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25))';
         }
@@ -289,8 +304,8 @@ export default function GlobalPlayerBar() {
           fireOverlayRef.current.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15))';
         }
       } else {
-        barFlashIntensityRef.current *= 0.65;
-        barScaleRef.current = barScaleRef.current + (1.0 - barScaleRef.current) * 0.35;
+        barFlashIntensityRef.current *= 0.72;
+        barScaleRef.current = barScaleRef.current + (1.0 - barScaleRef.current) * 0.30;
       }
 
       if (barFlashIntensityRef.current < 0.01) barFlashIntensityRef.current = 0;

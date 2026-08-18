@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession } from '@/lib/authSession';
+import { getMediaCdnUrl } from '@/lib/r2Storage';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
@@ -143,7 +144,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [currentTrack, currentAlbum, playlist, volume, shuffleMode, repeatMode]);
 
   const rawTrackUrl = currentTrack?.audio_url || '';
-  const trackUrl = rawTrackUrl;
+  const trackUrl = useMemo(() => {
+    if (!rawTrackUrl) return '';
+    return getMediaCdnUrl(rawTrackUrl);
+  }, [rawTrackUrl]);
 
   // Reset beat map states on track change
   useEffect(() => {
@@ -330,7 +334,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         audioCtxRef.current = new AudioCtx();
       }
-      if (audioCtxRef.current.state === 'suspended') {
+      if (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted') {
         audioCtxRef.current.resume().catch(() => {});
       }
       if (!sourceRef.current && audioCtxRef.current) {
@@ -342,18 +346,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         masterAnalyser.smoothingTimeConstant = 0.15;
 
         const kickFilter = audioCtx.createBiquadFilter();
-        kickFilter.type = 'bandpass';
-        kickFilter.frequency.value = 55;
-        kickFilter.Q.value = 3.2;
+        kickFilter.type = 'lowpass';
+        kickFilter.frequency.value = 140;
+        kickFilter.Q.value = 1.2;
 
         const kickAnalyser = audioCtx.createAnalyser();
         kickAnalyser.fftSize = 256;
-        kickAnalyser.smoothingTimeConstant = 0.02;
+        kickAnalyser.smoothingTimeConstant = 0.04;
 
         const snareFilter = audioCtx.createBiquadFilter();
         snareFilter.type = 'bandpass';
-        snareFilter.frequency.value = 3200;
-        snareFilter.Q.value = 1.8;
+        snareFilter.frequency.value = 2800;
+        snareFilter.Q.value = 1.6;
 
         const snareAnalyser = audioCtx.createAnalyser();
         snareAnalyser.fftSize = 256;
@@ -525,10 +529,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsPlaying(true);
     setCurrentTime(0);
     currentTimeRef.current = 0;
+    if (audioCtxRef.current && (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')) {
+      audioCtxRef.current.resume().catch(() => {});
+    }
   }, []);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack || !audioRef.current) return;
+    if (audioCtxRef.current && (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')) {
+      audioCtxRef.current.resume().catch(() => {});
+    }
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -656,42 +666,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider value={contextValue}>
       {children}
 
-      {/* Global Pure Background HTML5 Audio Element with Throttled State Updates & Preload Metadata */}
-      {currentTrack && trackUrl && activeZone === 'audio' && (
-        <audio
-          ref={audioRef}
-          src={trackUrl}
-          preload="metadata"
-          crossOrigin="anonymous"
-          autoPlay={isPlaying}
-          onPlay={initAudioAnalyser}
-          onTimeUpdate={() => {
-            if (!audioRef.current) return;
-            const cur = audioRef.current.currentTime;
-            currentTimeRef.current = cur;
+      {/* Permanent Singleton Background HTML5 Audio Element with Fixed MediaElementSource */}
+      <audio
+        ref={audioRef}
+        src={activeZone === 'audio' && currentTrack ? trackUrl : undefined}
+        preload="auto"
+        crossOrigin="anonymous"
+        onPlay={() => {
+          initAudioAnalyser();
+        }}
+        onTimeUpdate={() => {
+          if (!audioRef.current) return;
+          const cur = audioRef.current.currentTime;
+          currentTimeRef.current = cur;
 
-            // Throttled React state update every 350ms to eliminate 60FPS re-render lag
-            const now = performance.now();
-            if (now - lastStateUpdateTimeRef.current > 350) {
-              lastStateUpdateTimeRef.current = now;
-              setCurrentTime(cur);
+          // Throttled React state update every 350ms to eliminate 60FPS re-render lag
+          const now = performance.now();
+          if (now - lastStateUpdateTimeRef.current > 350) {
+            lastStateUpdateTimeRef.current = now;
+            setCurrentTime(cur);
+          }
+        }}
+        onLoadedMetadata={() => {
+          if (audioRef.current) {
+            setDuration(audioRef.current.duration);
+            if (currentTimeRef.current > 0 && Math.abs(audioRef.current.currentTime - currentTimeRef.current) > 2) {
+              audioRef.current.currentTime = currentTimeRef.current;
             }
-          }}
-          onLoadedMetadata={() => {
-            if (audioRef.current) {
-              setDuration(audioRef.current.duration);
-              if (currentTimeRef.current > 0 && Math.abs(audioRef.current.currentTime - currentTimeRef.current) > 2) {
-                audioRef.current.currentTime = currentTimeRef.current;
-              }
-            }
-          }}
-          onEnded={nextTrack}
-          onError={(e) => {
-            console.warn('Audio playback note:', currentTrack?.title, e);
-          }}
-          className="hidden"
-        />
-      )}
+          }
+        }}
+        onEnded={nextTrack}
+        onError={(e) => {
+          console.warn('Audio playback note:', currentTrack?.title, e);
+        }}
+        className="hidden"
+      />
     </PlayerContext.Provider>
   );
 }

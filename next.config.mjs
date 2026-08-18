@@ -20,6 +20,19 @@ const nextConfig = {
     });
     return config;
   },
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT,HEAD' },
+          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Range, Authorization' },
+          { key: 'Access-Control-Expose-Headers', value: 'Content-Length, Content-Range, Accept-Ranges, Content-Type' },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
