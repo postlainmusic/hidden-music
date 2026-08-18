@@ -50,7 +50,7 @@ jobs:
 
       - name: Initialize & Build TWA Project
         run: |
-          bubblewrap update --manifest=twa-manifest.json --skipPwaValidation
+          yes "" | bubblewrap update --manifest=twa-manifest.json --skipPwaValidation || true
           bubblewrap build \
             --manifest=twa-manifest.json \
             --skipPwaValidation \
@@ -59,7 +59,7 @@ jobs:
 
       - name: Prepare APK Binary
         run: |
-          find . -name "*.apk" -exec cp {} ./hidden-music.apk \;
+          find . -maxdepth 2 -name "*.apk" -exec cp {} ./hidden-music.apk \;
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
