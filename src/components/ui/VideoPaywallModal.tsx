@@ -20,7 +20,12 @@ import {
   RefreshCw,
   CreditCard,
 } from 'lucide-react';
-import { activateVideoSubscription, getStoredUserSession } from '@/lib/authSession';
+import {
+  activateVideoSubscription,
+  getStoredUserSession,
+  hasVideoSubscription,
+  refreshUserProfile,
+} from '@/lib/authSession';
 
 interface VideoPaywallModalProps {
   isOpen: boolean;
@@ -58,6 +63,25 @@ export default function VideoPaywallModal({
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-check & auto-unlock if user is already VIP when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (hasVideoSubscription()) {
+        if (onSuccess) onSuccess();
+        onClose();
+        return;
+      }
+
+      // Query database directly to see if Admin just granted access
+      refreshUserProfile().then((fresh) => {
+        if (fresh && hasVideoSubscription(fresh)) {
+          if (onSuccess) onSuccess();
+          onClose();
+        }
+      });
+    }
+  }, [isOpen, onClose, onSuccess]);
 
   // Cleanup polling when modal closes or unmounts
   useEffect(() => {

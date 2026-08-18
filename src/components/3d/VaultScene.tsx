@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
-import { hasVideoSubscription } from '@/lib/authSession';
+import { hasVideoSubscription, refreshUserProfile } from '@/lib/authSession';
 
 interface VaultSceneProps {
   albums: Album[];
@@ -316,9 +316,19 @@ export default function VaultScene({
     };
   }, [albums.length, isDetail, isVideoZone]);
 
-  // Video Gatekeeper check
-  const handleRequestVideoAccess = useCallback((track?: TrackItem) => {
-    const hasAccess = hasVideoSubscription(userSession);
+  // Video Gatekeeper check with Live Database Revalidation
+  const handleRequestVideoAccess = useCallback(async (track?: TrackItem) => {
+    // 1. Fast-path check with current session
+    let hasAccess = hasVideoSubscription(userSession);
+
+    // 2. If not granted yet in local state, fetch latest live profile record from Supabase directly
+    if (!hasAccess) {
+      const freshSession = await refreshUserProfile();
+      if (freshSession && hasVideoSubscription(freshSession)) {
+        hasAccess = true;
+      }
+    }
+
     if (!hasAccess) {
       if (onOpenPaywall) onOpenPaywall();
       return;

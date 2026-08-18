@@ -7,8 +7,9 @@ export interface VaultUserSession {
   display_name?: string;
   user_metadata?: Record<string, any>;
   role?: string;
-  plan?: 'free' | 'vip' | 'premium';
+  plan?: 'free' | 'vip' | 'premium' | string;
   hasVideoSubscription?: boolean;
+  has_video_subscription?: boolean;
   is_video_paid?: boolean;
   video_paid_at?: string | null;
   granted_by?: string | null;
@@ -32,8 +33,19 @@ export function getStoredUserSession(): VaultUserSession | null {
       const parsed = JSON.parse(local);
       if (parsed && (parsed.id || parsed.email)) {
         if (customName) parsed.display_name = customName;
-        if (hasVideoPass || parsed.is_video_paid) {
+        const isVip = Boolean(
+          hasVideoPass ||
+          parsed.is_video_paid === true ||
+          parsed.hasVideoSubscription === true ||
+          parsed.has_video_subscription === true ||
+          parsed.plan === 'vip' ||
+          parsed.plan === 'premium' ||
+          parsed.role === 'admin'
+        );
+
+        if (isVip) {
           parsed.hasVideoSubscription = true;
+          parsed.has_video_subscription = true;
           parsed.is_video_paid = true;
         }
         return parsed;
@@ -49,6 +61,7 @@ export function getStoredUserSession(): VaultUserSession | null {
         role: 'admin',
         plan: 'premium',
         hasVideoSubscription: true,
+        has_video_subscription: true,
         is_video_paid: true,
       };
     }
@@ -74,8 +87,23 @@ export function setStoredUserSession(user: any) {
       user.email?.split('@')[0] ||
       'VAULT MEMBER';
 
-    const isAdmin = user.role === 'admin' || user.email === 'admin@hiddenvault.com' || localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
-    const isVipPaid = isAdmin || hasVideoPass || user.is_video_paid === true || user.hasVideoSubscription === true || user.has_video_subscription === true || user.plan === 'vip' || user.plan === 'premium';
+    const isAdmin =
+      user.role === 'admin' ||
+      user.email === 'admin@hiddenvault.com' ||
+      localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+
+    const isVipPaid = Boolean(
+      isAdmin ||
+      hasVideoPass ||
+      user.is_video_paid === true ||
+      user.hasVideoSubscription === true ||
+      user.has_video_subscription === true ||
+      user.plan === 'vip' ||
+      user.plan === 'premium' ||
+      user.user_metadata?.is_video_paid === true ||
+      user.user_metadata?.hasVideoSubscription === true ||
+      user.user_metadata?.has_video_subscription === true
+    );
 
     const sessionData: VaultUserSession = {
       id: user.id || 'vault-user-' + Date.now(),
@@ -85,10 +113,13 @@ export function setStoredUserSession(user: any) {
         ...(user.user_metadata || {}),
         display_name: resolvedName,
         full_name: resolvedName,
+        is_video_paid: isVipPaid,
+        hasVideoSubscription: isVipPaid,
       },
       role: isAdmin ? 'admin' : (user.role || 'user'),
       plan: isAdmin ? 'premium' : (user.plan || (isVipPaid ? 'vip' : 'free')),
       hasVideoSubscription: isVipPaid,
+      has_video_subscription: isVipPaid,
       is_video_paid: isVipPaid,
       video_paid_at: user.video_paid_at || (isVipPaid ? new Date().toISOString() : null),
       granted_by: user.granted_by || null,
@@ -98,10 +129,12 @@ export function setStoredUserSession(user: any) {
     const str = JSON.stringify(sessionData);
     localStorage.setItem(USER_SESSION_KEY, str);
     sessionStorage.setItem(USER_SESSION_KEY, str);
+
     if (isVipPaid) {
       localStorage.setItem(VIDEO_PASS_KEY, 'true');
       sessionStorage.setItem(VIDEO_PASS_KEY, 'true');
     }
+
     window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: sessionData }));
     window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: sessionData }));
   } catch (err) {
@@ -132,6 +165,7 @@ export function setStoredAdminSession(isAdmin: boolean) {
         role: 'admin',
         plan: 'premium',
         hasVideoSubscription: true,
+        has_video_subscription: true,
         is_video_paid: true,
       });
     } else {
@@ -139,6 +173,8 @@ export function setStoredAdminSession(isAdmin: boolean) {
       sessionStorage.removeItem(ADMIN_SESSION_KEY);
       localStorage.removeItem(USER_SESSION_KEY);
       sessionStorage.removeItem(USER_SESSION_KEY);
+      localStorage.removeItem(VIDEO_PASS_KEY);
+      sessionStorage.removeItem(VIDEO_PASS_KEY);
     }
     window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: null }));
   } catch (err) {
@@ -170,19 +206,82 @@ export function hasVideoSubscription(session?: VaultUserSession | null): boolean
     return true;
   }
 
-  // 3. Check session subscription flags
+  // 3. Check all session subscription & paid flags
   if (
-    current.is_video_paid ||
-    current.hasVideoSubscription ||
+    current.is_video_paid === true ||
+    current.hasVideoSubscription === true ||
+    current.has_video_subscription === true ||
     current.plan === 'vip' ||
     current.plan === 'premium' ||
-    current.user_metadata?.hasVideoSubscription ||
-    current.user_metadata?.is_video_paid
+    current.user_metadata?.is_video_paid === true ||
+    current.user_metadata?.hasVideoSubscription === true ||
+    current.user_metadata?.has_video_subscription === true ||
+    current.user_metadata?.plan === 'vip' ||
+    current.user_metadata?.plan === 'premium'
   ) {
     return true;
   }
 
   return false;
+}
+
+/**
+ * Re-fetch fresh profile from Supabase Database directly to ensure latest is_video_paid status
+ */
+export async function refreshUserProfile(): Promise<VaultUserSession | null> {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const current = getStoredUserSession();
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const targetId = session?.user?.id || current?.id;
+    const targetEmail = session?.user?.email || current?.email;
+
+    if (!targetId && !targetEmail) return current;
+
+    let query = supabase.from('profiles').select('*');
+    if (targetId && targetId.length > 20) {
+      query = query.eq('id', targetId);
+    } else if (targetEmail) {
+      query = query.eq('email', targetEmail);
+    }
+
+    const { data: profile, error } = await query.maybeSingle();
+
+    if (!error && profile) {
+      const isVipPaid = Boolean(
+        profile.is_video_paid === true ||
+        profile.has_video_subscription === true ||
+        profile.plan === 'vip' ||
+        profile.plan === 'premium' ||
+        profile.role === 'admin'
+      );
+
+      const mergedUser: VaultUserSession = {
+        ...(current || {}),
+        ...(session?.user || {}),
+        ...profile,
+        id: profile.id || current?.id || session?.user?.id || 'user',
+        email: profile.email || current?.email || session?.user?.email,
+        display_name: profile.display_name || current?.display_name,
+        role: profile.role || current?.role || 'user',
+        plan: isVipPaid ? (profile.plan || 'vip') : 'free',
+        hasVideoSubscription: isVipPaid,
+        has_video_subscription: isVipPaid,
+        is_video_paid: isVipPaid,
+        video_paid_at: profile.video_paid_at || (isVipPaid ? new Date().toISOString() : null),
+        granted_by: profile.granted_by || null,
+        admin_note: profile.admin_note || null,
+      };
+
+      setStoredUserSession(mergedUser);
+      return mergedUser;
+    }
+  } catch (err) {
+    console.warn('refreshUserProfile error:', err);
+  }
+  return getStoredUserSession();
 }
 
 /**
@@ -201,6 +300,7 @@ export function activateVideoSubscription(): VaultUserSession | null {
         ...cur,
         plan: cur.role === 'admin' ? 'premium' : 'vip',
         hasVideoSubscription: true,
+        has_video_subscription: true,
         is_video_paid: true,
       };
       setStoredUserSession(updated);
@@ -226,6 +326,7 @@ export function revokeVideoSubscription(): void {
         ...cur,
         plan: 'free',
         hasVideoSubscription: false,
+        has_video_subscription: false,
         is_video_paid: false,
       };
       setStoredUserSession(updated);

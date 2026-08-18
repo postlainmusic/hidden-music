@@ -19,31 +19,29 @@ export async function GET(req: NextRequest) {
     const paymentInfo = await getPayOSPaymentInfo(orderCode);
     const isPaid = paymentInfo.status === 'PAID';
 
-    // If paid and user information is provided, optionally sync to Supabase
+    // If paid and user information is provided, sync to Supabase profiles
     if (isPaid && (userId || userEmail)) {
       try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://muemwfqynfljpmvxmpep.supabase.co';
         const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        const supabase = createClient(supabaseUrl, supabaseKey);
 
-        const plan = paymentInfo.amount >= 190000 ? 'premium' : 'vip';
+        if (supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          const plan = paymentInfo.amount >= 190000 ? 'premium' : 'vip';
 
-        if (userId) {
-          await supabase
-            .from('profiles')
-            .update({
-              plan,
-              has_video_subscription: true,
-            })
-            .eq('id', userId);
-        } else if (userEmail) {
-          await supabase
-            .from('profiles')
-            .update({
-              plan,
-              has_video_subscription: true,
-            })
-            .eq('email', userEmail);
+          const updatePayload = {
+            plan,
+            has_video_subscription: true,
+            is_video_paid: true,
+            video_paid_at: new Date().toISOString(),
+            granted_by: 'PAYOS_GATEWAY',
+          };
+
+          if (userId && userId.length > 20) {
+            await supabase.from('profiles').update(updatePayload).eq('id', userId);
+          } else if (userEmail) {
+            await supabase.from('profiles').update(updatePayload).eq('email', userEmail);
+          }
         }
       } catch (dbErr) {
         console.warn('Could not sync user profile to Supabase on payment check:', dbErr);
