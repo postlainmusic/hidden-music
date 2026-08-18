@@ -5,11 +5,16 @@
   "server": {
     "url": "https://music.postlain.com",
     "cleartext": true,
-    "androidScheme": "https"
+    "allowNavigation": [
+      "music.postlain.com",
+      "*.postlain.com",
+      "*.supabase.co",
+      "*.cloudflare.com",
+      "*.r2.dev"
+    ]
   },
   "android": {
     "allowMixedContent": true,
-    "captureInput": true,
     "webContentsDebuggingEnabled": true,
     "backgroundColor": "#09090d"
   }
