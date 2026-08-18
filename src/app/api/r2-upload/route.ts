@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const rawBase = fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
     const uniqueKey = `${folder}/${Date.now()}_${rawBase}.${ext}`;
 
-    const { presignedUrl, publicUrl, key } = getPresignedPutUrl(uniqueKey, 3600);
+    const { presignedUrl, publicUrl, key } = await getPresignedPutUrl(uniqueKey, 3600);
 
     return NextResponse.json({
       success: true,
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       const rawBase = fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
       const uniqueKey = `${folder}/${Date.now()}_${rawBase}.${ext}`;
 
-      const { presignedUrl, publicUrl, key } = getPresignedPutUrl(uniqueKey, 3600);
+      const { presignedUrl, publicUrl, key } = await getPresignedPutUrl(uniqueKey, 3600);
 
       return NextResponse.json({
         success: true,
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = new Uint8Array(arrayBuffer);
 
     // Sanitize filename
     const ext = file.name.split('.').pop() || 'bin';

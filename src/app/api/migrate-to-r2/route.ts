@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
             const res = await fetch(alb.cover_url);
             if (res.ok) {
               const arrayBuf = await res.arrayBuffer();
-              const buffer = Buffer.from(arrayBuf);
+              const buffer = new Uint8Array(arrayBuf);
               const contentType = res.headers.get('content-type') || 'image/jpeg';
               const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             const res = await fetch(audioUrl);
             if (res.ok) {
               const arrayBuf = await res.arrayBuffer();
-              const buffer = Buffer.from(arrayBuf);
+              const buffer = new Uint8Array(arrayBuf);
               const contentType = res.headers.get('content-type') || 'audio/mpeg';
               const ext = contentType.includes('wav') ? 'wav' : contentType.includes('flac') ? 'flac' : 'mp3';
 
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
                 const { data: downloadData, error: dlErr } = await supabase.storage.from(bName).download(item.name);
                 if (!dlErr && downloadData) {
                   const arrayBuf = await downloadData.arrayBuffer();
-                  const buffer = Buffer.from(arrayBuf);
+                  const buffer = new Uint8Array(arrayBuf);
                   const contentType = downloadData.type || 'application/octet-stream';
                   const r2Key = `${bName}/${item.name}`;
 

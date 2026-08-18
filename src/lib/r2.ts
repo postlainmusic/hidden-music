@@ -1,29 +1,54 @@
-import crypto from 'crypto';
-
-export * from './r2Storage';
-
 const R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '5da953b3d1c0e1c733cf2285f8e7ab39';
 const R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '57456fede976516aa1adecf2cd2b24e3';
 const R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '4cb6fa310e4a74e524dd8217bb0bae7072b5f0fdd21c350d8591a65f29fd4ee4';
 const R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'hidden-music-vault';
 const R2_PUBLIC_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-1d0bee5762b4432cbce8cd4c1c010fa4.r2.dev').replace(/\/$/, '');
 
-function getSignatureKey(key: string, dateStamp: string, regionName: string, serviceName: string) {
-  const kDate = crypto.createHmac('sha256', 'AWS4' + key).update(dateStamp).digest();
-  const kRegion = crypto.createHmac('sha256', kDate).update(regionName).digest();
-  const kService = crypto.createHmac('sha256', kRegion).update(serviceName).digest();
-  const kSigning = crypto.createHmac('sha256', kService).update('aws4_request').digest();
+export * from './r2Storage';
+
+// Universal Web Crypto Helpers
+async function sha256Hex(data: string | ArrayBuffer | Uint8Array): Promise<string> {
+  const buffer = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hmacSha256Raw(key: string | Uint8Array | ArrayBuffer, data: string | Uint8Array | ArrayBuffer): Promise<Uint8Array> {
+  const enc = new TextEncoder();
+  const rawKey = typeof key === 'string' ? enc.encode(key) : key;
+  const rawData = typeof data === 'string' ? enc.encode(data) : data;
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    rawKey,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuffer = await crypto.subtle.sign('HMAC', cryptoKey, rawData);
+  return new Uint8Array(sigBuffer);
+}
+
+async function hmacSha256Hex(key: string | Uint8Array | ArrayBuffer, data: string | Uint8Array | ArrayBuffer): Promise<string> {
+  const bytes = await hmacSha256Raw(key, data);
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function getSignatureKey(key: string, dateStamp: string, regionName: string, serviceName: string): Promise<Uint8Array> {
+  const kDate = await hmacSha256Raw('AWS4' + key, dateStamp);
+  const kRegion = await hmacSha256Raw(kDate, regionName);
+  const kService = await hmacSha256Raw(kRegion, serviceName);
+  const kSigning = await hmacSha256Raw(kService, 'aws4_request');
   return kSigning;
 }
 
 /**
  * Generate an AWS S3 Signature V4 Presigned PUT URL for direct client-to-R2 upload.
- * This completely bypasses Vercel/Next.js 4.5MB serverless limits, allowing seamless uploads of high-res audio/video files.
+ * Compatible with Edge Runtime and Browser.
  */
-export function getPresignedPutUrl(
+export async function getPresignedPutUrl(
   key: string,
   expiresInSeconds: number = 3600
-): { presignedUrl: string; publicUrl: string; key: string } {
+): Promise<{ presignedUrl: string; publicUrl: string; key: string }> {
   const cleanKey = key.replace(/^\/+/, '');
   const host = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   const region = 'auto';
@@ -51,12 +76,12 @@ export function getPresignedPutUrl(
   const payloadHash = 'UNSIGNED-PAYLOAD';
 
   const canonicalRequest = `PUT\n${canonicalUri}\n${queryParams}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
-  const canonicalRequestHash = crypto.createHash('sha256').update(canonicalRequest).digest('hex');
+  const canonicalRequestHash = await sha256Hex(canonicalRequest);
 
   const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
 
-  const signingKey = getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
-  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const signingKey = await getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
+  const signature = await hmacSha256Hex(signingKey, stringToSign);
 
   const presignedUrl = `https://${host}${canonicalUri}?${queryParams}&X-Amz-Signature=${signature}`;
   const publicUrl = `${R2_PUBLIC_URL}/${cleanKey}`;
@@ -69,7 +94,7 @@ export function getPresignedPutUrl(
  */
 export async function uploadToR2(
   key: string,
-  buffer: Buffer,
+  buffer: ArrayBuffer | Uint8Array,
   contentType: string = 'application/octet-stream'
 ): Promise<string> {
   const cleanKey = key.replace(/^\/+/, '');
@@ -82,7 +107,7 @@ export async function uploadToR2(
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
   const dateStamp = amzDate.substring(0, 8);
 
-  const payloadHash = crypto.createHash('sha256').update(buffer).digest('hex');
+  const payloadHash = await sha256Hex(buffer);
 
   const canonicalUri = `/${R2_BUCKET_NAME}/${encodeURI(cleanKey).replace(/\+/g, '%20')}`;
   const canonicalQuery = '';
@@ -103,14 +128,15 @@ export async function uploadToR2(
 
   const algorithm = 'AWS4-HMAC-SHA256';
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const canonicalReqHash = await sha256Hex(canonicalRequest);
   const stringToSign =
     `${algorithm}\n` +
     `${amzDate}\n` +
     `${credentialScope}\n` +
-    `${crypto.createHash('sha256').update(canonicalRequest).digest('hex')}`;
+    `${canonicalReqHash}`;
 
-  const signingKey = getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
-  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const signingKey = await getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
+  const signature = await hmacSha256Hex(signingKey, stringToSign);
 
   const authorizationHeader = `${algorithm} Credential=${R2_ACCESS_KEY_ID}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
@@ -147,7 +173,7 @@ export async function deleteFromR2(key: string): Promise<boolean> {
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
   const dateStamp = amzDate.substring(0, 8);
-  const payloadHash = crypto.createHash('sha256').update('').digest('hex');
+  const payloadHash = await sha256Hex('');
 
   const canonicalUri = `/${R2_BUCKET_NAME}/${encodeURI(cleanKey).replace(/\+/g, '%20')}`;
   const canonicalHeaders =
@@ -165,14 +191,15 @@ export async function deleteFromR2(key: string): Promise<boolean> {
 
   const algorithm = 'AWS4-HMAC-SHA256';
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const canonicalReqHash = await sha256Hex(canonicalRequest);
   const stringToSign =
     `${algorithm}\n` +
     `${amzDate}\n` +
     `${credentialScope}\n` +
-    `${crypto.createHash('sha256').update(canonicalRequest).digest('hex')}`;
+    `${canonicalReqHash}`;
 
-  const signingKey = getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
-  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const signingKey = await getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
+  const signature = await hmacSha256Hex(signingKey, stringToSign);
 
   const authorizationHeader = `${algorithm} Credential=${R2_ACCESS_KEY_ID}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
