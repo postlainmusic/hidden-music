@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Prevents double mount issue in R3F 3D Canvas during dev
+  swcMinify: true,
+
+  // Tối ưu tree-shaking và giảm kích thước bundle khi compile
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+    },
+  },
   
   // Bỏ qua Type-check & ESLint khi build trên Cloudflare để tăng tốc tối đa
   typescript: {
