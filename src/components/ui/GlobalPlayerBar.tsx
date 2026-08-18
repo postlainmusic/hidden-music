@@ -104,98 +104,46 @@ export default function GlobalPlayerBar() {
   }, []);
 
   // =========================================================================
-  // INTEGRATE ANDROID / MOBILE SYSTEM MEDIA NOTIFICATION PLAYBAR (MediaSession)
+  // NATIVE ANDROID NOTIFICATION & MEDIASESSION BRIDGE
   // =========================================================================
   useEffect(() => {
-    if (typeof window === 'undefined' || !('mediaSession' in navigator) || !currentTrack) {
+    if (typeof window === 'undefined') return;
+
+    // Gắn hàm lắng nghe lệnh bấm từ thanh thông báo Android
+    (window as any).__vault_media_action = (action: string) => {
+      if (action === 'PLAY_PAUSE') togglePlay();
+      else if (action === 'PREV') prevTrack();
+      else if (action === 'NEXT') nextTrack();
+    };
+
+    if (!currentTrack) {
+      if ((window as any).AndroidMediaBridge?.clearMedia) {
+        (window as any).AndroidMediaBridge.clearMedia();
+      }
       return;
     }
 
-    const coverUrl = currentAlbum?.cover_url || '/icon.png';
+    const coverUrl = currentAlbum?.cover_url || '';
     const trackTitle = currentTrack.title || 'Unknown Track';
     const trackArtist = currentTrack.artist || currentAlbum?.artist || 'POSTLAIN';
     const albumTitle = currentAlbum?.title || 'Hidden Music Vault';
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: trackTitle,
-      artist: trackArtist,
-      album: albumTitle,
-      artwork: [
-        { src: coverUrl, sizes: '96x96', type: 'image/png' },
-        { src: coverUrl, sizes: '128x128', type: 'image/png' },
-        { src: coverUrl, sizes: '192x192', type: 'image/png' },
-        { src: coverUrl, sizes: '256x256', type: 'image/png' },
-        { src: coverUrl, sizes: '384x384', type: 'image/png' },
-        { src: coverUrl, sizes: '512x512', type: 'image/png' },
-      ],
-    });
-
-    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-
-    const handlePlayAction = () => {
-      if (!isPlaying) togglePlay();
-    };
-
-    const handlePauseAction = () => {
-      if (isPlaying) togglePlay();
-    };
-
-    const handlePrevAction = () => {
-      prevTrack();
-    };
-
-    const handleNextAction = () => {
-      nextTrack();
-    };
-
-    const handleSeekToAction = (details: MediaSessionActionDetails) => {
-      if (details.seekTime !== undefined && details.seekTime !== null) {
-        seekTo(details.seekTime);
-      }
-    };
-
-    try {
-      navigator.mediaSession.setActionHandler('play', handlePlayAction);
-      navigator.mediaSession.setActionHandler('pause', handlePauseAction);
-      navigator.mediaSession.setActionHandler('previoustrack', handlePrevAction);
-      navigator.mediaSession.setActionHandler('nexttrack', handleNextAction);
-      navigator.mediaSession.setActionHandler('seekto', handleSeekToAction);
-    } catch {
-      // Ignored for unsupported handlers
+    // 1. Gửi sang Native Android Notification Service
+    if ((window as any).AndroidMediaBridge?.updateMedia) {
+      (window as any).AndroidMediaBridge.updateMedia(trackTitle, trackArtist, coverUrl, isPlaying);
     }
 
-    return () => {
-      try {
-        navigator.mediaSession.setActionHandler('play', null);
-        navigator.mediaSession.setActionHandler('pause', null);
-        navigator.mediaSession.setActionHandler('previoustrack', null);
-        navigator.mediaSession.setActionHandler('nexttrack', null);
-        navigator.mediaSession.setActionHandler('seekto', null);
-      } catch {
-        // Cleanup safety
-      }
-    };
-  }, [currentTrack, currentAlbum, isPlaying, togglePlay, prevTrack, nextTrack, seekTo]);
-
-  // Update Media Position State
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) {
-      return;
+    // 2. Đồng bộ chuẩn Web MediaSession
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: trackTitle,
+        artist: trackArtist,
+        album: albumTitle,
+        artwork: coverUrl ? [{ src: coverUrl, sizes: '512x512', type: 'image/png' }] : [],
+      });
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
-
-    const effectiveDur = duration > 0 && isFinite(duration) ? duration : (currentTrack?.duration || 0);
-    if (effectiveDur > 0 && isFinite(currentTime)) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: effectiveDur,
-          playbackRate: 1.0,
-          position: Math.min(Math.max(0, currentTime), effectiveDur),
-        });
-      } catch {
-        // Fallback for edge cases
-      }
-    }
-  }, [currentTime, duration, currentTrack?.duration]);
+  }, [currentTrack, currentAlbum, isPlaying, togglePlay, prevTrack, nextTrack]);
 
   // Click outside to close drawers and volume slider
   useEffect(() => {
