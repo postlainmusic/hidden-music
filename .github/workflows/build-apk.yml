@@ -28,19 +28,59 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+        run: npm install --prefer-offline --no-audit --legacy-peer-deps
 
       - name: Initialize Capacitor Android Platform
         run: |
           npx cap add android || true
           npx cap sync android
 
-      - name: Inject Android Permissions & Network Config
+      - name: Inject Full Android Manifest & Network Config
         run: |
-          # Cấp quyền truy cập Internet và trạng thái mạng
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
-          # Cho phép nạp webview từ URL trực tiếp
-          sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
+          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true">
+
+                  <activity
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                      android:name=".MainActivity"
+                      android:label="@string/title_activity_main"
+                      android:theme="@style/AppTheme.NoActionBarLaunch"
+                      android:launchMode="singleTask"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths"></meta-data>
+                  </provider>
+              </application>
+          </manifest>
+          EOF
 
       - name: Setup Gradle Permission
         run: |
@@ -54,7 +94,6 @@ jobs:
 
       - name: Prepare APK Binary
         run: |
-          # Sao chép và đổi tên file thành hidden-music.apk để link tải đẹp mắt
           cp android/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
 
       - name: Upload APK to Artifacts
@@ -73,7 +112,6 @@ jobs:
             ## 🎵 Hidden Music Vault - Android Native App
             
             Bản build ứng dụng Android Native chính thức kết nối trực tiếp với máy chủ [music.postlain.com](https://music.postlain.com).
-            
             - **Cập nhật:** Tự động đồng bộ với web live
             - **Tải file trực tiếp:** Bấm vào `hidden-music.apk` bên dưới.
           draft: false
