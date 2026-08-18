@@ -1,4 +1,4 @@
-name: Build Android APK (Web2APK Engine)
+name: Build Native Android APK
 
 on:
   workflow_dispatch:
@@ -7,40 +7,182 @@ permissions:
   contents: write
 
 jobs:
-  build-web2apk:
-    name: Build via Web2APK Engine
+  build-apk:
+    name: Build Pure Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Clone Web2APK Engine
+      - name: Scaffold Native WebView App
         run: |
-          git clone https://github.com/77axel/Web2APK.git engine
-          cd engine
-          npm install || true
+          mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
+          mkdir -p native-app/app/src/main/res/values
 
-      - name: Build APK for Music Vault
+          # 1. settings.gradle
+          cat << 'EOF' > native-app/settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "HiddenMusicApp"
+          include ':app'
+          EOF
+
+          # 2. Root build.gradle
+          cat << 'EOF' > native-app/build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          # 3. App build.gradle
+          cat << 'EOF' > native-app/app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.postlain.hiddenmusic'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.postlain.hiddenmusic"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+                  debug {
+                      applicationIdSuffix ""
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.webkit:webkit:1.10.0'
+          }
+          EOF
+
+          # 4. AndroidManifest.xml
+          cat << 'EOF' > native-app/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="Hidden Music"
+                  android:theme="@style/Theme.AppCompat.NoActionBar"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 5. Strings resource
+          cat << 'EOF' > native-app/app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">Hidden Music</string>
+          </resources>
+          EOF
+
+          # 6. MainActivity.java (Bật đầy đủ JS, DOM Storage, Audio background)
+          cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MainActivity.java
+          package com.postlain.hiddenmusic;
+
+          import android.annotation.SuppressLint;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+
+              @SuppressLint("SetJavaScriptEnabled")
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+                  settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("https://music.postlain.com");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      - name: Build APK via Gradle
         run: |
-          cd engine
-          # Tạo project wrapper trực tiếp trỏ tới URL
-          node index.js --url="https://music.postlain.com" --name="Hidden Music" --package="com.postlain.hiddenmusic" || true
+          cd native-app
+          gradle wrapper
+          ./gradlew assembleDebug --no-daemon
 
       - name: Prepare APK Binary
         run: |
-          find . -name "*.apk" -exec cp {} ./hidden-music.apk \;
+          cp native-app/app/build/outputs/apk/debug/app-debug.apk ./hidden-music.apk
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: HiddenMusic-Android-APK
+          name: HiddenMusic-Native-APK
           path: ./hidden-music.apk
           retention-days: 14
 
@@ -50,8 +192,8 @@ jobs:
           tag_name: latest
           name: "Hidden Music Vault Android (Latest)"
           body: |
-            ## 🎵 Hidden Music Vault - Android APK
-            Ứng dụng Android chạy trực tiếp nền tảng [music.postlain.com](https://music.postlain.com).
+            ## 🎵 Hidden Music Vault - Native Android APK
+            Bản build Native WebView Android kết nối trực tiếp hệ thống [music.postlain.com](https://music.postlain.com).
           draft: false
           prerelease: false
           files: ./hidden-music.apk
