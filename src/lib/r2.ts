@@ -1,39 +1,4 @@
-// Polyfill HMAC SHA-256 chạy chuẩn trên cả Browser lẫn Edge Runtime
-const crypto = {
-  createHmac(algorithm: string, secret: string | Uint8Array) {
-    let keyBuffer: Uint8Array;
-    if (typeof secret === 'string') {
-      keyBuffer = new TextEncoder().encode(secret);
-    } else {
-      keyBuffer = secret;
-    }
-
-    let currentData = new Uint8Array(0);
-
-    return {
-      update(data: string | Uint8Array) {
-        const appendData = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-        const merged = new Uint8Array(currentData.length + appendData.length);
-        merged.set(currentData);
-        merged.set(appendData, currentData.length);
-        currentData = merged;
-        return this;
-      },
-      digest(encoding?: string): any {
-        let hash = 0;
-        for (let i = 0; i < currentData.length; i++) {
-          hash = (hash << 5) - hash + currentData[i];
-          hash |= 0;
-        }
-        return Math.abs(hash).toString(16).padStart(64, '0');
-      }
-    };
-  },
-  createHash(algorithm: string) {
-    return this.createHmac(algorithm, '');
-  }
-};
-
+import crypto from 'crypto';
 
 export * from './r2Storage';
 

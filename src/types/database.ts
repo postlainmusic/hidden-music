@@ -1,21 +1,21 @@
 export type UserRole = 'user' | 'admin';
 
+export type UserPlan = 'free' | 'vip' | 'premium';
+
 export type Theme3D = 'monochrome_disc' | 'cyber_crystal' | 'vinyl_gold' | 'hologram_sphere';
 
 export type MediaType = 'audio' | 'video';
 
-export type SubscriptionTier = 'free' | 'vip' | 'lifetime';
-export type SubscriptionStatus = 'active' | 'inactive' | 'expired' | 'trial';
+export type PlayerZone = 'audio' | 'video';
 
 export interface Profile {
   id: string;
   email: string;
   display_name: string | null;
   role: UserRole;
-  is_subscribed?: boolean;
-  subscription_status?: SubscriptionStatus;
-  subscription_tier?: SubscriptionTier;
   avatar_url: string | null;
+  plan?: UserPlan;
+  has_video_subscription?: boolean;
   created_at: string;
 }
 
@@ -32,34 +32,24 @@ export interface Album {
   tracks?: TrackItem[];
 }
 
-export interface SyncMetadata {
-  intro_duration?: number;
-  outro_start?: number;
-  confidence_score?: number;
-  sample_rate?: number;
-  analyzed_at?: string;
-  method?: 'cross_correlation' | 'energy_envelope' | 'manual';
-  notes?: string;
-}
-
 // Track / MV Item inside an Album Folder
+// Audio and Video are two completely independent stream URLs
 export interface TrackItem {
   id: string;
   album_id: string;
   title: string;
   artist?: string;
   media_type: MediaType;
-  source?: 'vault' | 'youtube';
-  youtube_id?: string;
   audio_url: string;
   video_url?: string;
-  video_offset?: number; // Offset in seconds (e.g. 13.78s)
-  sync_metadata?: SyncMetadata | string | null;
   cover_url?: string;
   original_year?: number;
   lyrics?: string;
   duration: number;
   created_at: string;
+  // Deprecated legacy field kept optional for backward DB compatibility
+  video_offset?: number;
+  sync_metadata?: any;
 }
 
 // User Feedback / Bug Reports / Suggestions
@@ -89,6 +79,3 @@ export interface AlbumCommentItem {
   created_at: string;
   updated_at?: string;
 }
-
-
-

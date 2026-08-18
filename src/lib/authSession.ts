@@ -7,32 +7,20 @@ export interface VaultUserSession {
   display_name?: string;
   user_metadata?: Record<string, any>;
   role?: string;
-  is_subscribed?: boolean;
-  subscription_status?: 'active' | 'inactive' | 'expired' | 'trial';
-  subscription_tier?: 'free' | 'vip' | 'lifetime';
-}
-
-export function isUserSubscribed(session?: VaultUserSession | null): boolean {
-  if (!session) return false;
-  if (session.role === 'admin') return true;
-  if (session.is_subscribed || session.subscription_status === 'active' || session.subscription_tier === 'vip' || session.subscription_tier === 'lifetime') {
-    return true;
-  }
-  // Check localStorage flag if manually set
-  if (typeof window !== 'undefined' && localStorage.getItem('hidden_vault_vip_active') === 'true') {
-    return true;
-  }
-  return false;
+  plan?: 'free' | 'vip' | 'premium';
+  hasVideoSubscription?: boolean;
 }
 
 const USER_SESSION_KEY = 'hidden_vault_user_session';
 const ADMIN_SESSION_KEY = 'hidden_vault_admin_session';
+const VIDEO_PASS_KEY = 'hidden_vault_video_pass';
 
 export function getStoredUserSession(): VaultUserSession | null {
   if (typeof window === 'undefined') return null;
 
   try {
     const customName = localStorage.getItem('hidden_vault_custom_name');
+    const hasVideoPass = localStorage.getItem(VIDEO_PASS_KEY) === 'true';
 
     // 1. Check direct user session in localStorage
     const local = localStorage.getItem(USER_SESSION_KEY);
@@ -40,6 +28,7 @@ export function getStoredUserSession(): VaultUserSession | null {
       const parsed = JSON.parse(local);
       if (parsed && (parsed.id || parsed.email)) {
         if (customName) parsed.display_name = customName;
+        if (hasVideoPass) parsed.hasVideoSubscription = true;
         return parsed;
       }
     }
@@ -51,6 +40,8 @@ export function getStoredUserSession(): VaultUserSession | null {
         email: 'admin@hiddenvault.com',
         display_name: customName || 'LUCIINGO1108',
         role: 'admin',
+        plan: 'premium',
+        hasVideoSubscription: true,
       };
     }
   } catch (err) {
@@ -64,6 +55,8 @@ export function setStoredUserSession(user: any) {
   if (typeof window === 'undefined' || !user) return;
   try {
     const customStoredName = localStorage.getItem('hidden_vault_custom_name');
+    const hasVideoPass = localStorage.getItem(VIDEO_PASS_KEY) === 'true';
+
     const resolvedName =
       user.display_name ||
       customStoredName ||
@@ -72,6 +65,8 @@ export function setStoredUserSession(user: any) {
       user.user_metadata?.name ||
       user.email?.split('@')[0] ||
       'VAULT MEMBER';
+
+    const isAdmin = user.role === 'admin' || user.email === 'admin@hiddenvault.com' || localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
 
     const sessionData: VaultUserSession = {
       id: user.id || 'vault-user-' + Date.now(),
@@ -82,7 +77,9 @@ export function setStoredUserSession(user: any) {
         display_name: resolvedName,
         full_name: resolvedName,
       },
-      role: user.role || (user.email === 'admin@hiddenvault.com' ? 'admin' : 'user'),
+      role: isAdmin ? 'admin' : (user.role || 'user'),
+      plan: isAdmin ? 'premium' : (user.plan || (hasVideoPass ? 'vip' : 'free')),
+      hasVideoSubscription: isAdmin || hasVideoPass || user.hasVideoSubscription || user.user_metadata?.hasVideoSubscription === true,
     };
 
     const str = JSON.stringify(sessionData);
@@ -110,11 +107,14 @@ export function setStoredAdminSession(isAdmin: boolean) {
     if (isAdmin) {
       localStorage.setItem(ADMIN_SESSION_KEY, 'true');
       sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+      localStorage.setItem(VIDEO_PASS_KEY, 'true');
       setStoredUserSession({
         id: 'admin-master-id',
         email: 'admin@hiddenvault.com',
         display_name: 'LUCIINGO1108',
         role: 'admin',
+        plan: 'premium',
+        hasVideoSubscription: true,
       });
     } else {
       localStorage.removeItem(ADMIN_SESSION_KEY);
@@ -131,6 +131,81 @@ export function setStoredAdminSession(isAdmin: boolean) {
 export function hasActiveSession(): boolean {
   if (typeof window === 'undefined') return false;
   return Boolean(getStoredUserSession());
+}
+
+/**
+ * Check if the user has access to Video Zone (Admin, VIP Plan, or Active Video Pass)
+ */
+export function hasVideoSubscription(session?: VaultUserSession | null): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const current = session || getStoredUserSession();
+  if (!current) return false;
+
+  // 1. Admins have unconditional full access
+  if (current.role === 'admin' || current.email === 'admin@hiddenvault.com' || getStoredAdminSession()) {
+    return true;
+  }
+
+  // 2. Check local video pass flag
+  if (localStorage.getItem(VIDEO_PASS_KEY) === 'true') {
+    return true;
+  }
+
+  // 3. Check session subscription flags
+  if (current.hasVideoSubscription || current.plan === 'vip' || current.plan === 'premium' || current.user_metadata?.hasVideoSubscription) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Activate Video Subscription Pass (Instant client/localStorage activation)
+ */
+export function activateVideoSubscription(): VaultUserSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    localStorage.setItem(VIDEO_PASS_KEY, 'true');
+    sessionStorage.setItem(VIDEO_PASS_KEY, 'true');
+
+    const cur = getStoredUserSession();
+    if (cur) {
+      const updated: VaultUserSession = {
+        ...cur,
+        plan: cur.role === 'admin' ? 'premium' : 'vip',
+        hasVideoSubscription: true,
+      };
+      setStoredUserSession(updated);
+      return updated;
+    }
+  } catch (e) {
+    console.warn('Video subscription activation note:', e);
+  }
+  return null;
+}
+
+/**
+ * Revoke Video Subscription Pass (For testing or cancellation)
+ */
+export function revokeVideoSubscription(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(VIDEO_PASS_KEY);
+    sessionStorage.removeItem(VIDEO_PASS_KEY);
+    const cur = getStoredUserSession();
+    if (cur && cur.role !== 'admin') {
+      const updated: VaultUserSession = {
+        ...cur,
+        plan: 'free',
+        hasVideoSubscription: false,
+      };
+      setStoredUserSession(updated);
+    }
+  } catch (e) {
+    console.warn('Video subscription revoke note:', e);
+  }
 }
 
 export function clearAllStoredSessions() {

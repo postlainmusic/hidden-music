@@ -7,6 +7,7 @@ import VaultScene from '@/components/3d/VaultScene';
 import Navbar from '@/components/ui/Navbar';
 import Footer from '@/components/ui/Footer';
 import VaultGate from '@/components/ui/VaultGate';
+import VideoPaywallModal from '@/components/ui/VideoPaywallModal';
 import { createClient } from '@/lib/supabase/client';
 import { Album, TrackItem } from '@/types/database';
 import { usePlayer } from '@/context/PlayerContext';
@@ -15,11 +16,8 @@ import {
   setStoredUserSession,
   getStoredAdminSession,
   clearAllStoredSessions,
-  performLogout,
-  isUserSubscribed
+  performLogout
 } from '@/lib/authSession';
-import SubscriptionModal from '@/components/ui/SubscriptionModal';
-import HybridSearchModal from '@/components/ui/HybridSearchModal';
 
 interface VaultAppProps {
   initialAlbumId?: string;
@@ -32,32 +30,32 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   const [userSession, setUserSession] = useState<any>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(true);
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
-  const [initialMediaMode, setInitialMediaMode] = useState<'audio' | 'video'>('audio');
 
   // Seamless Master-Detail View Orchestration States
   const [viewMode, setViewMode] = useState<'vault' | 'album'>(initialAlbumId ? 'album' : 'vault');
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<TrackItem | null>(null);
 
-  // Global Ctrl + K / Cmd + K Shortcut to toggle Hybrid Search
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        setIsSearchModalOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  // Video Paywall Modal State
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   // Dynamic Maintenance Estimated Time (+2 hours from viewing)
   const [maintenanceTime, setMaintenanceTime] = useState<{ timeStr: string; fullStr: string }>({
     timeStr: '',
     fullStr: '',
   });
+
+  const {
+    currentTrack,
+    isPlaying,
+    activeZone,
+    playTrack,
+    togglePlay,
+    shuffleMode,
+    toggleShuffle,
+    switchToAudioZone,
+    switchToVideoZone,
+  } = usePlayer();
 
   useEffect(() => {
     const updateMaintenanceTarget = () => {
@@ -78,15 +76,6 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     const interval = setInterval(updateMaintenanceTarget, 60000);
     return () => clearInterval(interval);
   }, []);
-
-  const {
-    currentTrack,
-    isPlaying,
-    playTrack,
-    togglePlay,
-    shuffleMode,
-    toggleShuffle,
-  } = usePlayer();
 
   useEffect(() => {
     setMounted(true);
@@ -140,7 +129,13 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     const initAuth = async () => {
       try {
         if (getStoredAdminSession()) {
-          setUserSession({ email: 'admin@hiddenvault.com', id: 'admin-master-id', display_name: 'LUCIINGO1108' });
+          setUserSession({
+            email: 'admin@hiddenvault.com',
+            id: 'admin-master-id',
+            display_name: 'LUCIINGO1108',
+            role: 'admin',
+            hasVideoSubscription: true,
+          });
           return;
         }
 
@@ -174,7 +169,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
       setIsLoadingAlbums(false);
     }, 3000);
 
-    // Clean background fetch of albums from Supabase
+    // Background fetch of albums from Supabase
     const fetchSupabaseAlbums = async () => {
       try {
         const { data, error } = await supabase
@@ -185,7 +180,6 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
         if (error) {
           console.error('Error fetching albums from Supabase:', error);
         } else if (data && Array.isArray(data)) {
-          // Sort tracks for each album
           data.forEach((alb) => {
             if (alb.tracks) {
               alb.tracks.sort((a: TrackItem, b: TrackItem) => {
@@ -234,7 +228,6 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
       }
     });
 
-    // Listen to custom session updates
     const handleCustomSessionChange = () => {
       const stored = getStoredUserSession();
       setUserSession(stored);
@@ -251,9 +244,14 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     };
   }, [initialAlbumId]);
 
-  // Listen to Browser Back / Forward buttons for seamless history traversal
+  // Handle Browser Back / Forward
   useEffect(() => {
     const handlePopState = () => {
+      if (activeZone === 'video') {
+        switchToAudioZone();
+        return;
+      }
+
       if (window.location.pathname.startsWith('/album/')) {
         const albumId = window.location.pathname.replace('/album/', '');
         const targetAlb = albums.find((a) => a.id === albumId);
@@ -267,27 +265,12 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [albums]);
+  }, [albums, activeZone, switchToAudioZone]);
 
-  // Handle Album Selection with Smooth 60FPS Morph Transition
-  const handleSelectAlbum = async (
-    album: Album,
-    mediaModeOrUpdateHistory?: 'audio' | 'video' | boolean,
-    updateHistory = true
-  ) => {
-    let mediaMode: 'audio' | 'video' = 'audio';
-    let shouldUpdateHistory = updateHistory;
-
-    if (typeof mediaModeOrUpdateHistory === 'string') {
-      mediaMode = mediaModeOrUpdateHistory;
-    } else if (typeof mediaModeOrUpdateHistory === 'boolean') {
-      shouldUpdateHistory = mediaModeOrUpdateHistory;
-    }
-
-    setInitialMediaMode(mediaMode);
+  // Handle Album Selection
+  const handleSelectAlbum = async (album: Album, updateHistory = true) => {
     let fullAlbum = album;
 
-    // Check if album needs tracks fetched
     if (!album.tracks || album.tracks.length === 0) {
       try {
         const cached = localStorage.getItem(`hidden_vault_album_cache_${album.id}`);
@@ -318,22 +301,20 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
     setSelectedAlbum(fullAlbum);
     if (fullAlbum.tracks && fullAlbum.tracks.length > 0) {
-      if (mediaMode === 'video') {
-        const firstVideoTrack = fullAlbum.tracks.find((t) => t.video_url || t.media_type === 'video');
-        setSelectedTrack(firstVideoTrack || fullAlbum.tracks[0]);
-      } else {
-        setSelectedTrack(fullAlbum.tracks[0]);
-      }
+      setSelectedTrack(fullAlbum.tracks[0]);
     }
     setViewMode('album');
 
-    if (shouldUpdateHistory && typeof window !== 'undefined') {
+    if (updateHistory && typeof window !== 'undefined') {
       window.history.pushState({ view: 'album', albumId: album.id }, '', `/album/${album.id}`);
     }
   };
 
-  // Handle Back to 3D Vault with Smooth Reverse Glide (Zero Glitch)
+  // Handle Back to 3D Vault
   const handleBackToVault = (updateHistory = true) => {
+    if (activeZone === 'video') {
+      switchToAudioZone();
+    }
     setViewMode('vault');
     if (updateHistory && typeof window !== 'undefined') {
       window.history.pushState({ view: 'vault' }, '', '/');
@@ -347,7 +328,6 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
   const tracks = useMemo(() => selectedAlbum?.tracks || [], [selectedAlbum]);
   const isCurrentPlayingThisAlbum = currentTrack && tracks.some((t) => t.id === currentTrack.id);
-  const isSubscribed = isUserSubscribed(userSession);
 
   const handlePlayAlbum = () => {
     if (tracks.length > 0 && selectedAlbum) {
@@ -390,20 +370,17 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     return <VaultGate />;
   }
 
-  // 2. User is Logged In -> Single Continuous Canvas
+  // 2. Continuous Stage
   return (
     <main className="relative h-[100dvh] w-full bg-[#090a0f] overflow-hidden select-none">
       
-      {/* Unified Continuous Stage with 60FPS Physical Glide */}
+      {/* Unified Continuous Stage with 3D Vault & Video Zone */}
       {albums.length > 0 && (
         <VaultScene
           albums={albums}
           viewMode={viewMode}
           selectedAlbum={selectedAlbum}
           onSelectAlbum={handleSelectAlbum}
-          isSubscribed={isSubscribed}
-          onOpenSubscriptionModal={() => setIsSubscriptionModalOpen(true)}
-          initialMediaMode={initialMediaMode}
           tracks={tracks}
           selectedTrack={selectedTrack}
           setSelectedTrack={setSelectedTrack}
@@ -417,34 +394,38 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
           handlePlayAlbum={handlePlayAlbum}
           handleShufflePlay={handleShufflePlay}
           formatDuration={formatDuration}
+          activeZone={activeZone}
+          onSwitchToVideoZone={(t) => switchToVideoZone(t)}
+          onSwitchToAudioZone={switchToAudioZone}
+          onOpenPaywall={() => setIsPaywallOpen(true)}
+          userSession={userSession}
         />
       )}
 
-      {/* Subscription VIP Modal */}
-      <SubscriptionModal
-        isOpen={isSubscriptionModalOpen}
-        onClose={() => setIsSubscriptionModalOpen(false)}
-        onSubscribed={() => {
-          const fresh = getStoredUserSession();
-          setUserSession(fresh);
-        }}
-      />
-
-      {/* Hybrid Search Modal (Vault R2 + YouTube Music Global) */}
-      <HybridSearchModal
-        isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
-        vaultAlbums={albums}
-      />
-
-      {/* Top Navbar with Dynamic State, Smooth Back Handler & Hybrid Search Trigger */}
+      {/* Top Navbar */}
       <Navbar
         userEmail={userSession?.email}
         onLogout={handleLogout}
-        onOpenSearch={() => setIsSearchModalOpen(true)}
-        showBackButton={viewMode === 'album'}
-        onBackClick={() => handleBackToVault(true)}
-        title={viewMode === 'album' ? selectedAlbum?.title : undefined}
+        showBackButton={viewMode === 'album' || activeZone === 'video'}
+        onBackClick={() => {
+          if (activeZone === 'video') {
+            switchToAudioZone();
+          } else {
+            handleBackToVault(true);
+          }
+        }}
+        title={activeZone === 'video' ? 'VIDEO ZONE // MV' : (viewMode === 'album' ? selectedAlbum?.title : undefined)}
+      />
+
+      {/* Video Subscription Paywall Modal */}
+      <VideoPaywallModal
+        isOpen={isPaywallOpen}
+        onClose={() => setIsPaywallOpen(false)}
+        onSuccess={() => {
+          setIsPaywallOpen(false);
+          const targetTrack = selectedTrack || (tracks.length > 0 ? tracks[0] : undefined);
+          switchToVideoZone(targetTrack);
+        }}
       />
 
       {/* Futuristic Spinner while Initial Albums are loading */}
@@ -457,7 +438,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
         </div>
       )}
 
-      {/* Secure Empty State / Maintenance Mode when no albums exist */}
+      {/* Maintenance Mode fallback */}
       {!isLoadingAlbums && albums.length === 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-4 z-10 text-center font-mono select-none">
           <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
@@ -473,16 +454,11 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
           <p className="text-xs sm:text-sm text-slate-300 max-w-md leading-relaxed">
             Hệ thống sẽ bảo trì đến khoảng <span className="text-white font-bold tracking-wide underline underline-offset-4">{maintenanceTime.fullStr || '2 tiếng nữa'}</span>, vui lòng quay lại sau <span className="text-white font-bold tracking-wide underline underline-offset-4">{maintenanceTime.timeStr || '2 tiếng nữa'}</span>.
           </p>
-          <div className="mt-6 flex items-center gap-2 text-[11px] text-slate-500 font-cyber">
-            <span>SECURE VAULT GATEWAY</span>
-            <span>•</span>
-            <span>MAINTENANCE WINDOW ACTIVE</span>
-          </div>
         </div>
       )}
 
-      {/* Footer (Hidden on mobile if fixed) */}
-      <Footer isFixed={true} />
+      {/* Footer (Hidden in Video Zone) */}
+      {activeZone !== 'video' && <Footer isFixed={true} />}
     </main>
   );
 }

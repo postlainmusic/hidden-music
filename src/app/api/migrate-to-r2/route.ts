@@ -1,8 +1,8 @@
-export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { uploadToR2 } from '@/lib/r2';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {

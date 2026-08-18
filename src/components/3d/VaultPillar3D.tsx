@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import React, { useRef, useState, useEffect } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Text, Image as DreiImage } from '@react-three/drei';
 import * as THREE from 'three';
 import { Album } from '@/types/database';
@@ -44,7 +44,7 @@ function AlbumCard3D({
     // Calculate wrapped Y position for continuous infinite loop scroll
     const scrollPos = scrollPosRef.current;
     const rawY = -index * ITEM_SPACING + scrollPos;
-
+    
     let wrappedY = ((rawY % TOTAL_HEIGHT) + TOTAL_HEIGHT) % TOTAL_HEIGHT;
     if (wrappedY > TOTAL_HEIGHT / 2) {
       wrappedY -= TOTAL_HEIGHT;
@@ -53,14 +53,9 @@ function AlbumCard3D({
     const distFromCenter = wrappedY;
     const absDist = Math.abs(distFromCenter);
 
-    // Off-screen Culling: hide cards far from center to save GPU draw calls
-    if (absDist > 3.8) {
-      cardGroupRef.current.visible = false;
-      return;
-    }
-    cardGroupRef.current.visible = true;
-
     // Dynamic Opacity & Fade Calculations
+    // Center active item (absDist < 0.6): Opacity = 1.0
+    // Outer items fade out smoothly to 0.0 opacity as they move away
     const targetOpacity = Math.max(0.0, Math.min(1.0, 1.2 - Math.pow(absDist / 2.2, 1.5)));
 
     // 3D Transforms
@@ -69,37 +64,35 @@ function AlbumCard3D({
     const targetRotY = hovered ? pointer.x * 0.35 : 0;
     const targetScale = hovered ? 1.15 : Math.max(0.85, 1.0 - absDist * 0.08);
 
-    // Apply smooth Lerp 3D Transforms at 60 FPS (delta-capped for stability)
-    const safeDelta = Math.min(delta, 0.1);
-    cardGroupRef.current.position.y = THREE.MathUtils.lerp(cardGroupRef.current.position.y, wrappedY + 0.3, safeDelta * 10);
-    cardGroupRef.current.position.z = THREE.MathUtils.lerp(cardGroupRef.current.position.z, targetZ, safeDelta * 10);
-    cardGroupRef.current.rotation.x = THREE.MathUtils.lerp(cardGroupRef.current.rotation.x, targetRotX, safeDelta * 8);
-    const curScale = cardGroupRef.current.scale.x;
-    const lerpedScale = THREE.MathUtils.lerp(curScale, targetScale, safeDelta * 10);
-    cardGroupRef.current.scale.set(lerpedScale, lerpedScale, lerpedScale);
+    // Apply smooth Lerp 3D Transforms at 60 FPS
+    cardGroupRef.current.position.y = THREE.MathUtils.lerp(cardGroupRef.current.position.y, wrappedY + 0.3, delta * 10);
+    cardGroupRef.current.position.z = THREE.MathUtils.lerp(cardGroupRef.current.position.z, targetZ, delta * 10);
+    cardGroupRef.current.rotation.x = THREE.MathUtils.lerp(cardGroupRef.current.rotation.x, targetRotX, delta * 8);
+    cardGroupRef.current.rotation.y = THREE.MathUtils.lerp(cardGroupRef.current.rotation.y, targetRotY, delta * 8);
+    cardGroupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 10);
 
     // Apply Opacity Fade to Materials
     if (frameMatRef.current) {
       frameMatRef.current.transparent = true;
-      frameMatRef.current.opacity = THREE.MathUtils.lerp(frameMatRef.current.opacity, targetOpacity, safeDelta * 10);
+      frameMatRef.current.opacity = THREE.MathUtils.lerp(frameMatRef.current.opacity, targetOpacity, delta * 10);
     }
     if (imageRef.current?.material) {
       imageRef.current.material.transparent = true;
-      imageRef.current.material.opacity = THREE.MathUtils.lerp(imageRef.current.material.opacity, targetOpacity, safeDelta * 10);
+      imageRef.current.material.opacity = THREE.MathUtils.lerp(imageRef.current.material.opacity, targetOpacity, delta * 10);
     }
     if (titleTextRef.current) {
-      titleTextRef.current.fillOpacity = THREE.MathUtils.lerp(titleTextRef.current.fillOpacity, targetOpacity, safeDelta * 10);
+      titleTextRef.current.fillOpacity = THREE.MathUtils.lerp(titleTextRef.current.fillOpacity, targetOpacity, delta * 10);
     }
     if (subTextRef.current) {
-      subTextRef.current.fillOpacity = THREE.MathUtils.lerp(subTextRef.current.fillOpacity, targetOpacity, safeDelta * 10);
+      subTextRef.current.fillOpacity = THREE.MathUtils.lerp(subTextRef.current.fillOpacity, targetOpacity, delta * 10);
     }
 
     // 3D Vinyl Record sliding out & spinning on hover
     if (vinylRef.current) {
       const targetVinylX = hovered ? 1.5 : 0;
-      vinylRef.current.position.x = THREE.MathUtils.lerp(vinylRef.current.position.x, targetVinylX, safeDelta * 8);
+      vinylRef.current.position.x = THREE.MathUtils.lerp(vinylRef.current.position.x, targetVinylX, delta * 8);
       if (hovered) {
-        vinylRef.current.rotation.z -= safeDelta * 4.0;
+        vinylRef.current.rotation.z -= delta * 4.0;
       }
     }
   });
@@ -112,14 +105,14 @@ function AlbumCard3D({
       onPointerOver={(e) => {
         e.stopPropagation();
         setHovered(true);
-        if (typeof document !== 'undefined') document.body.style.cursor = 'pointer';
+        document.body.style.cursor = 'pointer';
       }}
       onPointerOut={() => {
         setHovered(false);
-        if (typeof document !== 'undefined') document.body.style.cursor = 'default';
+        document.body.style.cursor = 'default';
       }}
     >
-      {/* 3D Metallic Case Frame */}
+      {/* 3D Metallic Case Frame (Size 2.5x2.5, perfectly centered) */}
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[2.5, 2.5, 0.12]} />
         <meshStandardMaterial
@@ -153,7 +146,7 @@ function AlbumCard3D({
         grayscale={0}
       />
 
-      {/* BOLD Album Title Underneath */}
+      {/* BOLD Album Title Underneath (Centered perfectly in viewport) */}
       <Text
         ref={titleTextRef}
         position={[0, -1.55, 0.12]}
@@ -181,22 +174,25 @@ function AlbumCard3D({
   );
 }
 
-export function VaultPillar3DScene({ albums, onSelectAlbum }: VaultPillar3DProps) {
+export default function VaultPillar3D({ albums, onSelectAlbum }: VaultPillar3DProps) {
   const containerGroupRef = useRef<THREE.Group>(null!);
   const scrollPosRef = useRef(0);
   const targetScrollY = useRef(0);
   const ITEM_SPACING = 4.4;
 
+  // Normalized Wheel, Key, and Touch Scroll Handler
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       let delta = e.deltaY;
       if (e.deltaMode === 1) delta *= 30;
       else if (e.deltaMode === 2) delta *= 250;
 
+      // Unbounded continuous scroll target for infinite loop
       const step = (delta > 0 ? 1 : -1) * Math.min(Math.abs(delta * 0.015), ITEM_SPACING * 0.85);
       targetScrollY.current += step;
     };
 
+    // Keyboard Arrow Keys support
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
         targetScrollY.current += ITEM_SPACING;
@@ -205,6 +201,7 @@ export function VaultPillar3DScene({ albums, onSelectAlbum }: VaultPillar3DProps
       }
     };
 
+    // Touch & Pointer Drag support
     let isDragging = false;
     let startY = 0;
 
@@ -242,12 +239,13 @@ export function VaultPillar3DScene({ albums, onSelectAlbum }: VaultPillar3DProps
   }, [albums.length]);
 
   useFrame((_, delta) => {
-    const safeDelta = Math.min(delta, 0.1);
-    scrollPosRef.current = THREE.MathUtils.lerp(scrollPosRef.current, targetScrollY.current, safeDelta * 10);
+    // Smooth lerp 3D vertical scroll target position
+    scrollPosRef.current = THREE.MathUtils.lerp(scrollPosRef.current, targetScrollY.current, delta * 10);
   });
 
   return (
     <group ref={containerGroupRef} position={[0, 0, 0]}>
+      {/* 3D Vertical Column with Continuous Infinite Loop & Smooth Fade Out */}
       {albums.map((album, index) => (
         <AlbumCard3D
           key={album.id}
@@ -259,32 +257,5 @@ export function VaultPillar3DScene({ albums, onSelectAlbum }: VaultPillar3DProps
         />
       ))}
     </group>
-  );
-}
-
-export default function VaultPillar3D({ albums, onSelectAlbum }: VaultPillar3DProps) {
-  // Clamped DPR (Max 1.5 on Mobile, Max 2.0 on Desktop) to prevent Retina 3x GPU lag
-  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
-  const dprRange: [number, number] = useMemo(() => [1, isMobile ? 1.5 : 2.0], [isMobile]);
-
-  return (
-    <div className="w-full h-full absolute inset-0 z-0">
-      <Canvas
-        camera={{ position: [0, 0, 8.5], fov: 45 }}
-        dpr={dprRange}
-        gl={{
-          antialias: !isMobile,
-          powerPreference: 'high-performance',
-          alpha: true,
-          stencil: false,
-          depth: true,
-        }}
-      >
-        <ambientLight intensity={0.7} />
-        <directionalLight position={[5, 10, 7]} intensity={1.2} />
-        <pointLight position={[-5, -5, 5]} intensity={0.5} color="#3b82f6" />
-        <VaultPillar3DScene albums={albums} onSelectAlbum={onSelectAlbum} />
-      </Canvas>
-    </div>
   );
 }

@@ -1,43 +1,6 @@
+import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/client';
 import { TrackItem } from '@/types/database';
-
-// Polyfill HMAC SHA-256 chạy chuẩn trên cả Browser lẫn Edge Runtime
-const crypto = {
-  createHmac(algorithm: string, secret: string | Uint8Array) {
-    let keyBuffer: Uint8Array;
-    if (typeof secret === 'string') {
-      keyBuffer = new TextEncoder().encode(secret);
-    } else {
-      keyBuffer = secret;
-    }
-
-    let currentData = new Uint8Array(0);
-
-    return {
-      update(data: string | Uint8Array) {
-        const appendData = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-        const merged = new Uint8Array(currentData.length + appendData.length);
-        merged.set(currentData);
-        merged.set(appendData, currentData.length);
-        currentData = merged;
-        return this;
-      },
-      digest(encoding?: string): any {
-        let hash = 0;
-        for (let i = 0; i < currentData.length; i++) {
-          hash = (hash << 5) - hash + currentData[i];
-          hash |= 0;
-        }
-        return Math.abs(hash).toString(16).padStart(64, '0');
-      }
-    };
-  },
-  createHash(algorithm: string) {
-    return this.createHmac(algorithm, '');
-  }
-};
-
-
 
 const R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '5da953b3d1c0e1c733cf2285f8e7ab39';
 const R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '57456fede976516aa1adecf2cd2b24e3';

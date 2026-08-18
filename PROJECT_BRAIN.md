@@ -20,33 +20,25 @@
 
 ---
 
-## 🏗 2. KIẾN TRÚC DỮ LIỆU THƯ MỤC (PARENT - CHILD ARCHITECTURE)
+## 🏗 2. KIẾN TRÚC 2 PHÂN VÙNG ĐỘC LẬP (DECOUPLED DUAL-ZONE ARCHITECTURE)
 
-Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV Bên Trong**:
+Hệ thống phân tách triệt để 2 không gian phát độc lập:
 
 ```
- ┌─────────────────────────────────────────────────────────┐
- │                   ALBUM (Bảng `albums`)                  │
- │  - id (UUID)                                            │
- │  - title: "HVL"                                         │
- │  - artist: "MCK"                                        │
- │  - original_year: 2024                                  │
- │  - cover_url: "https://..." (Ảnh màu thực tế)           │
- │  - is_published: true                                   │
- └────────────────────────────┬────────────────────────────┘
-                              │ 1 - N (ForeignKey: album_id)
-                              ▼
- ┌─────────────────────────────────────────────────────────┐
- │               TRACK ITEM (Bảng `tracks`)                │
- │  - id (UUID)                                            │
- │  - album_id (UUID FK -> albums.id)                      │
- │  - title: "02. IDK"                                     │
- │  - media_type: "audio" | "video"                        │
- │  - audio_url: "https://...mp3"                          │
- │  - video_url: "https://...mp4" (Tùy chọn cho MV)        │
- │  - lyrics: "[video_offset:01:45]\n[00:16.63]..."        │
- │  - duration: 200                                        │
- └─────────────────────────────────────────────────────────┘
+                               ┌─────────────────────────────┐
+                               │     HIDDEN MUSIC VAULT      │
+                               └──────────────┬──────────────┘
+                                              │
+                      ┌───────────────────────┴───────────────────────┐
+                      ▼                                               ▼
+          [AUDIO ZONE - ÂM NHẠC]                          [VIDEO ZONE - MV THEATER]
+    ┌───────────────────────────────────┐           ┌───────────────────────────────────┐
+    │ - GlobalPlayerBar toàn màn hình   │           │ - Card Theater tỷ lệ 2/3 chuẩn HD │
+    │ - Thanh Seekbar kéo dài 100%      │   GATE    │ - Trình phát Video độc lập        │
+    │ - Beat Pulse & Gothic Lyrics      │ ◄───────► │ - Compact Playlist & Comments     │
+    │ - Không tải / không chạy video    │  PAYWALL  │ - Dừng & hủy hoàn toàn Audio/Bar  │
+    │ - Nút Video + Gatekeeper Paywall  │           │ - Nút Audio quay lại Audio Zone   │
+    └───────────────────────────────────┘           └───────────────────────────────────┘
 ```
 
 ---
@@ -56,7 +48,7 @@ Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV B
 * **Project Ref**: `muemwfqynfljpmvxmpep`
 * **URL REST API**: `https://muemwfqynfljpmvxmpep.supabase.co`
 * **Database Tables**:
-  * `public.profiles`: Quản lý người dùng và phân quyền `role` (`user` | `admin`).
+  * `public.profiles`: Quản lý người dùng và phân quyền `role` (`user` | `admin`), gói dịch vụ `plan` và cờ `has_video_subscription`.
   * `public.albums`: Thư mục đĩa Album (id, title, artist, original_year, cover_url, is_published).
   * `public.tracks`: Từng bài hát / MV bên trong Album (id, album_id, title, media_type, audio_url, video_url, lyrics, duration).
 * **Storage Buckets**:
@@ -66,21 +58,20 @@ Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV B
 
 ---
 
-## 🎵 4. HỆ THỐNG PHÁT NHẠC & MV ĐA ĐỊNH DẠNG (GLOBAL PLAYER ENGINE)
+## 🎵 4. HỆ THỐNG PHÁT NHẠC & MV ĐA ĐỊNH DẠNG (GLOBAL PLAYER & THEATER ENGINE)
 
-1. **Native HTML5 Video & Audio Streaming**:
-   * Phát trực tiếp file `.mp4`, `.webm`, `.mp3`, `.wav`, `.flac` tải lên từ Supabase Storage.
-   * Cơ chế **Seamless Time Handoff**: Khi chuyển đổi qua lại giữa MV Stage và Audio Mode, thời gian phát tiếp tục chính xác từng giây mà không bao giờ bị tải lại từ đầu (`0:00`).
-2. **Đồng Bộ Lời Bài Hát & Video Intro Offset**:
-   * Hỗ trợ tag `[video_offset:mm:ss]` trong định dạng `.LRC` để tự động lùi thời gian bắt đầu chạy phụ đề/lời bài hát cho các video MV có đoạn hội thoại / intro mở đầu.
-   * Giao diện Lời bài hát Gothic không viền kẻ, tự cuộn mượt mà theo beat nhạc và tự căn giữa màn hình.
-3. **Phản Hồi Bắt Beat Theo Thời Gian Thực (Kick & Snare Detection)**:
-   * Thuật toán phân tích Web Audio API (58Hz Sub-Punch Kick & 280Hz Snare Crack) với hiệu ứng chớp lửa Cam/Đỏ khi bắt Kick và Neon Tím/Xanh khi bắt Snare.
-4. **Giao Diện Responsive Riêng Cho Mobile (`< md`)**:
-   * Hàng 1: Thumbnail + Tên bài hát + Nút MV + Bộ nút điều khiển cảm ứng (Lyrics, Prev, Play 32x32, Next, Queue, Volume).
-   * Hàng 2: Dải Seekbar kéo dài 100% toàn màn hình kèm 2 mốc thời gian rõ nét.
-5. **Bảo Mật Hiển Thị Player Bar**:
-   * Player Bar tự động ẩn hoàn toàn khi người dùng chưa đăng nhập hoặc khi bị văng ra màn hình đăng nhập (`VaultGate`).
+1. **Audio Zone (GlobalPlayerBar)**:
+   * Thanh Seekbar kéo dài toàn chiều rộng giao diện cho trải nghiệm nghe nhạc thuần túy.
+   * Đồng bộ lời bài hát Gothic LRC mượt mà không viền.
+   * Phản hồi bắt beat Web Audio API (58Hz Sub-Punch Kick & 280Hz Snare Crack).
+   * Tự động ẩn Playbar hoàn toàn khi chuyển qua Video Zone.
+2. **Video Zone (Theater 2/3 Ratio)**:
+   * Khung phát Video HTML5 chiếm tỷ lệ 2/3 với đầy đủ controls (Play/Pause, Seekbar, Volume, Mute, Fullscreen, Next/Prev).
+   * Cột bên phải (1/3) chứa Compact Playlist và Tab Thảo luận / Bình luận.
+   * Nút bấm **AUDIO ZONE** chuyển đổi quay lại Audio Zone an toàn, dừng video và khôi phục Playbar.
+3. **Video Access Gatekeeper**:
+   * Kiểm tra quyền `hasVideoSubscription`.
+   * Tự động bật Modal `VideoPaywallModal` khi người dùng chưa nâng cấp gói dịch vụ.
 
 ---
 
@@ -94,21 +85,19 @@ Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV B
   * `Q`: Mở / Đóng Danh sách phát (Queue).
   * `S`: Bật / Tắt chế độ Trộn bài (Shuffle).
   * `R`: Chuyển chế độ Lặp bài (Repeat Off / One / All).
-  * `Nhấp đúp vào Video`: Phóng to / Thu nhỏ MV toàn màn hình.
-  * `F5`: Tải lại trang và **giữ nguyên toàn bộ phiên đăng nhập**.
+  * `F5`: Tải lại trang và giữ nguyên toàn bộ phiên đăng nhập.
   * `Ctrl + Shift + F5`: Hard Reset, xóa sạch session và đăng xuất an toàn.
 
 ---
 
-## 🔐 6. TRANG QUẢN TRỊ ADMIN (`/admin`) & QUY TRÌNH ĐĂNG BÀI
+## 🔐 6. TRANG QUẢN TRỊ ADMIN (`/admin`)
 
 * **Đường dẫn bí mật**: `/admin`
 * **Tài khoản Admin mặc định**: `Lucii@1108` (hoặc đăng nhập bằng Google Mail admin).
-* **Tách biệt 2 ô URL**:
+* **Tách biệt 2 trường dữ liệu độc lập**:
   * **Ô 1: Tệp Âm thanh / URL Audio (.mp3 / .flac)**.
-  * **Ô 2: Tệp Video / URL MV (.mp4 từ Supabase)**.
-  * **Ô 3: Mốc bắt đầu nhạc trong MV (Offset)** (vd: `01:45`).
-* Hệ thống tự động bảo toàn cả `audio_url` và `video_url` khi sửa bài hát, ngăn ngừa triệt để lỗi ghi đè dữ liệu.
+  * **Ô 2: Tệp Video / URL MV (.mp4 từ Cloudflare R2 / Supabase)**.
+* Đã loại bỏ hoàn toàn các trường và logic tính toán Video Offset không cần thiết.
 
 ---
 
@@ -117,33 +106,32 @@ Dự án áp dụng mô hình **Album Thư Mục Chứa -> Các Bài Hát / MV B
 ```
 c:\Users\Admin\Documents\hidden-music\
 ├── PROJECT_BRAIN.md                  <-- File bộ não kiến trúc này
+├── CURRENT_CHECKPOINT.md             <-- Checkpoint tiến độ
 ├── AGENTS.md                         <-- Hướng dẫn vận hành AI
 ├── .agents/skills/                   <-- Vault Skills (vault-manager, vault-deploy)
-├── font_vh/                          <-- Bộ font Việt Hóa (DFVN Grafika, Gotham, UVN)
-├── public/fonts/                     <-- Web fonts (Gotham-Medium, Gotham-Ultra, DFVN-Grafika)
-├── supabase/
-│   └── schema.sql                    <-- Schema CSDL Postgres Supabase
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx                <-- Root layout & Grain & ShortcutsDrawer
 │   │   ├── globals.css               <-- CSS TV Grain Noise, CRT Scanlines, @font-face
 │   │   ├── page.tsx                  <-- Trang chủ Cột 3D Vault
-│   │   ├── admin/page.tsx            <-- Trang Admin Quản lý Album / Track / Video Offset
+│   │   ├── admin/page.tsx            <-- Trang Admin Quản lý Album / Track độc lập
 │   │   └── album/[id]/page.tsx       <-- Trang Chi Tiết Thư Mục Album
 │   ├── components/
 │   │   ├── 3d/
-│   │   │   ├── VaultScene.tsx        <-- Canvas Three.js & Lighting
+│   │   │   ├── VaultScene.tsx        <-- Cột 3D Monolith & Giao diện Video Zone 2/3 Theater
 │   │   │   └── VaultPillar3D.tsx     <-- Cột 3D Album Card
 │   │   └── ui/
-│   │       ├── GlobalPlayerBar.tsx   <-- Trình phát nhạc / MV / Lời bài hát Gothic
+│   │       ├── GlobalPlayerBar.tsx   <-- Trình phát nhạc thuần Audio với timeline kéo dài
+│   │       ├── VideoPaywallModal.tsx <-- Cổng nâng cấp gói Video Pass độc quyền
+│   │       ├── AlbumComments.tsx     <-- Hệ thống bình luận & thảo luận
 │   │       ├── ShortcutsDrawer.tsx   <-- Bong bóng phím tắt trượt thông minh
 │   │       ├── CinematicVisualizer.tsx <-- Hiệu ứng beat visualizer
 │   │       └── VaultGate.tsx         <-- Cổng đăng nhập bảo mật
 │   ├── context/
-│   │   └── PlayerContext.tsx         <-- State quản lý Player & đồng bộ Auth
+│   │   └── PlayerContext.tsx         <-- State phân tách Audio Zone & Video Zone
 │   ├── lib/
-│   │   ├── authSession.ts            <-- Quản lý Session F5 & Hard Reset
-│   │   ├── lrcParser.ts              <-- Trình đọc lời .LRC và trích xuất Video Offset
+│   │   ├── authSession.ts            <-- Quản lý Session & Quyền Gói Video Subscription
+│   │   ├── lrcParser.ts              <-- Trình đọc lời .LRC
 │   │   └── supabase/                 <-- Client kết nối Supabase
 │   └── types/
 │       └── database.ts               <-- TypeScript Interfaces (Album & TrackItem)

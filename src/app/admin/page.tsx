@@ -1,7 +1,5 @@
 'use client';
 
-export const runtime = 'edge';
-
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -48,7 +46,6 @@ import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
 import { extractVideoOffset, formatOffsetString } from '@/lib/lrcParser';
 import { getStoredAdminSession, setStoredAdminSession, getStoredUserSession } from '@/lib/authSession';
-import { calculateAudioVideoSync, AudioSyncResult } from '@/lib/audioSyncService';
 
 export interface BatchTrackItem {
   id: string;
@@ -135,10 +132,6 @@ export default function AdminPage() {
   const [audioUrlInput, setAudioUrlInput] = useState('');
   const [videoUrlInput, setVideoUrlInput] = useState('');
   const [lyrics, setLyrics] = useState('');
-  const [videoOffsetInput, setVideoOffsetInput] = useState('');
-  const [analyzingSync, setAnalyzingSync] = useState(false);
-  const [syncStatusText, setSyncStatusText] = useState<string | null>(null);
-  const [trackSyncMetadata, setTrackSyncMetadata] = useState<any>(null);
 
   // UUID Validator Regex
   const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -558,20 +551,12 @@ export default function AdminPage() {
     setVideoUrlInput(track.video_url || '');
     setMediaUrlInput(track.audio_url || track.video_url || '');
     setLyrics(track.lyrics || '');
-    const offsetSecs =
-      track.video_offset !== undefined && track.video_offset !== null
-        ? Number(track.video_offset)
-        : extractVideoOffset(track.lyrics || '');
-    setVideoOffsetInput(offsetSecs !== 0 ? (offsetSecs > 0 ? `+${offsetSecs}` : `${offsetSecs}`) : '');
-    setTrackSyncMetadata(track.sync_metadata || null);
-    setSyncStatusText(null);
   };
 
   const cancelEditTrack = () => {
     setEditingTrackId(null);
     setTrackTitle('');
     setLyrics('');
-    setVideoOffsetInput('');
     setAudioUrlInput('');
     setVideoUrlInput('');
     setMediaFile(null);
@@ -579,62 +564,6 @@ export default function AdminPage() {
     setAutoMetadata(null);
     setTrackDuration(200);
     setBatchTracks([]);
-    setTrackSyncMetadata(null);
-    setSyncStatusText(null);
-  };
-
-  // Automatic Audio-Video Waveform Fingerprinting & Cross-Correlation Synchronizer
-  const handleAutoAnalyzeSync = async () => {
-    const audioSource =
-      mediaFile && (mediaType === 'audio' || mediaFile.type.startsWith('audio/'))
-        ? mediaFile
-        : audioUrlInput.trim() || (mediaType === 'audio' ? mediaUrlInput.trim() : '');
-    const videoSource =
-      mediaFile && (mediaType === 'video' || mediaFile.type.startsWith('video/'))
-        ? mediaFile
-        : videoUrlInput.trim() || (mediaType === 'video' ? mediaUrlInput.trim() : '');
-
-    if (!audioSource || !videoSource) {
-      setStatusMsg({
-        type: 'error',
-        text: 'Vui lòng cung cấp cả Tệp/URL Audio và Tệp/URL Video trước khi chạy phân tích đồng bộ!',
-      });
-      setSyncStatusText('⚠️ Thiếu nguồn Audio hoặc Video.');
-      return;
-    }
-
-    setAnalyzingSync(true);
-    setSyncStatusText('Đang khởi tạo thuật toán Waveform Fingerprinting...');
-
-    try {
-      const result: AudioSyncResult = await calculateAudioVideoSync(audioSource, videoSource, {
-        onProgress: (percent, step) => {
-          setSyncStatusText(`[${percent}%] ${step}`);
-        },
-      });
-
-      const formattedOffset = result.offset > 0 ? `+${result.offset}` : `${result.offset}`;
-      setVideoOffsetInput(formattedOffset);
-      setTrackSyncMetadata(result.metadata);
-
-      setStatusMsg({
-        type: 'success',
-        text: `🎉 ${result.message}`,
-      });
-      setSyncStatusText(
-        `✅ Đã tìm thấy offset: ${formattedOffset}s (Độ tin cậy: ${(result.confidence * 100).toFixed(0)}%)`
-      );
-    } catch (err: any) {
-      console.error('Auto sync error:', err);
-      const errMsg = err.message || 'Không thể giải mã luồng âm thanh từ video.';
-      setStatusMsg({
-        type: 'error',
-        text: `Lỗi phân tích đồng bộ: ${errMsg}`,
-      });
-      setSyncStatusText(`❌ Lỗi phân tích: ${errMsg}`);
-    } finally {
-      setAnalyzingSync(false);
-    }
   };
 
   const handleSelectMediaFile = async (file: File | null) => {
@@ -957,25 +886,7 @@ export default function AdminPage() {
         else finalAudioUrl = mediaUrlInput.trim();
       }
 
-      let finalLyrics = lyrics.trim();
-      let numericOffset = 0;
-      if (videoOffsetInput.trim()) {
-        const rawOffset = videoOffsetInput.trim().replace('+', '');
-        if (rawOffset.includes(':')) {
-          const parts = rawOffset.split(':');
-          if (parts.length === 2) {
-            const mins = parseFloat(parts[0]) || 0;
-            const secs = parseFloat(parts[1]) || 0;
-            numericOffset = mins * 60 + secs;
-          } else {
-            numericOffset = parseFloat(rawOffset) || 0;
-          }
-        } else {
-          numericOffset = parseFloat(rawOffset) || 0;
-        }
-        finalLyrics = finalLyrics.replace(/^\[(video_offset|music_start):.*?\]\r?\n?/gim, '').trim();
-        finalLyrics = `[video_offset:${numericOffset}]\n` + finalLyrics;
-      }
+      const finalLyrics = lyrics.trim();
 
       const trackPayload: Record<string, any> = {
         album_id: openedAlbumId,
@@ -983,8 +894,6 @@ export default function AdminPage() {
         media_type: finalVideoUrl ? 'video' : mediaType,
         audio_url: finalAudioUrl,
         video_url: finalVideoUrl,
-        video_offset: numericOffset,
-        sync_metadata: trackSyncMetadata || undefined,
         lyrics: finalLyrics || undefined,
         duration: trackDuration > 0 ? trackDuration : 200,
       };
@@ -995,15 +904,13 @@ export default function AdminPage() {
       if (!editingTrackId && matchingTrack && (mediaType === 'video' || finalVideoUrl)) {
         const updatePayload: Record<string, any> = {
           video_url: finalVideoUrl || mediaUrlInput || '',
-          video_offset: numericOffset,
         };
-        if (trackSyncMetadata) updatePayload.sync_metadata = trackSyncMetadata;
         if (lyrics) updatePayload.lyrics = finalLyrics;
 
         await safeUpdateTrack(supabase, matchingTrack.id, updatePayload);
         setStatusMsg({
           type: 'success',
-          text: `⚡ Đã tự động nhận diện bài hát trùng tên "${matchingTrack.title}" -> Tích hợp MV Video & Timeline Offset vào bài hát thành công!`,
+          text: `⚡ Đã tự động nhận diện bài hát trùng tên "${matchingTrack.title}" -> Tích hợp MV Video vào bài hát thành công!`,
         });
       } else if (editingTrackId && isUUID(editingTrackId)) {
         await safeUpdateTrack(supabase, editingTrackId, trackPayload);
@@ -2197,11 +2104,6 @@ export default function AdminPage() {
                             {t.video_url && (
                               <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
                                 <Film className="w-2.5 h-2.5" /> VIDEO MV
-                              </span>
-                            )}
-                            {t.video_offset !== undefined && t.video_offset !== null && t.video_offset !== 0 && (
-                              <span className="text-[9px] uppercase px-2 py-0.2 rounded font-bold bg-yellow-950/80 text-yellow-300 border border-yellow-500/40 flex items-center gap-1">
-                                <Clock className="w-2.5 h-2.5" /> {t.video_offset > 0 ? `+${t.video_offset}s` : `${t.video_offset}s`}
                               </span>
                             )}
                             {t.lyrics ? (

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from 'react';
-import { Album, TrackItem } from '@/types/database';
+import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession } from '@/lib/authSession';
 
@@ -18,6 +18,7 @@ interface PlayerContextType {
   shuffleMode: boolean;
   repeatMode: RepeatMode;
   isCinematicFxEnabled: boolean;
+  activeZone: PlayerZone;
   audioRef: React.RefObject<HTMLAudioElement>;
   analyserRef: React.RefObject<AnalyserNode | null>;
   kickAnalyserRef: React.RefObject<AnalyserNode | null>;
@@ -37,6 +38,9 @@ interface PlayerContextType {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   toggleCinematicFx: () => void;
+  setActiveZone: (zone: PlayerZone) => void;
+  switchToAudioZone: () => void;
+  switchToVideoZone: (track?: TrackItem) => void;
 }
 
 const PLAYER_STATE_KEY = 'hidden_vault_player_state';
@@ -54,6 +58,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [shuffleMode, setShuffleMode] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
   const [isCinematicFxEnabled, setIsCinematicFxEnabled] = useState(true);
+  const [activeZone, setActiveZone] = useState<PlayerZone>('audio');
 
   // Restore player state safely on client mount
   useEffect(() => {
@@ -128,16 +133,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const kickTimestampsRef = useRef<number[]>([]);
   const snareTimestampsRef = useRef<number[]>([]);
   const isPCMReadyRef = useRef<boolean>(false);
+  const currentProcessingUrlRef = useRef<string>('');
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const lastUiTimeUpdateRef = useRef<number>(0);
-  const trackUrl = useMemo(() => {
-    if (!currentTrack) return '';
-    if (currentTrack.source === 'youtube' || currentTrack.id.startsWith('yt_') || currentTrack.youtube_id) {
-      const vid = currentTrack.youtube_id || currentTrack.id.replace(/^yt_/, '');
-      return `/api/yt/stream/${vid}`;
-    }
-    return currentTrack.audio_url || '';
-  }, [currentTrack]);
+  const rawTrackUrl = currentTrack?.audio_url || '';
+  const trackUrl = rawTrackUrl;
 
   // Reset beat map states on track change
   useEffect(() => {
@@ -146,7 +145,177 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     isPCMReadyRef.current = false;
   }, [currentTrack?.id]);
 
-  // Instant Real-time streaming Web Audio Graph (Zero memory footprint, zero extra network request)
+  // Extract Separate Kick & Snare Timestamps from raw PCM AudioBuffer
+  const processPCMBeatMap = async (url: string) => {
+    if (!url || typeof window === 'undefined') return;
+    currentProcessingUrlRef.current = url;
+    try {
+      if (!audioCtxRef.current) {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        audioCtxRef.current = new AudioCtx();
+      }
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      if (currentProcessingUrlRef.current !== url) return;
+
+      const audioBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
+      if (currentProcessingUrlRef.current !== url) return;
+
+      const sampleRate = audioBuffer.sampleRate;
+      const channelData = audioBuffer.getChannelData(0);
+      const len = channelData.length;
+
+      // 1. Digital 55Hz Biquad Bandpass Filter for Kick Sub-Punch
+      const f0K = 55, QK = 3.5;
+      const w0K = (2 * Math.PI * f0K) / sampleRate;
+      const alphaK = Math.sin(w0K) / (2 * QK);
+      const B0K = alphaK / (1 + alphaK), B2K = -alphaK / (1 + alphaK);
+      const A1K = (-2 * Math.cos(w0K)) / (1 + alphaK), A2K = (1 - alphaK) / (1 + alphaK);
+
+      const filteredKick = new Float32Array(len);
+      let x1K = 0, x2K = 0, y1K = 0, y2K = 0;
+      for (let i = 0; i < len; i++) {
+        const x0 = channelData[i];
+        const y0 = B0K * x0 + B2K * x2K - A1K * y1K - A2K * y2K;
+        x2K = x1K; x1K = x0; y2K = y1K; y1K = y0;
+        filteredKick[i] = y0;
+      }
+
+      // 2. Digital 3200Hz Biquad Bandpass Filter for Snare / Clap High Crack
+      const f0S = 3200, QS = 1.8;
+      const w0S = (2 * Math.PI * f0S) / sampleRate;
+      const alphaS = Math.sin(w0S) / (2 * QS);
+      const B0S = alphaS / (1 + alphaS), B2S = -alphaS / (1 + alphaS);
+      const A1S = (-2 * Math.cos(w0S)) / (1 + alphaS), A2S = (1 - alphaS) / (1 + alphaS);
+
+      const filteredSnare = new Float32Array(len);
+      let x1S = 0, x2S = 0, y1S = 0, y2S = 0;
+      for (let i = 0; i < len; i++) {
+        const x0 = channelData[i];
+        const y0 = B0S * x0 + B2S * x2S - A1S * y1S - A2S * y2S;
+        x2S = x1S; x1S = x0; y2S = y1S; y1S = y0;
+        filteredSnare[i] = y0;
+      }
+
+      // 3. Digital 600Hz Mid-Range Guard Filter
+      const f0M = 600, QM = 1.0;
+      const w0M = (2 * Math.PI * f0M) / sampleRate;
+      const alphaM = Math.sin(w0M) / (2 * QM);
+      const B0M = alphaM / (1 + alphaM), B2M = -alphaM / (1 + alphaM);
+      const A1M = (-2 * Math.cos(w0M)) / (1 + alphaM), A2M = (1 - alphaM) / (1 + alphaM);
+
+      const filteredMid = new Float32Array(len);
+      let x1M = 0, x2M = 0, y1M = 0, y2M = 0;
+      for (let i = 0; i < len; i++) {
+        const x0 = channelData[i];
+        const y0 = B0M * x0 + B2M * x2M - A1M * y1M - A2M * y2M;
+        x2M = x1M; x1M = x0; y2M = y1M; y1M = y0;
+        filteredMid[i] = y0;
+      }
+
+      const frameSize = Math.floor(sampleRate * 0.02); // 20ms frame
+      const totalFrames = Math.floor(len / frameSize);
+
+      let maxEnergyK = 0;
+      let maxEnergyS = 0;
+      let maxEnergyM = 0;
+      for (let f = 0; f < totalFrames; f++) {
+        const start = f * frameSize;
+        let sumK = 0, sumS = 0, sumM = 0;
+        for (let i = 0; i < frameSize; i++) {
+          const k = filteredKick[start + i];
+          const s = filteredSnare[start + i];
+          const m = filteredMid[start + i];
+          sumK += k * k;
+          sumS += s * s;
+          sumM += m * m;
+        }
+        const eK = Math.sqrt(sumK / frameSize);
+        const eS = Math.sqrt(sumS / frameSize);
+        const eM = Math.sqrt(sumM / frameSize);
+        if (eK > maxEnergyK) maxEnergyK = eK;
+        if (eS > maxEnergyS) maxEnergyS = eS;
+        if (eM > maxEnergyM) maxEnergyM = eM;
+      }
+
+      const hasRealKickDrums = maxEnergyK >= 0.080 && (maxEnergyM === 0 || maxEnergyK / maxEnergyM >= 0.30);
+      const hasRealSnares = maxEnergyS >= 0.080 && (maxEnergyM === 0 || maxEnergyS / maxEnergyM >= 0.28);
+
+      const kickStamps: number[] = [];
+      const snareStamps: number[] = [];
+
+      if (hasRealKickDrums || hasRealSnares) {
+        let prevKickE = 0, smoothKickTrans = 0, lastKickSec = -1;
+        let prevSnareE = 0, smoothSnareTrans = 0, lastSnareSec = -1;
+
+        for (let f = 0; f < totalFrames; f++) {
+          const start = f * frameSize;
+          let sumK = 0, sumS = 0, sumM = 0;
+          for (let i = 0; i < frameSize; i++) {
+            const k = filteredKick[start + i];
+            const s = filteredSnare[start + i];
+            const m = filteredMid[start + i];
+            sumK += k * k;
+            sumS += s * s;
+            sumM += m * m;
+          }
+          const eK = Math.sqrt(sumK / frameSize);
+          const eS = Math.sqrt(sumS / frameSize);
+          const eM = Math.sqrt(sumM / frameSize);
+
+          const deltaK = Math.max(0, eK - prevKickE);
+          const deltaS = Math.max(0, eS - prevSnareE);
+          prevKickE = eK;
+          prevSnareE = eS;
+
+          smoothKickTrans = smoothKickTrans * 0.85 + deltaK * 0.15;
+          smoothSnareTrans = smoothSnareTrans * 0.85 + deltaS * 0.15;
+
+          const threshK = Math.max(0.026, smoothKickTrans * 1.8);
+          const threshS = Math.max(0.032, smoothSnareTrans * 1.9);
+          const curSec = (f * frameSize) / sampleRate;
+
+          if (
+            hasRealKickDrums &&
+            deltaK > threshK &&
+            deltaK > 0.026 &&
+            eK > maxEnergyK * 0.50 &&
+            eK > 0.065 &&
+            eK >= eM * 0.48 &&
+            (curSec - lastKickSec > 0.16)
+          ) {
+            lastKickSec = curSec;
+            kickStamps.push(Number(curSec.toFixed(3)));
+          }
+
+          if (
+            hasRealSnares &&
+            deltaS > threshS &&
+            deltaS > 0.032 &&
+            eS > maxEnergyS * 0.50 &&
+            eS > 0.068 &&
+            eS >= eM * 0.42 &&
+            (curSec - lastSnareSec > 0.16)
+          ) {
+            lastSnareSec = curSec;
+            snareStamps.push(Number(curSec.toFixed(3)));
+          }
+        }
+      }
+
+      if (currentProcessingUrlRef.current === url) {
+        kickTimestampsRef.current = kickStamps;
+        snareTimestampsRef.current = snareStamps;
+        isPCMReadyRef.current = true;
+      }
+    } catch (e) {
+      console.warn('PCM Beat map generation note:', e);
+      if (currentProcessingUrlRef.current === url) {
+        isPCMReadyRef.current = true;
+      }
+    }
+  };
+
   const initAudioAnalyser = () => {
     if (!audioRef.current || typeof window === 'undefined') return;
     try {
@@ -161,12 +330,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const audioCtx = audioCtxRef.current;
         const source = audioCtx.createMediaElementSource(audioRef.current);
 
-        // 1. Full Spectrum Master Analyser for Visualizer
         const masterAnalyser = audioCtx.createAnalyser();
         masterAnalyser.fftSize = 256;
         masterAnalyser.smoothingTimeConstant = 0.15;
 
-        // 2. Real-time Kick Sub-Punch Analyser
         const kickFilter = audioCtx.createBiquadFilter();
         kickFilter.type = 'bandpass';
         kickFilter.frequency.value = 55;
@@ -176,7 +343,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         kickAnalyser.fftSize = 256;
         kickAnalyser.smoothingTimeConstant = 0.02;
 
-        // 3. Real-time Snare / Clap Analyser
         const snareFilter = audioCtx.createBiquadFilter();
         snareFilter.type = 'bandpass';
         snareFilter.frequency.value = 3200;
@@ -186,7 +352,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         snareAnalyser.fftSize = 256;
         snareAnalyser.smoothingTimeConstant = 0.04;
 
-        // Connect Audio Graph
         source.connect(masterAnalyser);
         source.connect(kickFilter);
         kickFilter.connect(kickAnalyser);
@@ -200,10 +365,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         kickAnalyserRef.current = kickAnalyser;
         snareAnalyserRef.current = snareAnalyser;
         sourceRef.current = source;
-        isPCMReadyRef.current = true;
       }
     } catch (err) {
-      console.warn('AudioAnalyser initialization note:', err);
+      console.warn('AudioAnalyser initialization warning:', err);
     }
   };
 
@@ -211,7 +375,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsCinematicFxEnabled((prev) => !prev);
   };
 
-  // Global User Interaction to unlock AudioContext for real-time Beat Analysis
+  // Switch to Audio Zone cleanly
+  const switchToAudioZone = () => {
+    setActiveZone('audio');
+  };
+
+  // Switch to Video Zone cleanly (stops audio completely)
+  const switchToVideoZone = (track?: TrackItem) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    setIsPlaying(false);
+    if (track) {
+      setCurrentTrack(track);
+    }
+    setActiveZone('video');
+  };
+
+  // Global User Interaction to unlock AudioContext
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -232,7 +413,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Hard Refresh (Ctrl + F5, Shift + F5, Ctrl + Shift + R, Cmd + Shift + R) Handler
+  // Hard Refresh Handler
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -264,63 +445,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleHardRefresh, true);
   }, []);
 
-  // Load saved state from localStorage on initial mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('hidden_music_player_state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.currentTrack) setCurrentTrack(parsed.currentTrack);
-        if (parsed.currentAlbum) setCurrentAlbum(parsed.currentAlbum);
-        if (parsed.playlist && parsed.playlist.length > 0) setPlaylist(parsed.playlist);
-        if (typeof parsed.currentTime === 'number') setCurrentTime(parsed.currentTime);
-        if (typeof parsed.volume === 'number') setVolumeState(parsed.volume);
-        if (typeof parsed.shuffleMode === 'boolean') setShuffleMode(parsed.shuffleMode);
-        if (parsed.repeatMode) setRepeatMode(parsed.repeatMode);
-      }
-    } catch (err) {
-      console.warn('Failed to load player state from localStorage:', err);
-    }
-  }, []);
-
-  const currentTimeRef = useRef(currentTime);
-  useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
-
-  // Save player state to localStorage on changes
-  useEffect(() => {
-    if (!currentTrack) return;
-    try {
-      const stateToSave = {
-        currentTrack,
-        currentAlbum,
-        playlist,
-        currentTime: currentTimeRef.current,
-        volume,
-        shuffleMode,
-        repeatMode,
-      };
-      localStorage.setItem('hidden_music_player_state', JSON.stringify(stateToSave));
-    } catch (err) {
-      console.warn('Failed to save player state to localStorage:', err);
-    }
-  }, [currentTrack, currentAlbum, playlist, volume, shuffleMode, repeatMode]);
-
   // Sync Volume
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
 
-  // Sync Play / Pause state with audio element
+  // Sync Play / Pause state with audio element (Audio Zone ONLY)
   useEffect(() => {
+    if (activeZone === 'video') {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      return;
+    }
+
     if (!audioRef.current || !trackUrl) return;
     if (audioRef.current.muted) {
       audioRef.current.pause();
       return;
     }
+
     if (isPlaying) {
       initAudioAnalyser();
+      processPCMBeatMap(trackUrl);
       audioRef.current.play().catch((err) => {
         console.warn('Audio play blocked by browser policy:', err);
         setIsPlaying(false);
@@ -329,69 +476,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current.pause();
     }
 
-    // MediaSession lockscreen and system notification integration
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && currentTrack) {
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: currentTrack.title,
-          artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
-          album: currentAlbum?.title || 'Hidden Music Vault',
-          artwork: currentAlbum?.cover_url ? [
-            { src: currentAlbum.cover_url, sizes: '96x96', type: 'image/jpeg' },
-            { src: currentAlbum.cover_url, sizes: '128x128', type: 'image/jpeg' },
-            { src: currentAlbum.cover_url, sizes: '256x256', type: 'image/jpeg' },
-            { src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' },
-          ] : [],
-        });
+    // MediaSession lockscreen integration
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
+        album: currentAlbum?.title || 'Hidden Music Vault',
+        artwork: currentAlbum?.cover_url ? [
+          { src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' },
+        ] : [],
+      });
 
-        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-
-        navigator.mediaSession.setActionHandler('play', () => {
-          setIsPlaying(true);
-        });
-        navigator.mediaSession.setActionHandler('pause', () => {
-          setIsPlaying(false);
-        });
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-          prevTrack();
-        });
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-          nextTrack();
-        });
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-          if (details.seekTime !== undefined && details.seekTime !== null) {
-            seekTo(details.seekTime);
-          }
-        });
-        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-          const skipTime = details.seekOffset || 10;
-          seekTo(Math.max(0, currentTime - skipTime));
-        });
-        navigator.mediaSession.setActionHandler('seekforward', (details) => {
-          const skipTime = details.seekOffset || 10;
-          seekTo(Math.min(duration || 1000, currentTime + skipTime));
-        });
-        navigator.mediaSession.setActionHandler('stop', () => {
-          setIsPlaying(false);
-        });
-
-        if ('setPositionState' in navigator.mediaSession && duration > 0) {
-          navigator.mediaSession.setPositionState({
-            duration: Math.max(duration, 1),
-            playbackRate: 1.0,
-            position: Math.min(Math.max(currentTime, 0), duration),
-          });
-        }
-      } catch (e) {
-        console.warn('MediaSession handler setup error:', e);
-      }
+      navigator.mediaSession.setActionHandler('play', () => {
+        setIsPlaying(true);
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        setIsPlaying(false);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        prevTrack();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        nextTrack();
+      });
     }
-  }, [isPlaying, trackUrl, currentTrack, currentAlbum]);
+  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone]);
 
   const playTrack = (track: TrackItem, album?: Album | null, newPlaylist?: TrackItem[]) => {
     setCurrentTrack(track);
     if (album) setCurrentAlbum(album);
     if (newPlaylist && newPlaylist.length > 0) setPlaylist(newPlaylist);
+    setActiveZone('audio');
     setIsPlaying(true);
     setCurrentTime(0);
   };
@@ -402,6 +517,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      setActiveZone('audio');
       audioRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
@@ -467,6 +583,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         shuffleMode,
         repeatMode,
         isCinematicFxEnabled,
+        activeZone,
         audioRef,
         analyserRef,
         kickAnalyserRef,
@@ -486,30 +603,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         toggleShuffle,
         toggleRepeat,
         toggleCinematicFx,
+        setActiveZone,
+        switchToAudioZone,
+        switchToVideoZone,
       }}
     >
       {children}
 
-      {/* Global Clean Background HTML5 Audio Element (Zero Buffering Stream) */}
+      {/* Global Pure Background HTML5 Audio Element */}
       {currentTrack && trackUrl && (
         <audio
           ref={audioRef}
           src={trackUrl}
           crossOrigin="anonymous"
-          preload="auto"
-          autoPlay={isPlaying}
+          autoPlay={isPlaying && activeZone === 'audio'}
           onPlay={initAudioAnalyser}
-          onTimeUpdate={(e) => {
-            const target = e.currentTarget;
-            currentTimeRef.current = target.currentTime;
-            const now = performance.now();
-            if (now - lastUiTimeUpdateRef.current > 250) {
-              lastUiTimeUpdateRef.current = now;
-              setCurrentTime(target.currentTime);
+          onTimeUpdate={() => {
+            if (audioRef.current && activeZone === 'audio') {
+              setCurrentTime(audioRef.current.currentTime);
             }
           }}
-          onSeeked={(e) => setCurrentTime(e.currentTarget.currentTime)}
-          onPause={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={() => {
             if (audioRef.current) {
               setDuration(audioRef.current.duration);
@@ -520,7 +633,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           }}
           onEnded={nextTrack}
           onError={(e) => {
-            console.warn('Audio element playback note:', currentTrack?.title, e);
+            console.warn('Audio playback note:', currentTrack?.title, e);
           }}
           className="hidden"
         />
