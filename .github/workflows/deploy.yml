@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: 'npm'
 
       - name: Cache Next.js & Cloudflare build
@@ -34,10 +34,10 @@ jobs:
             ${{ runner.os }}-nextjs-
 
       - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+        run: npm install --prefer-offline --no-audit --legacy-peer-deps
 
       - name: Build Next.js with Cloudflare Adapter
-        run: npx @cloudflare/next-on-pages --skip-type-checking
+        run: npx --legacy-peer-deps @cloudflare/next-on-pages --skip-type-checking
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1
