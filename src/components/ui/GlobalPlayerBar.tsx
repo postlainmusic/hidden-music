@@ -104,16 +104,20 @@ export default function GlobalPlayerBar() {
   }, []);
 
   // =========================================================================
-  // NATIVE ANDROID NOTIFICATION & MEDIASESSION BRIDGE
+  // NATIVE ANDROID SYSTEM NOTIFICATION & WIDGET BRIDGE (BI-DIRECTIONAL)
   // =========================================================================
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Gắn hàm lắng nghe lệnh bấm từ thanh thông báo Android
+    // Lắng nghe lệnh từ Notification & Home Screen Widgets
     (window as any).__vault_media_action = (action: string) => {
       if (action === 'PLAY_PAUSE') togglePlay();
       else if (action === 'PREV') prevTrack();
       else if (action === 'NEXT') nextTrack();
+    };
+
+    (window as any).__vault_media_seek = (posSec: number) => {
+      seekTo(posSec);
     };
 
     if (!currentTrack) {
@@ -127,13 +131,22 @@ export default function GlobalPlayerBar() {
     const trackTitle = currentTrack.title || 'Unknown Track';
     const trackArtist = currentTrack.artist || currentAlbum?.artist || 'POSTLAIN';
     const albumTitle = currentAlbum?.title || 'Hidden Music Vault';
+    const effectiveDur = duration > 0 && isFinite(duration) ? duration : (currentTrack.duration || 0);
 
-    // 1. Gửi sang Native Android Notification Service
+    // Bắn sang Native Android để update đồng thời Notification và Home Widgets
     if ((window as any).AndroidMediaBridge?.updateMedia) {
-      (window as any).AndroidMediaBridge.updateMedia(trackTitle, trackArtist, coverUrl, isPlaying);
+      (window as any).AndroidMediaBridge.updateMedia(
+        trackTitle,
+        trackArtist,
+        albumTitle,
+        coverUrl,
+        isPlaying,
+        currentTime,
+        effectiveDur
+      );
     }
 
-    // 2. Đồng bộ chuẩn Web MediaSession
+    // Web MediaSession
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: trackTitle,
@@ -143,7 +156,7 @@ export default function GlobalPlayerBar() {
       });
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
-  }, [currentTrack, currentAlbum, isPlaying, togglePlay, prevTrack, nextTrack]);
+  }, [currentTrack, currentAlbum, isPlaying, currentTime, duration, togglePlay, prevTrack, nextTrack, seekTo]);
 
   // Click outside to close drawers and volume slider
   useEffect(() => {
