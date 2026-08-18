@@ -109,7 +109,7 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // High-Performance 60FPS Direct DOM Timeline Updater (Zero React Re-render Lag)
+  // High-Performance 60FPS Direct DOM Timeline Updater
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
@@ -155,7 +155,7 @@ export default function GlobalPlayerBar() {
     return getActiveLyricIndex(parsedLyrics, currentTime);
   }, [parsedLyrics, currentTime]);
 
-  // Hardware-accelerated smooth center scroll only triggered when active lyric index changes
+  // Smooth scroll to center without layout shifts
   useEffect(() => {
     if (!showLyrics || activeLyricIdx < 0) return;
     const container = lyricsScrollRef.current;
@@ -163,19 +163,15 @@ export default function GlobalPlayerBar() {
 
     const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
     if (activeEl) {
-      const containerHeight = container.clientHeight;
-      const elOffsetTop = activeEl.offsetTop;
-      const elHeight = activeEl.clientHeight;
-      const targetScroll = elOffsetTop - containerHeight / 2 + elHeight / 2;
-
-      container.scrollTo({
-        top: Math.max(0, targetScroll),
+      activeEl.scrollIntoView({
         behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
       });
     }
   }, [activeLyricIdx, showLyrics]);
 
-  // Keyboard shortcut listener
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -302,9 +298,9 @@ export default function GlobalPlayerBar() {
     >
       {/* 1. SEAMLESS ATTACHED DRAWER: LYRICS & QUEUE */}
       {hasDrawerOpen && (
-        <div className="w-full max-w-5xl h-[320px] sm:h-[380px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/98 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-4 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto font-mono z-10 animate-fadeIn">
+        <div className="w-full max-w-5xl h-[280px] sm:h-[360px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/98 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-3 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto font-mono z-10 animate-fadeIn">
           {/* Drawer Header */}
-          <div className="flex items-center justify-between pb-2.5 border-b border-white/10 flex-shrink-0">
+          <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-shrink-0">
             <div className="flex items-center gap-2">
               {showLyrics ? <Mic2 className="w-4 h-4 text-white" /> : <ListMusic className="w-4 h-4 text-white" />}
               <span className="text-xs uppercase font-extrabold tracking-widest text-white font-cyber">
@@ -322,12 +318,12 @@ export default function GlobalPlayerBar() {
             </button>
           </div>
 
-          {/* Drawer Body */}
+          {/* Drawer Body - Smooth Centered Typography */}
           <div className="flex-1 min-h-0 relative overflow-hidden select-none">
             {showLyrics && (
               <div
                 ref={lyricsScrollRef}
-                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-32 sm:py-36 space-y-3.5 will-change-transform font-sans"
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-24 sm:py-32 space-y-2.5 will-change-transform font-sans px-2"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
@@ -345,10 +341,10 @@ export default function GlobalPlayerBar() {
                         key={idx}
                         data-active-lyric={isActive ? 'true' : 'false'}
                         onClick={() => seekTo(line.time)}
-                        className={`transition-all duration-200 cursor-pointer select-none font-sans ${
+                        className={`transition-colors duration-250 cursor-pointer select-none font-sans leading-relaxed ${
                           isActive
-                            ? 'text-white text-base sm:text-lg md:text-xl font-extrabold drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-105 opacity-100 py-1.5'
-                            : 'text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-medium opacity-60 hover:opacity-90 py-1'
+                            ? 'text-white text-sm sm:text-base md:text-lg font-bold drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] opacity-100 py-1'
+                            : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm font-medium opacity-50 hover:opacity-80 py-0.5'
                         }`}
                       >
                         {line.text}
@@ -414,7 +410,7 @@ export default function GlobalPlayerBar() {
           hasDrawerOpen ? '-mt-[1px] rounded-t-none border-t-0' : ''
         }`}
       >
-        {/* Mobile Top Progress Bar Line (Seamless Top Border Scrubber) */}
+        {/* Mobile Top Progress Bar Line */}
         <div className="block md:hidden absolute top-0 left-0 right-0 h-[2.5px] bg-white/10 overflow-hidden">
           <div
             ref={mobileProgressBarRef}
