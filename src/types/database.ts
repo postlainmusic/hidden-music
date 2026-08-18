@@ -32,6 +32,16 @@ export interface Album {
   tracks?: TrackItem[];
 }
 
+export interface SyncMetadata {
+  intro_duration?: number;
+  outro_start?: number;
+  confidence_score?: number;
+  sample_rate?: number;
+  analyzed_at?: string;
+  method?: 'cross_correlation' | 'energy_envelope' | 'manual';
+  notes?: string;
+}
+
 // Track / MV Item inside an Album Folder
 // Audio and Video are two completely independent stream URLs
 export interface TrackItem {
@@ -47,9 +57,9 @@ export interface TrackItem {
   lyrics?: string;
   duration: number;
   created_at: string;
-  // Deprecated legacy field kept optional for backward DB compatibility
+  // Legacy fields kept optional for backward DB compatibility
   video_offset?: number;
-  sync_metadata?: any;
+  sync_metadata?: SyncMetadata | string | null;
 }
 
 // User Feedback / Bug Reports / Suggestions
