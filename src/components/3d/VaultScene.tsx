@@ -172,6 +172,7 @@ export default function VaultScene({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoCardRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingVideoSeekRef = useRef<boolean>(false);
   const touchStartY = useRef(0);
   const lastScrollTime = useRef(0);
 
@@ -386,9 +387,15 @@ export default function VaultScene({
     }
   }, []);
 
-  const handleVideoSeek = useCallback((time: number) => {
+  const handleVideoSeekChange = useCallback((time: number) => {
+    setVideoCurrentTime(time);
+  }, []);
+
+  const handleVideoSeekCommit = useCallback((time: number) => {
+    isDraggingVideoSeekRef.current = false;
     setVideoCurrentTime(time);
     if (videoRef.current) {
+      setIsVideoBuffering(true);
       videoRef.current.currentTime = time;
     }
   }, []);
@@ -616,10 +623,20 @@ export default function VaultScene({
                         setIsVideoBuffering(false);
                       }}
                       onPause={() => setIsVideoPlaying(false)}
+                      onSeeking={() => setIsVideoBuffering(true)}
+                      onSeeked={() => {
+                        setIsVideoBuffering(false);
+                        if (isVideoPlaying && videoRef.current?.paused) {
+                          videoRef.current.play().catch(() => {});
+                        }
+                      }}
                       onWaiting={() => setIsVideoBuffering(true)}
                       onCanPlay={() => setIsVideoBuffering(false)}
+                      onCanPlayThrough={() => setIsVideoBuffering(false)}
                       onTimeUpdate={() => {
-                        if (videoRef.current) setVideoCurrentTime(videoRef.current.currentTime);
+                        if (videoRef.current && !isDraggingVideoSeekRef.current) {
+                          setVideoCurrentTime(videoRef.current.currentTime);
+                        }
                       }}
                       onLoadedMetadata={() => {
                         if (videoRef.current) {
@@ -683,7 +700,15 @@ export default function VaultScene({
                       min={0}
                       max={videoDuration || 100}
                       value={videoCurrentTime}
-                      onChange={(e) => handleVideoSeek(parseFloat(e.target.value))}
+                      onMouseDown={() => {
+                        isDraggingVideoSeekRef.current = true;
+                      }}
+                      onTouchStart={() => {
+                        isDraggingVideoSeekRef.current = true;
+                      }}
+                      onChange={(e) => handleVideoSeekChange(parseFloat(e.target.value))}
+                      onMouseUp={(e) => handleVideoSeekCommit(parseFloat((e.target as HTMLInputElement).value))}
+                      onTouchEnd={(e) => handleVideoSeekCommit(parseFloat((e.target as HTMLInputElement).value))}
                       className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-zinc-800 shadow-inner"
                     />
                     <span className="text-[10px] font-mono text-slate-400 tabular-nums">

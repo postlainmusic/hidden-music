@@ -44,7 +44,6 @@ export default function GlobalPlayerBar() {
     activeZone,
     audioRef,
     currentTimeRef,
-    analyserRef,
     playTrack,
     togglePlay,
     nextTrack,
@@ -63,10 +62,7 @@ export default function GlobalPlayerBar() {
 
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
-  const barContainerRef = useRef<HTMLDivElement | null>(null);
-  const fireOverlayRef = useRef<HTMLDivElement | null>(null);
   const timelineRafIdRef = useRef<number | null>(null);
-  const animFrameIdRef = useRef<number | null>(null);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const volumeSliderRef = useRef<HTMLDivElement | null>(null);
   const isDraggingVolumeRef = useRef<boolean>(false);
@@ -75,13 +71,6 @@ export default function GlobalPlayerBar() {
   const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const seekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
-
-  // Kick / Bass Beat Detection Transient Tracking Refs
-  const lastKickTimeRef = useRef<number>(0);
-  const prevBassEnergyRef = useRef<number>(0);
-  const smoothedBassTransRef = useRef<number>(0);
-  const barScaleRef = useRef<number>(1);
-  const barFlashRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -144,83 +133,6 @@ export default function GlobalPlayerBar() {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef]);
-
-  // Robust Sub-Bass Kick Visualizer Engine (30Hz - 90Hz Lowpass Band, Dynamic Threshold & 200ms Debounce)
-  useEffect(() => {
-    if (!isPlaying || activeZone !== 'audio') {
-      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-      if (fireOverlayRef.current) fireOverlayRef.current.style.opacity = '0';
-      if (barContainerRef.current) {
-        barContainerRef.current.style.transform = 'scale(1)';
-        barContainerRef.current.style.boxShadow = '0 20px 50px rgba(0,0,0,0.9)';
-        barContainerRef.current.style.borderColor = 'rgba(255,255,255,0.2)';
-      }
-      return;
-    }
-
-    const analyzeFrame = () => {
-      const now = performance.now();
-      let isKick = false;
-      let isHeavy = false;
-
-      if (analyserRef?.current) {
-        try {
-          const freqData = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(freqData);
-
-          // Sub-bass / Kick drum range: 30Hz - 90Hz (first 3-4 bins)
-          const bass = (freqData[0] + freqData[1] + freqData[2]) / 3;
-          const delta = Math.max(0, bass - prevBassEnergyRef.current);
-          prevBassEnergyRef.current = bass;
-
-          smoothedBassTransRef.current = smoothedBassTransRef.current * 0.85 + delta * 0.15;
-          const kickThreshold = Math.max(10, smoothedBassTransRef.current * 1.5);
-
-          // Cooldown: at least 200ms between beats to isolate authentic kick hits
-          if (delta > kickThreshold && bass > 35 && (now - lastKickTimeRef.current > 200)) {
-            isKick = true;
-            isHeavy = bass > 75 || delta > 25;
-            lastKickTimeRef.current = now;
-          }
-        } catch {}
-      }
-
-      if (isKick) {
-        barScaleRef.current = isHeavy ? 1.042 : 1.022;
-        barFlashRef.current = isHeavy ? 0.90 : 0.55;
-      } else {
-        // Exponential Spring Decay
-        barFlashRef.current *= 0.72;
-        barScaleRef.current += (1.0 - barScaleRef.current) * 0.28;
-        if (barFlashRef.current < 0.02) barFlashRef.current = 0;
-        if (Math.abs(barScaleRef.current - 1.0) < 0.001) barScaleRef.current = 1.0;
-      }
-
-      // Direct DOM Mutation for Zero-Lag 60FPS Animation
-      if (barContainerRef.current) {
-        barContainerRef.current.style.transform = `scale(${barScaleRef.current.toFixed(4)})`;
-        if (barFlashRef.current > 0.02) {
-          barContainerRef.current.style.boxShadow = `0 20px 50px rgba(0,0,0,0.9), 0 0 ${Math.round(barFlashRef.current * 35)}px rgba(255,255,255,${(barFlashRef.current * 0.35).toFixed(2)})`;
-          barContainerRef.current.style.borderColor = `rgba(255,255,255,${(0.20 + barFlashRef.current * 0.60).toFixed(2)})`;
-        } else {
-          barContainerRef.current.style.boxShadow = '0 20px 50px rgba(0,0,0,0.9)';
-          barContainerRef.current.style.borderColor = 'rgba(255,255,255,0.2)';
-        }
-      }
-
-      if (fireOverlayRef.current) {
-        fireOverlayRef.current.style.opacity = barFlashRef.current.toFixed(3);
-      }
-
-      animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
-    };
-
-    animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
-
-    return () => {
-      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-    };
-  }, [isPlaying, activeZone, analyserRef]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -483,23 +395,14 @@ export default function GlobalPlayerBar() {
         </div>
       )}
 
-      {/* 2. DOCK PLAYBAR (ELEGANT MONOCHROMATIC MONOLITH DOCK WITH KICK BEAT REACTIVITY) */}
+      {/* 2. DOCK PLAYBAR (ROCK-SOLID STATIC CLEAN DARK VAULT DOCK - ZERO JITTER) */}
       <div
-        ref={barContainerRef}
-        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-visible transition-all duration-75 will-change-transform ${
+        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-visible transition-all duration-200 select-none ${
           hasDrawerOpen ? '-mt-[1px] rounded-t-none border-t-0' : ''
         }`}
       >
-        {/* Monochromatic Flash Pulse Overlay */}
-        <div
-          ref={fireOverlayRef}
-          className={`absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-75 bg-gradient-to-r from-white/10 via-white/20 to-white/10 ${
-            hasDrawerOpen ? 'rounded-b-3xl rounded-t-none' : 'rounded-3xl'
-          }`}
-        />
-
         {/* STRICT SINGLE-ROW HORIZONTAL LAYOUT */}
-        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full relative z-10">
+        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full">
           
           {/* Left: Track Information & Album Cover */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[140px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0">
