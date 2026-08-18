@@ -16,10 +16,12 @@ import {
   SkipBack,
   SkipForward,
   Headphones,
+  Loader2,
 } from 'lucide-react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
 import { hasVideoSubscription, refreshUserProfile } from '@/lib/authSession';
+import { getMediaCdnUrl } from '@/lib/r2Storage';
 
 interface VaultSceneProps {
   albums: Album[];
@@ -160,6 +162,7 @@ export default function VaultScene({
   // Video Zone Specific Independent State
   const [selectedVideoTrack, setSelectedVideoTrack] = useState<TrackItem | null>(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [isVideoBuffering, setIsVideoBuffering] = useState(false);
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoVolume, setVideoVolume] = useState(0.8);
@@ -174,6 +177,12 @@ export default function VaultScene({
 
   const isDetail = viewMode === 'album';
   const isVideoZone = activeZone === 'video';
+
+  // Compute optimized CDN stream URL for current video track
+  const videoStreamUrl = useMemo(() => {
+    if (!selectedVideoTrack?.video_url) return '';
+    return getMediaCdnUrl(selectedVideoTrack.video_url);
+  }, [selectedVideoTrack?.video_url]);
 
   // Find tracks with video
   const videoTracks = useMemo(() => tracks.filter((t) => Boolean(t.video_url)), [tracks]);
@@ -224,18 +233,35 @@ export default function VaultScene({
     [isDetail, selectedAlbum, albums, currentIndex]
   );
 
-  // Fullscreen change listener for video
+  // Fullscreen change listener for video (with Screen Orientation Auto-Unlock)
   useEffect(() => {
     const handleFsChange = () => {
-      const isFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
       setIsVideoFullscreen(isFs);
+
+      // Auto-unlock screen orientation when exiting fullscreen
+      if (!isFs && typeof screen !== 'undefined' && screen.orientation && (screen.orientation as any).unlock) {
+        try {
+          (screen.orientation as any).unlock();
+        } catch {}
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFsChange);
     document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
+    document.addEventListener('MSFullscreenChange', handleFsChange);
+
     return () => {
       document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
+      document.removeEventListener('MSFullscreenChange', handleFsChange);
     };
   }, []);
 
@@ -343,14 +369,19 @@ export default function VaultScene({
     }
   }, [userSession, onOpenPaywall, selectedTrack, videoTracks, tracks, onSwitchToVideoZone]);
 
-  // Video Controls
+  // Video Controls: 1-Click Toggle Play / Pause
   const toggleVideoPlay = useCallback(() => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.play().catch(() => {});
-      setIsVideoPlaying(true);
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      video.play().then(() => {
+        setIsVideoPlaying(true);
+      }).catch((err) => {
+        console.warn('Video play note:', err);
+      });
     } else {
-      videoRef.current.pause();
+      video.pause();
       setIsVideoPlaying(false);
     }
   }, []);
@@ -362,24 +393,71 @@ export default function VaultScene({
     }
   }, []);
 
+  // Multi-vendor Fullscreen with Automatic Mobile Landscape Orientation Lock
+  const enterFullscreen = useCallback(async (element: HTMLElement) => {
+    try {
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      } else if ((element as any).webkitRequestFullscreen) {
+        await (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        await (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        await (element as any).msRequestFullscreen();
+      }
+
+      // Auto-rotate mobile screen to landscape
+      if (typeof screen !== 'undefined' && screen.orientation && (screen.orientation as any).lock) {
+        try {
+          await (screen.orientation as any).lock('landscape');
+        } catch (err) {
+          console.warn('Orientation lock note:', err);
+        }
+      }
+    } catch (err) {
+      console.warn('Enter fullscreen note:', err);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        await (document as any).webkitExitFullscreen();
+      } else if ((document as any).mozCancelFullScreen) {
+        await (document as any).mozCancelFullScreen();
+      } else if ((document as any).msExitFullscreen) {
+        await (document as any).msExitFullscreen();
+      }
+
+      if (typeof screen !== 'undefined' && screen.orientation && (screen.orientation as any).unlock) {
+        try {
+          (screen.orientation as any).unlock();
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('Exit fullscreen note:', err);
+    }
+  }, []);
+
   const toggleVideoFullscreen = useCallback(() => {
     const el = videoCardRef.current || videoRef.current;
     if (!el) return;
 
-    if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-      if (el.requestFullscreen) {
-        el.requestFullscreen().catch(() => {});
-      } else if ((el as any).webkitRequestFullscreen) {
-        (el as any).webkitRequestFullscreen();
-      }
+    const isFs = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+
+    if (!isFs) {
+      enterFullscreen(el);
     } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      }
+      exitFullscreen();
     }
-  }, []);
+  }, [enterFullscreen, exitFullscreen]);
 
   const handlePlayNextVideo = useCallback(() => {
     if (videoTracks.length === 0) return;
@@ -512,19 +590,19 @@ export default function VaultScene({
                   <span>HIDDEN MUSIC MV</span>
                 </div>
 
-                {/* Native HTML5 Video Element with Anti-Download Protections */}
+                {/* Native HTML5 Video Element with Direct CDN Stream & Anti-Download Protections */}
                 <div
                   onDoubleClick={toggleVideoFullscreen}
                   onClick={toggleVideoPlay}
-                  className="relative flex-1 w-full h-full flex items-center justify-center cursor-pointer bg-black overflow-hidden"
+                  className="relative flex-1 w-full h-full flex items-center justify-center cursor-pointer bg-black overflow-hidden select-none"
                 >
-                  {selectedVideoTrack?.video_url ? (
+                  {videoStreamUrl ? (
                     <video
                       ref={videoRef}
-                      src={selectedVideoTrack.video_url}
-                      preload="metadata"
-                      autoPlay
-                      playsInline
+                      src={videoStreamUrl}
+                      preload="auto"
+                      autoPlay={true}
+                      playsInline={true}
                       controls={false}
                       controlsList="nodownload nofullscreen noremoteplayback"
                       disablePictureInPicture
@@ -532,6 +610,14 @@ export default function VaultScene({
                         e.preventDefault();
                         return false;
                       }}
+                      onPlay={() => setIsVideoPlaying(true)}
+                      onPlaying={() => {
+                        setIsVideoPlaying(true);
+                        setIsVideoBuffering(false);
+                      }}
+                      onPause={() => setIsVideoPlaying(false)}
+                      onWaiting={() => setIsVideoBuffering(true)}
+                      onCanPlay={() => setIsVideoBuffering(false)}
                       onTimeUpdate={() => {
                         if (videoRef.current) setVideoCurrentTime(videoRef.current.currentTime);
                       }}
@@ -540,6 +626,11 @@ export default function VaultScene({
                           setVideoDuration(videoRef.current.duration);
                           videoRef.current.volume = videoVolume;
                           videoRef.current.muted = isVideoMuted;
+                          videoRef.current.play().then(() => {
+                            setIsVideoPlaying(true);
+                          }).catch(() => {
+                            setIsVideoPlaying(false);
+                          });
                         }
                       }}
                       onEnded={handlePlayNextVideo}
@@ -557,12 +648,25 @@ export default function VaultScene({
                     </div>
                   )}
 
-                  {/* Big Center Play / Pause Watermark Indicator */}
-                  {!isVideoPlaying && selectedVideoTrack?.video_url && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                      <div className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl">
-                        <Play className="w-6 h-6 fill-current ml-0.5" />
+                  {/* 1-Click Instant Center Play / Pause Indicator */}
+                  {!isVideoPlaying && videoStreamUrl && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleVideoPlay();
+                      }}
+                      className="absolute inset-0 flex items-center justify-center bg-black/45 cursor-pointer z-20 transition-opacity"
+                    >
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:scale-110 active:scale-95 transition-transform">
+                        <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-current ml-0.5" />
                       </div>
+                    </div>
+                  )}
+
+                  {/* Buffering Spinner */}
+                  {isVideoBuffering && isVideoPlaying && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none z-20">
+                      <Loader2 className="w-10 h-10 text-white animate-spin" />
                     </div>
                   )}
                 </div>
@@ -798,7 +902,7 @@ export default function VaultScene({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            {/* Glass Card Container */}
+            {/* Glass Card Container (Strict Border Isolation - No Ghost Border Glitch) */}
             <div
               onClick={() => {
                 if (!isDetail) {
@@ -808,9 +912,9 @@ export default function VaultScene({
                   else handlePlayAlbum();
                 }
               }}
-              className={`cursor-pointer transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] p-4 sm:p-5 md:p-6 w-[280px] sm:w-[320px] md:w-[350px] flex flex-col items-center ${
+              className={`cursor-pointer transition-transform duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] p-4 sm:p-5 md:p-6 w-[280px] sm:w-[320px] md:w-[350px] flex flex-col items-center select-none ${
                 isDetail
-                  ? 'bg-transparent border-transparent shadow-none backdrop-blur-none'
+                  ? 'bg-transparent !border-0 !border-none !outline-none !ring-0 shadow-none backdrop-blur-none'
                   : 'glass-card'
               }`}
             >
