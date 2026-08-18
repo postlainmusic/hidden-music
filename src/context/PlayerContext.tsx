@@ -23,6 +23,7 @@ export interface PlayerContextType {
   activeZone: PlayerZone;
   audioRef: React.RefObject<HTMLAudioElement>;
   currentTimeRef: React.RefObject<number>;
+  analyserRef: React.RefObject<AnalyserNode | null>;
   playTrack: (track: TrackItem, album?: Album | null, playlist?: TrackItem[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -61,6 +62,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentTimeRef = useRef<number>(0);
   const lastStateUpdateTimeRef = useRef<number>(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
 
   // Restore player state safely on client mount
   useEffect(() => {
@@ -150,6 +154,74 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return getMediaCdnUrl(nextTrackItem.audio_url);
   }, [nextTrackItem]);
 
+  // Initialize Web Audio Graph with 100Hz Lowpass Biquad Filter
+  const initAudioAnalyser = useCallback(() => {
+    if (!audioRef.current || typeof window === 'undefined') return;
+    try {
+      if (!audioCtxRef.current) {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          audioCtxRef.current = new AudioCtx();
+        }
+      }
+      if (
+        audioCtxRef.current &&
+        (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')
+      ) {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      if (!sourceRef.current && audioCtxRef.current && audioRef.current) {
+        const audioCtx = audioCtxRef.current;
+        const source = audioCtx.createMediaElementSource(audioRef.current);
+
+        // Precision 2nd-order Lowpass Filter isolating Kick/Sub-Bass (< 100Hz, Q=1.2)
+        const lowpass = audioCtx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 100;
+        lowpass.Q.value = 1.2;
+
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.05;
+
+        // Route: Source -> Lowpass -> Analyser
+        source.connect(lowpass);
+        lowpass.connect(analyser);
+
+        // Output Route: Source -> Destination (Crystal clear direct audio output)
+        source.connect(audioCtx.destination);
+
+        analyserRef.current = analyser;
+        sourceRef.current = source;
+      }
+    } catch (err) {
+      console.warn('AudioAnalyser setup note:', err);
+    }
+  }, []);
+
+  // Global user interaction handler to unlock AudioContext
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const unlockAudio = () => {
+      if (
+        audioCtxRef.current &&
+        (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')
+      ) {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    };
+    window.addEventListener('click', unlockAudio, { passive: true });
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio, { passive: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
   const toggleCinematicFx = useCallback(() => {
     setIsCinematicFxEnabled((prev) => !prev);
   }, []);
@@ -233,6 +305,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (isPlaying) {
+      initAudioAnalyser();
       audioRef.current.play().catch((err) => {
         console.warn('Audio play blocked by browser policy:', err);
         setIsPlaying(false);
@@ -265,7 +338,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         nextTrack();
       });
     }
-  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone]);
+  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone, initAudioAnalyser]);
 
   const playTrack = useCallback((track: TrackItem, album?: Album | null, newPlaylist?: TrackItem[]) => {
     setCurrentTrack(track);
@@ -276,19 +349,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsBuffering(false);
     setCurrentTime(0);
     currentTimeRef.current = 0;
+    if (audioCtxRef.current && (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')) {
+      audioCtxRef.current.resume().catch(() => {});
+    }
   }, []);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack || !audioRef.current) return;
+    if (audioCtxRef.current && (audioCtxRef.current.state === 'suspended' || audioCtxRef.current.state === 'interrupted')) {
+      audioCtxRef.current.resume().catch(() => {});
+    }
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
       setActiveZone('audio');
+      initAudioAnalyser();
       audioRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
-  }, [currentTrack, isPlaying]);
+  }, [currentTrack, isPlaying, initAudioAnalyser]);
 
   const seekTo = useCallback((time: number) => {
     currentTimeRef.current = time;
@@ -356,6 +436,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       activeZone,
       audioRef,
       currentTimeRef,
+      analyserRef,
       playTrack,
       togglePlay,
       nextTrack,
@@ -403,11 +484,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider value={contextValue}>
       {children}
 
-      {/* Lightweight Native HTML5 Audio Engine (Instant Streaming, No WebAudio Overhead) */}
+      {/* HTML5 Audio Engine with Lowpass Web Audio Analyser & CORS Support */}
       <audio
         ref={audioRef}
         src={activeZone === 'audio' && currentTrack ? trackUrl : undefined}
         preload="auto"
+        crossOrigin="anonymous"
+        onPlay={() => {
+          initAudioAnalyser();
+        }}
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => setIsBuffering(false)}
         onCanPlay={() => setIsBuffering(false)}
@@ -442,7 +527,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
       {/* Hidden Preloader for Next Track (Zero-Gap Instant Playback) */}
       {activeZone === 'audio' && nextTrackUrl && (
-        <audio src={nextTrackUrl} preload="auto" className="hidden" />
+        <audio src={nextTrackUrl} preload="auto" crossOrigin="anonymous" className="hidden" />
       )}
     </PlayerContext.Provider>
   );

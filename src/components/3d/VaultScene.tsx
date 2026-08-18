@@ -21,7 +21,7 @@ import {
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
 import { hasVideoSubscription, refreshUserProfile } from '@/lib/authSession';
-import { getMediaCdnUrl } from '@/lib/r2Storage';
+import { getMediaCdnUrl, getCoverCdnUrl } from '@/lib/r2Storage';
 
 interface VaultSceneProps {
   albums: Album[];
@@ -938,7 +938,7 @@ export default function VaultScene({
                         <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-zinc-800 border-2 border-white/40 flex items-center justify-center shadow-inner ${
                           isCurrentPlayingThisAlbum && isPlaying ? 'animate-spin-slow' : ''
                         }`}>
-                          <img src={activeAlbum.cover_url} alt="" className="w-full h-full object-cover rounded-full" />
+                          <img src={getCoverCdnUrl(activeAlbum.cover_url)} alt="" className="w-full h-full object-cover rounded-full" />
                           <div className="absolute w-3.5 h-3.5 rounded-full bg-black border border-white/60" />
                         </div>
                       </div>
@@ -954,7 +954,7 @@ export default function VaultScene({
                   }}
                 >
                   <img
-                    src={activeAlbum.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000'}
+                    src={getCoverCdnUrl(activeAlbum.cover_url || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000')}
                     alt={activeAlbum.title}
                     className="w-full h-full object-cover select-none"
                     loading="eager"

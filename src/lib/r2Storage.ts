@@ -5,10 +5,13 @@ const R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '5da953b3d1c0e1c73
 const R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '57456fede976516aa1adecf2cd2b24e3';
 const R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '4cb6fa310e4a74e524dd8217bb0bae7072b5f0fdd21c350d8591a65f29fd4ee4';
 const R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'hidden-music-vault';
-const R2_PUBLIC_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-1d0bee5762b4432cbce8cd4c1c010fa4.r2.dev').replace(/\/$/, '');
+const R2_PUBLIC_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || 'https://media.postlain.com').replace(/\/$/, '');
+
+// Dedicated Production Media CDN Domain
+export const MEDIA_CANONICAL_DOMAIN = 'https://media.postlain.com';
 
 // Worker Gateway URL for Enhanced Range Requests & Streaming
-const R2_WORKER_GATEWAY_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_URL || R2_PUBLIC_URL).replace(/\/$/, '');
+const R2_WORKER_GATEWAY_URL = (process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_URL || MEDIA_CANONICAL_DOMAIN).replace(/\/$/, '');
 const STREAM_SECRET_KEY = process.env.STREAM_SECRET_KEY || 'vault-stream-secret-key-prod-2026';
 
 // Universal Web Crypto Helpers
@@ -52,7 +55,7 @@ async function getSignatureKey(key: string, dateStamp: string, regionName: strin
 export function extractCleanKey(keyOrUrl: string): string {
   if (!keyOrUrl) return '';
   let clean = keyOrUrl.trim();
-  // Remove public dev URL prefix
+  // Remove public dev URL prefix or domain
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     try {
       const parsed = new URL(clean);
@@ -60,6 +63,36 @@ export function extractCleanKey(keyOrUrl: string): string {
     } catch {}
   }
   return clean.replace(/^\/+/, '');
+}
+
+/**
+ * Normalizes any media storage key or URL to the canonical https://media.postlain.com domain
+ */
+export function normalizeMediaUrl(urlOrKey: string): string {
+  if (!urlOrKey) return '';
+  const trimmed = urlOrKey.trim();
+
+  // If already an external third-party stream not hosted on R2 (e.g. YouTube, external CDN)
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (
+      trimmed.includes('r2.dev') ||
+      trimmed.includes('r2.cloudflarestorage.com') ||
+      trimmed.includes('workers.dev') ||
+      trimmed.includes('postlain.com')
+    ) {
+      try {
+        const parsed = new URL(trimmed);
+        const cleanPath = parsed.pathname.replace(/^\/+/, '');
+        return `${MEDIA_CANONICAL_DOMAIN}/${cleanPath}`;
+      } catch {
+        return trimmed;
+      }
+    }
+    return trimmed;
+  }
+
+  const cleanKey = trimmed.replace(/^\/+/, '');
+  return `${MEDIA_CANONICAL_DOMAIN}/${cleanKey}`;
 }
 
 /**
@@ -76,58 +109,38 @@ export async function generateSignedStreamUrl(
   const dataToSign = `${cleanKey}:${expiresAt}`;
   const token = await hmacSha256Hex(STREAM_SECRET_KEY, dataToSign);
 
-  const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
-  return `${baseGateway}/${cleanKey}?token=${token}&expires=${expiresAt}`;
+  return `${MEDIA_CANONICAL_DOMAIN}/${cleanKey}?token=${token}&expires=${expiresAt}`;
 }
 
 /**
- * Get the CDN URL for audio streaming (supports Range requests and optional signed token)
+ * Get the CDN URL for audio/video streaming (Canonical domain https://media.postlain.com)
  */
 export function getMediaCdnUrl(
   keyOrUrl: string,
   options?: { secure?: boolean; expiresInSeconds?: number }
 ): string {
   if (!keyOrUrl) return '';
-
-  const cleanKey = extractCleanKey(keyOrUrl);
-  if (!cleanKey) return keyOrUrl;
-
-  // If already an external third-party streaming URL (e.g. YouTube or external audio)
-  if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
-    if (!keyOrUrl.includes('r2.dev') && !keyOrUrl.includes('cloudflarestorage.com') && !keyOrUrl.includes('workers.dev')) {
-      return keyOrUrl;
-    }
-  }
-
-  const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
-  return `${baseGateway}/${cleanKey}`;
+  return normalizeMediaUrl(keyOrUrl);
 }
 
 /**
- * Get dynamic transformed Cover Art CDN URL (WebP/AVIF auto-negotiation, dynamic width & quality)
+ * Get dynamic transformed Cover Art CDN URL (Canonical domain https://media.postlain.com)
  */
 export function getCoverCdnUrl(
   keyOrUrl: string,
   options?: { width?: number; quality?: number; format?: 'webp' | 'avif' | 'jpeg' }
 ): string {
-  const cleanKey = extractCleanKey(keyOrUrl);
-  if (!cleanKey) return '/icon.svg';
+  if (!keyOrUrl) return '/icon.svg';
+  const canonical = normalizeMediaUrl(keyOrUrl);
+  if (!canonical || canonical === '/icon.svg') return '/icon.svg';
 
-  if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
-    if (!keyOrUrl.includes('r2.dev') && !keyOrUrl.includes('cloudflarestorage.com') && !keyOrUrl.includes('workers.dev')) {
-      return keyOrUrl;
-    }
-  }
-
-  const baseGateway = R2_WORKER_GATEWAY_URL || R2_PUBLIC_URL;
   const queryParts: string[] = [];
-
   if (options?.width) queryParts.push(`w=${options.width}`);
   if (options?.quality) queryParts.push(`q=${options.quality}`);
   if (options?.format) queryParts.push(`fmt=${options.format}`);
 
   const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
-  return `${baseGateway}/${cleanKey}${queryString}`;
+  return `${canonical}${queryString}`;
 }
 
 /**

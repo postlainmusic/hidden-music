@@ -44,6 +44,7 @@ export default function GlobalPlayerBar() {
     activeZone,
     audioRef,
     currentTimeRef,
+    analyserRef,
     playTrack,
     togglePlay,
     nextTrack,
@@ -62,7 +63,10 @@ export default function GlobalPlayerBar() {
 
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
+  const barContainerRef = useRef<HTMLDivElement | null>(null);
+  const fireOverlayRef = useRef<HTMLDivElement | null>(null);
   const timelineRafIdRef = useRef<number | null>(null);
+  const animFrameIdRef = useRef<number | null>(null);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const volumeSliderRef = useRef<HTMLDivElement | null>(null);
   const isDraggingVolumeRef = useRef<boolean>(false);
@@ -71,6 +75,13 @@ export default function GlobalPlayerBar() {
   const currentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const seekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
+
+  // Kick / Bass Beat Detection Transient Tracking Refs
+  const lastKickTimeRef = useRef<number>(0);
+  const prevBassEnergyRef = useRef<number>(0);
+  const smoothedBassTransRef = useRef<number>(0);
+  const barScaleRef = useRef<number>(1);
+  const barFlashRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -133,6 +144,83 @@ export default function GlobalPlayerBar() {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef]);
+
+  // Robust Sub-Bass Kick Visualizer Engine (30Hz - 90Hz Lowpass Band, Dynamic Threshold & 200ms Debounce)
+  useEffect(() => {
+    if (!isPlaying || activeZone !== 'audio') {
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+      if (fireOverlayRef.current) fireOverlayRef.current.style.opacity = '0';
+      if (barContainerRef.current) {
+        barContainerRef.current.style.transform = 'scale(1)';
+        barContainerRef.current.style.boxShadow = '0 20px 50px rgba(0,0,0,0.9)';
+        barContainerRef.current.style.borderColor = 'rgba(255,255,255,0.2)';
+      }
+      return;
+    }
+
+    const analyzeFrame = () => {
+      const now = performance.now();
+      let isKick = false;
+      let isHeavy = false;
+
+      if (analyserRef?.current) {
+        try {
+          const freqData = new Uint8Array(analyserRef.current.frequencyBinCount);
+          analyserRef.current.getByteFrequencyData(freqData);
+
+          // Sub-bass / Kick drum range: 30Hz - 90Hz (first 3-4 bins)
+          const bass = (freqData[0] + freqData[1] + freqData[2]) / 3;
+          const delta = Math.max(0, bass - prevBassEnergyRef.current);
+          prevBassEnergyRef.current = bass;
+
+          smoothedBassTransRef.current = smoothedBassTransRef.current * 0.85 + delta * 0.15;
+          const kickThreshold = Math.max(10, smoothedBassTransRef.current * 1.5);
+
+          // Cooldown: at least 200ms between beats to isolate authentic kick hits
+          if (delta > kickThreshold && bass > 35 && (now - lastKickTimeRef.current > 200)) {
+            isKick = true;
+            isHeavy = bass > 75 || delta > 25;
+            lastKickTimeRef.current = now;
+          }
+        } catch {}
+      }
+
+      if (isKick) {
+        barScaleRef.current = isHeavy ? 1.042 : 1.022;
+        barFlashRef.current = isHeavy ? 0.90 : 0.55;
+      } else {
+        // Exponential Spring Decay
+        barFlashRef.current *= 0.72;
+        barScaleRef.current += (1.0 - barScaleRef.current) * 0.28;
+        if (barFlashRef.current < 0.02) barFlashRef.current = 0;
+        if (Math.abs(barScaleRef.current - 1.0) < 0.001) barScaleRef.current = 1.0;
+      }
+
+      // Direct DOM Mutation for Zero-Lag 60FPS Animation
+      if (barContainerRef.current) {
+        barContainerRef.current.style.transform = `scale(${barScaleRef.current.toFixed(4)})`;
+        if (barFlashRef.current > 0.02) {
+          barContainerRef.current.style.boxShadow = `0 20px 50px rgba(0,0,0,0.9), 0 0 ${Math.round(barFlashRef.current * 35)}px rgba(255,255,255,${(barFlashRef.current * 0.35).toFixed(2)})`;
+          barContainerRef.current.style.borderColor = `rgba(255,255,255,${(0.20 + barFlashRef.current * 0.60).toFixed(2)})`;
+        } else {
+          barContainerRef.current.style.boxShadow = '0 20px 50px rgba(0,0,0,0.9)';
+          barContainerRef.current.style.borderColor = 'rgba(255,255,255,0.2)';
+        }
+      }
+
+      if (fireOverlayRef.current) {
+        fireOverlayRef.current.style.opacity = barFlashRef.current.toFixed(3);
+      }
+
+      animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(analyzeFrame);
+
+    return () => {
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+    };
+  }, [isPlaying, activeZone, analyserRef]);
 
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
@@ -295,7 +383,7 @@ export default function GlobalPlayerBar() {
             <div className="flex items-center gap-2">
               {showLyrics ? <Mic2 className="w-4 h-4 text-white" /> : <ListMusic className="w-4 h-4 text-white" />}
               <span className="text-xs uppercase font-extrabold tracking-widest text-white font-cyber">
-                {showLyrics ? 'LỜI BÀI HÁT (GOTHIC LYRICS)' : 'DANH SÁCH PHÁT (QUEUE)'}
+                {showLyrics ? 'LỜI BÀI HÁT' : 'DANH SÁCH PHÁT'}
               </span>
             </div>
             <button
@@ -309,19 +397,19 @@ export default function GlobalPlayerBar() {
             </button>
           </div>
 
-          {/* Drawer Body - Zero Scrollbar on both X & Y */}
+          {/* Drawer Body - Modern Sans-serif Typography with Perfect Vietnamese Accents */}
           <div className="flex-1 min-h-0 relative overflow-hidden select-none">
             {showLyrics && (
               <div
                 ref={lyricsScrollRef}
-                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-32 sm:py-36 space-y-4 will-change-transform"
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-32 sm:py-36 space-y-3.5 will-change-transform font-sans"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
                 }}
               >
                 {parsedLyrics.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs uppercase tracking-widest">
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs uppercase tracking-widest font-mono">
                     Chưa có lời bài hát cho tác phẩm này
                   </div>
                 ) : (
@@ -332,10 +420,10 @@ export default function GlobalPlayerBar() {
                         key={idx}
                         data-active-lyric={isActive ? 'true' : 'false'}
                         onClick={() => seekTo(line.time)}
-                        className={`transition-all duration-300 cursor-pointer font-serif tracking-wide select-none ${
+                        className={`transition-all duration-200 cursor-pointer select-none font-sans ${
                           isActive
-                            ? 'text-white text-base sm:text-lg md:text-xl font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.9)] scale-105 opacity-100 py-1'
-                            : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm opacity-50 hover:opacity-80'
+                            ? 'text-white text-base sm:text-lg md:text-xl font-extrabold drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-105 opacity-100 py-1.5'
+                            : 'text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-medium opacity-60 hover:opacity-90 py-1'
                         }`}
                       >
                         {line.text}
@@ -348,7 +436,7 @@ export default function GlobalPlayerBar() {
 
             {showQueue && (
               <div
-                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar space-y-1.5 py-2 pr-1"
+                className="h-full overflow-y-auto overflow-x-hidden no-scrollbar space-y-1.5 py-2 pr-1 font-mono"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
@@ -395,14 +483,23 @@ export default function GlobalPlayerBar() {
         </div>
       )}
 
-      {/* 2. DOCK PLAYBAR (ELEGANT MONOCHROMATIC MONOLITH DOCK) */}
+      {/* 2. DOCK PLAYBAR (ELEGANT MONOCHROMATIC MONOLITH DOCK WITH KICK BEAT REACTIVITY) */}
       <div
-        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-visible transition-all duration-200 ${
+        ref={barContainerRef}
+        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-visible transition-all duration-75 will-change-transform ${
           hasDrawerOpen ? '-mt-[1px] rounded-t-none border-t-0' : ''
         }`}
       >
+        {/* Monochromatic Flash Pulse Overlay */}
+        <div
+          ref={fireOverlayRef}
+          className={`absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-75 bg-gradient-to-r from-white/10 via-white/20 to-white/10 ${
+            hasDrawerOpen ? 'rounded-b-3xl rounded-t-none' : 'rounded-3xl'
+          }`}
+        />
+
         {/* STRICT SINGLE-ROW HORIZONTAL LAYOUT */}
-        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full">
+        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full relative z-10">
           
           {/* Left: Track Information & Album Cover */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[140px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0">
