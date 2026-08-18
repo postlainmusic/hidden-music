@@ -24,6 +24,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
       - name: Scaffold Pure Google TWA Project
         run: |
           mkdir -p twa-app/app/src/main/res/values
@@ -109,7 +114,7 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
+                  android:icon="@android:drawable/sym_def_app_icon"
                   android:label="Hidden Music"
                   android:theme="@android:style/Theme.Translucent.NoTitleBar">
 
@@ -154,8 +159,7 @@ jobs:
       - name: Build TWA APK with Gradle
         run: |
           cd twa-app
-          gradle wrapper
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
 
       - name: Prepare APK Binary
         run: |
