@@ -8,10 +8,13 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build Pure Android APK
+    name: Build Ultra-Smooth Android APK
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,12 +29,32 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Scaffold Native WebView App
+      - name: Scaffold Hardware-Accelerated App
         run: |
           mkdir -p native-app/app/src/main/java/com/postlain/hiddenmusic
           mkdir -p native-app/app/src/main/res/values
+          mkdir -p native-app/app/src/main/res/mipmap-hdpi
+          mkdir -p native-app/app/src/main/res/mipmap-mdpi
+          mkdir -p native-app/app/src/main/res/mipmap-xhdpi
+          mkdir -p native-app/app/src/main/res/mipmap-xxhdpi
+          mkdir -p native-app/app/src/main/res/mipmap-xxxhdpi
 
-          # 1. settings.gradle
+          # 1. Copy App Icon
+          if [ -f "public/icon.png" ]; then
+            cp public/icon.png native-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp public/icon.png native-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp public/icon.png native-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp public/icon.png native-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp public/icon.png native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          elif [ -f "public/favicon.ico" ]; then
+            cp public/favicon.ico native-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp public/favicon.ico native-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp public/favicon.ico native-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp public/favicon.ico native-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp public/favicon.ico native-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          fi
+
+          # 2. settings.gradle
           cat << 'EOF' > native-app/settings.gradle
           pluginManagement {
               repositories {
@@ -51,20 +74,20 @@ jobs:
           include ':app'
           EOF
 
-          # 2. gradle.properties
+          # 3. gradle.properties
           cat << 'EOF' > native-app/gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dhttp.agent=Mozilla/5.0
           android.useAndroidX=true
           EOF
 
-          # 3. Root build.gradle
+          # 4. Root build.gradle
           cat << 'EOF' > native-app/build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # 4. App build.gradle
+          # 5. App build.gradle
           cat << 'EOF' > native-app/app/build.gradle
           plugins {
               id 'com.android.application'
@@ -78,8 +101,8 @@ jobs:
                   applicationId "com.postlain.hiddenmusic"
                   minSdk 21
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0.0"
+                  versionCode 2
+                  versionName "1.1.0"
               }
 
               buildTypes {
@@ -102,7 +125,7 @@ jobs:
           }
           EOF
 
-          # 5. AndroidManifest.xml
+          # 6. AndroidManifest.xml (BẬT ÉP HARDWARE ACCELERATION CẤP CAO NHẤT)
           cat << 'EOF' > native-app/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -113,13 +136,17 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
                   android:label="Hidden Music"
                   android:theme="@style/Theme.AppCompat.NoActionBar"
+                  android:hardwareAccelerated="true"
+                  android:largeHeap="true"
                   android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
+                      android:hardwareAccelerated="true"
                       android:configChanges="orientation|screenSize|keyboardHidden">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -130,24 +157,26 @@ jobs:
           </manifest>
           EOF
 
-          # 6. Strings resource
+          # 7. Strings resource
           cat << 'EOF' > native-app/app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Hidden Music</string>
           </resources>
           EOF
 
-          # 7. MainActivity.java
+          # 8. MainActivity.java (Ép GPU Render layer, cache bộ nhớ đệm, tối ưu 60-120FPS cho WebGL)
           cat << 'EOF' > native-app/app/src/main/java/com/postlain/hiddenmusic/MainActivity.java
           package com.postlain.hiddenmusic;
 
           import android.annotation.SuppressLint;
           import android.net.http.SslError;
+          import android.os.Build;
           import android.os.Bundle;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.webkit.CookieManager;
           import android.webkit.SslErrorHandler;
           import android.webkit.WebChromeClient;
-          import android.webkit.WebResourceError;
-          import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
@@ -160,8 +189,19 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  
+                  // Bật cờ phần cứng cho Window
+                  getWindow().setFlags(
+                      WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                      WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+                  );
+
                   webView = new WebView(this);
                   setContentView(webView);
+
+                  // Ép GPU Render Layer cho WebView
+                  webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                  webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
 
                   WebSettings settings = webView.getSettings();
                   settings.setJavaScriptEnabled(true);
@@ -171,19 +211,20 @@ jobs:
                   settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  
+                  // Tối ưu cache & bộ nhớ đệm render
                   settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-                  settings.setUserAgentString(settings.getUserAgentString() + " MobileApp/1.0");
+                  settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+                  settings.setOffscreenPreRaster(true);
+
+                  CookieManager.getInstance().setAcceptCookie(true);
+                  CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
                   webView.setWebChromeClient(new WebChromeClient());
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
                           handler.proceed();
-                      }
-
-                      @Override
-                      public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                          super.onReceivedError(view, request, error);
                       }
                   });
 
@@ -223,8 +264,8 @@ jobs:
           tag_name: latest
           name: "Hidden Music Vault Android (Latest)"
           body: |
-            ## 🎵 Hidden Music Vault - Native Android APK
-            Bản build Native WebView Android kết nối trực tiếp [hiddenmusic.postlain.com](https://hiddenmusic.postlain.com).
+            ## 🎵 Hidden Music Vault - Native Android APK (GPU Accelerated)
+            Bản build tối ưu phần cứng GPU, tăng tốc độ khung hình (FPS) cho Three.js và giao diện đĩa than 3D.
           draft: false
           prerelease: false
           files: ./hidden-music.apk
