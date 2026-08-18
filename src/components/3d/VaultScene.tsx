@@ -17,6 +17,8 @@ import {
   SkipForward,
   Headphones,
   Loader2,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
@@ -158,6 +160,7 @@ export default function VaultScene({
   const [isHovered, setIsHovered] = useState(false);
   const [albumTab, setAlbumTab] = useState<'tracks' | 'comments'>('tracks');
   const [commentsCount, setCommentsCount] = useState(0);
+  const [isStandaloneApp, setIsStandaloneApp] = useState(true);
 
   // Video Zone States
   const [selectedVideoTrack, setSelectedVideoTrack] = useState<TrackItem | null>(null);
@@ -178,6 +181,18 @@ export default function VaultScene({
 
   const isDetail = viewMode === 'album';
   const isVideoZone = activeZone === 'video';
+
+  // Kiểm tra môi trường để chỉ hiện nút Tải APK trên Web trình duyệt
+  useEffect(() => {
+    const isApp =
+      typeof window !== 'undefined' &&
+      (window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone ||
+        document.referrer.includes('android-app://') ||
+        (window as any).Capacitor !== undefined);
+
+    setIsStandaloneApp(Boolean(isApp));
+  }, []);
 
   const videoStreamUrl = useMemo(() => {
     if (!selectedVideoTrack?.video_url) return '';
@@ -551,24 +566,39 @@ export default function VaultScene({
               </span>
             </div>
 
-            {/* AUDIO ZONE RETURN BUTTON */}
-            <button
-              onClick={() => {
-                if (videoRef.current) {
-                  videoRef.current.pause();
-                  videoRef.current.src = '';
-                  try {
-                    videoRef.current.load();
-                  } catch {}
-                }
-                if (onSwitchToAudioZone) onSwitchToAudioZone();
-              }}
-              title="Quay lại Chế độ Âm nhạc (Audio Zone)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-zinc-200 text-black font-black font-cyber text-[10px] sm:text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer"
-            >
-              <Headphones className="w-3.5 h-3.5" />
-              <span>AUDIO ZONE</span>
-            </button>
+            {/* ACTION CONTROLS */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!isStandaloneApp && (
+                <a
+                  href="https://github.com/postlainmusic/hidden-music/releases/latest/download/hidden-music.apk"
+                  download="HiddenMusic.apk"
+                  title="Tải ứng dụng Android Native (.APK)"
+                  className="hidden xs:flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 font-mono text-[9px] uppercase tracking-wider font-bold transition-all"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>APK APP</span>
+                </a>
+              )}
+
+              {/* AUDIO ZONE RETURN BUTTON */}
+              <button
+                onClick={() => {
+                  if (videoRef.current) {
+                    videoRef.current.pause();
+                    videoRef.current.src = '';
+                    try {
+                      videoRef.current.load();
+                    } catch {}
+                  }
+                  if (onSwitchToAudioZone) onSwitchToAudioZone();
+                }}
+                title="Quay lại Chế độ Âm nhạc (Audio Zone)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-zinc-200 text-black font-black font-cyber text-[10px] sm:text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <Headphones className="w-3.5 h-3.5" />
+                <span>AUDIO ZONE</span>
+              </button>
+            </div>
           </div>
 
           {/* Split Screen 2/3 Video + 1/3 Playlist */}
@@ -998,7 +1028,7 @@ export default function VaultScene({
 
           {/* Action Buttons Deck */}
           <div
-            className={`w-full max-w-[320px] flex flex-col items-center gap-2 mt-1 transition-all duration-500 ease-out ${
+            className={`w-full max-w-[340px] flex flex-col items-center gap-2 mt-1 transition-all duration-500 ease-out ${
               isDetail
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
                 : 'opacity-0 translate-y-4 pointer-events-none'
@@ -1062,6 +1092,19 @@ export default function VaultScene({
               >
                 <Shuffle className="w-4 h-4" />
               </button>
+
+              {/* NÚT TẢI APP ANDROID NATIVE APK */}
+              {!isStandaloneApp && (
+                <a
+                  href="https://github.com/postlainmusic/hidden-music/releases/latest/download/hidden-music.apk"
+                  download="HiddenMusic.apk"
+                  title="Tải ứng dụng Android Native (.APK)"
+                  className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 hover:border-white transition-all hover:scale-105 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-lg group"
+                >
+                  <Smartphone className="w-4 h-4 group-hover:hidden" />
+                  <Download className="w-4 h-4 hidden group-hover:block" />
+                </a>
+              )}
             </div>
           </div>
 
