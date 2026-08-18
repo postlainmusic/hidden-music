@@ -197,7 +197,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
     const supabase = createClient();
 
-    // Background auth verification with Supabase
+    // Background auth verification & profile sync with Supabase
     const initAuth = async () => {
       try {
         if (getStoredAdminSession()) {
@@ -207,6 +207,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
             display_name: 'LUCIINGO1108',
             role: 'admin',
             hasVideoSubscription: true,
+            is_video_paid: true,
           });
           return;
         }
@@ -216,9 +217,30 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
         if (hasCodeParam || storedUser) {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            setUserSession(session.user);
-            setStoredUserSession(session.user);
+          const targetUser = session?.user || storedUser;
+
+          if (targetUser) {
+            // Fetch live profile record to sync VIP status from database
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', targetUser.id)
+                .maybeSingle();
+
+              if (profile) {
+                const merged = { ...targetUser, ...profile };
+                setUserSession(merged);
+                setStoredUserSession(merged);
+              } else {
+                setUserSession(targetUser);
+                setStoredUserSession(targetUser);
+              }
+            } catch {
+              setUserSession(targetUser);
+              setStoredUserSession(targetUser);
+            }
+
             if (hasCodeParam) {
               window.history.replaceState({}, document.title, window.location.pathname);
             }
@@ -235,6 +257,37 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     };
 
     initAuth();
+
+    // Realtime sync: listen to profile changes (instant VIP unlock when Admin grants access)
+    let profileChannel: any = null;
+    try {
+      profileChannel = supabase
+        .channel('realtime_vault_profile_updates')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          (payload: any) => {
+            const current = getStoredUserSession();
+            if (current && payload.new && (payload.new.id === current.id || payload.new.email === current.email)) {
+              const isVip = Boolean(
+                payload.new.is_video_paid ||
+                payload.new.has_video_subscription ||
+                payload.new.plan === 'vip' ||
+                payload.new.plan === 'premium'
+              );
+              setStoredUserSession({
+                ...current,
+                ...payload.new,
+                hasVideoSubscription: isVip,
+                is_video_paid: isVip,
+              });
+            }
+          }
+        )
+        .subscribe();
+    } catch (e) {
+      console.warn('Realtime profile listener notice:', e);
+    }
 
     // Safety timeout: Never hang in loading state for more than 3 seconds
     const timeoutTimer = setTimeout(() => {
@@ -311,6 +364,11 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
     return () => {
       clearTimeout(timeoutTimer);
       subscription.unsubscribe();
+      if (profileChannel) {
+        try {
+          supabase.removeChannel(profileChannel);
+        } catch {}
+      }
       window.removeEventListener('vault_profile_updated', handleCustomSessionChange);
       window.removeEventListener('vault_auth_change', handleCustomSessionChange);
     };

@@ -9,6 +9,10 @@ export interface VaultUserSession {
   role?: string;
   plan?: 'free' | 'vip' | 'premium';
   hasVideoSubscription?: boolean;
+  is_video_paid?: boolean;
+  video_paid_at?: string | null;
+  granted_by?: string | null;
+  admin_note?: string | null;
 }
 
 const USER_SESSION_KEY = 'hidden_vault_user_session';
@@ -28,7 +32,10 @@ export function getStoredUserSession(): VaultUserSession | null {
       const parsed = JSON.parse(local);
       if (parsed && (parsed.id || parsed.email)) {
         if (customName) parsed.display_name = customName;
-        if (hasVideoPass) parsed.hasVideoSubscription = true;
+        if (hasVideoPass || parsed.is_video_paid) {
+          parsed.hasVideoSubscription = true;
+          parsed.is_video_paid = true;
+        }
         return parsed;
       }
     }
@@ -42,6 +49,7 @@ export function getStoredUserSession(): VaultUserSession | null {
         role: 'admin',
         plan: 'premium',
         hasVideoSubscription: true,
+        is_video_paid: true,
       };
     }
   } catch (err) {
@@ -67,6 +75,7 @@ export function setStoredUserSession(user: any) {
       'VAULT MEMBER';
 
     const isAdmin = user.role === 'admin' || user.email === 'admin@hiddenvault.com' || localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+    const isVipPaid = isAdmin || hasVideoPass || user.is_video_paid === true || user.hasVideoSubscription === true || user.has_video_subscription === true || user.plan === 'vip' || user.plan === 'premium';
 
     const sessionData: VaultUserSession = {
       id: user.id || 'vault-user-' + Date.now(),
@@ -78,13 +87,21 @@ export function setStoredUserSession(user: any) {
         full_name: resolvedName,
       },
       role: isAdmin ? 'admin' : (user.role || 'user'),
-      plan: isAdmin ? 'premium' : (user.plan || (hasVideoPass ? 'vip' : 'free')),
-      hasVideoSubscription: isAdmin || hasVideoPass || user.hasVideoSubscription || user.user_metadata?.hasVideoSubscription === true,
+      plan: isAdmin ? 'premium' : (user.plan || (isVipPaid ? 'vip' : 'free')),
+      hasVideoSubscription: isVipPaid,
+      is_video_paid: isVipPaid,
+      video_paid_at: user.video_paid_at || (isVipPaid ? new Date().toISOString() : null),
+      granted_by: user.granted_by || null,
+      admin_note: user.admin_note || null,
     };
 
     const str = JSON.stringify(sessionData);
     localStorage.setItem(USER_SESSION_KEY, str);
     sessionStorage.setItem(USER_SESSION_KEY, str);
+    if (isVipPaid) {
+      localStorage.setItem(VIDEO_PASS_KEY, 'true');
+      sessionStorage.setItem(VIDEO_PASS_KEY, 'true');
+    }
     window.dispatchEvent(new CustomEvent('vault_auth_change', { detail: sessionData }));
     window.dispatchEvent(new CustomEvent('vault_profile_updated', { detail: sessionData }));
   } catch (err) {
@@ -115,6 +132,7 @@ export function setStoredAdminSession(isAdmin: boolean) {
         role: 'admin',
         plan: 'premium',
         hasVideoSubscription: true,
+        is_video_paid: true,
       });
     } else {
       localStorage.removeItem(ADMIN_SESSION_KEY);
@@ -134,7 +152,7 @@ export function hasActiveSession(): boolean {
 }
 
 /**
- * Check if the user has access to Video Zone (Admin, VIP Plan, or Active Video Pass)
+ * Check if the user has access to Video Zone (Admin, VIP Plan, is_video_paid, or Active Video Pass)
  */
 export function hasVideoSubscription(session?: VaultUserSession | null): boolean {
   if (typeof window === 'undefined') return false;
@@ -153,7 +171,14 @@ export function hasVideoSubscription(session?: VaultUserSession | null): boolean
   }
 
   // 3. Check session subscription flags
-  if (current.hasVideoSubscription || current.plan === 'vip' || current.plan === 'premium' || current.user_metadata?.hasVideoSubscription) {
+  if (
+    current.is_video_paid ||
+    current.hasVideoSubscription ||
+    current.plan === 'vip' ||
+    current.plan === 'premium' ||
+    current.user_metadata?.hasVideoSubscription ||
+    current.user_metadata?.is_video_paid
+  ) {
     return true;
   }
 
@@ -176,6 +201,7 @@ export function activateVideoSubscription(): VaultUserSession | null {
         ...cur,
         plan: cur.role === 'admin' ? 'premium' : 'vip',
         hasVideoSubscription: true,
+        is_video_paid: true,
       };
       setStoredUserSession(updated);
       return updated;
@@ -200,6 +226,7 @@ export function revokeVideoSubscription(): void {
         ...cur,
         plan: 'free',
         hasVideoSubscription: false,
+        is_video_paid: false,
       };
       setStoredUserSession(updated);
     }

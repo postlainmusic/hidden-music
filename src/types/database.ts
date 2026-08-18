@@ -16,6 +16,10 @@ export interface Profile {
   avatar_url: string | null;
   plan?: UserPlan;
   has_video_subscription?: boolean;
+  is_video_paid?: boolean;
+  video_paid_at?: string | null;
+  granted_by?: 'PAYOS_GATEWAY' | 'ADMIN_MANUAL' | string | null;
+  admin_note?: string | null;
   created_at: string;
 }
 

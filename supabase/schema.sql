@@ -1,4 +1,4 @@
-TEXT-- ========================================================
+-- ========================================================
 -- HIDDEN MUSIC VAULT - SUPABASE DATABASE SCHEMA FIX
 -- Copy and run this script in Supabase SQL Editor
 -- ========================================================
@@ -10,8 +10,22 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   display_name TEXT,
   role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   avatar_url TEXT,
+  plan TEXT DEFAULT 'free',
+  has_video_subscription BOOLEAN DEFAULT false,
+  is_video_paid BOOLEAN DEFAULT false,
+  video_paid_at TIMESTAMP WITH TIME ZONE,
+  granted_by TEXT,
+  admin_note TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration safety for profiles columns
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS has_video_subscription BOOLEAN DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_video_paid BOOLEAN DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS video_paid_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS granted_by TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS admin_note TEXT;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public profiles viewable" ON public.profiles;

@@ -39,8 +39,10 @@ import {
   Key,
   Shield,
   Cloud,
-  Link2
+  Link2,
+  Users
 } from 'lucide-react';
+import AdminUserManagement from '@/components/admin/AdminUserManagement';
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
@@ -68,7 +70,7 @@ export default function AdminPage() {
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
 
-  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks'>('albums');
+  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks' | 'users'>('albums');
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -1573,6 +1575,8 @@ export default function AdminPage() {
             <p className="text-xs text-slate-400 font-mono">
               {adminTab === 'feedbacks'
                 ? `Hộp thư góp ý & Báo lỗi từ thành viên Vault`
+                : adminTab === 'users'
+                ? `Quản lý người dùng & Cấp quyền Video VIP trực tiếp`
                 : openedAlbumId && activeAlbum
                 ? `Browsing Album Archive: ${activeAlbum.title}`
                 : `Supabase Encrypted Albums List`}
@@ -1601,6 +1605,21 @@ export default function AdminPage() {
             >
               <Disc3 className="w-3.5 h-3.5" />
               <span>KHO ALBUM ({albums.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAdminTab('users');
+                setStatusMsg(null);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                adminTab === 'users'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>QUẢN LÝ USER</span>
             </button>
 
             <button
@@ -2287,6 +2306,15 @@ export default function AdminPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 4: USER ACCESS & VIP MANAGEMENT TAB                                  */}
+      {/* ========================================================================= */}
+      {adminTab === 'users' && (
+        <div className="max-w-6xl mx-auto relative z-10 animate-fadeIn">
+          <AdminUserManagement onNotify={setStatusMsg} />
         </div>
       )}
 
