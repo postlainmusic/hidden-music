@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LogIn, UserCheck, LogOut, Disc3, ArrowLeft, Settings } from 'lucide-react';
+import { LogIn, UserCheck, LogOut, Disc3, ArrowLeft, Settings, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import AuthModal from '@/components/ui/AuthModal';
 import ProfileModal from '@/components/ui/ProfileModal';
