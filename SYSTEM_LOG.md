@@ -13,6 +13,7 @@
 - [Giao dịch 005: Optimize CI/CD Pipeline with Dual-Layer Caching (`09bb9c5`)](#giao-dịch-005-optimize-cicd-pipeline-with-dual-layer-caching-09bb9c5)
 - [Giao dịch 006: Minimal Player in Video Zone & Desktop Drawer Redesign (`8e9ed02`)](#giao-dịch-006-minimal-player-in-video-zone--desktop-drawer-redesign-8e9ed02)
 - [Giao dịch 007: Comprehensive Deep Code Audit & Verification of Items 2 to 9](#giao-dịch-007-comprehensive-deep-code-audit--verification-of-items-2-to-9)
+- [Giao dịch 008: Playbar Cleanup, Footer Spacing & Discovery Feed Revamp](#giao-dịch-008-playbar-cleanup-footer-spacing--discovery-feed-revamp)
 
 ---
 
@@ -95,6 +96,25 @@
   - **Mục 5**: Discovery Feed (`DiscoveryFeed.tsx`, `/discover/page.tsx`) tích hợp mượt mà các swimlanes và telemetry event tracking (`useTelemetry.ts`).
   - **Mục 6**: Phân tách triệt để Audio/Video Zone (`GlobalPlayerBar.tsx` dòng 365-420, `PremiumVideoPlayer.tsx`).
   - **Mục 8 & 9**: Quét kiểm tra toàn diện 100% các icon JSX `<IconName>` trong toàn bộ thư mục `src/`, xác nhận không có icon nào bị thiếu import.
+
+---
+
+### Giao dịch 008: Playbar Cleanup, Footer Spacing & Discovery Feed Revamp
+* **Thời gian**: 19/08/2026 16:15
+* **Tệp đã sửa**: `src/components/ui/GlobalPlayerBar.tsx`, `src/components/discovery/DiscoveryFeed.tsx`, `src/context/PlayerContext.tsx`.
+* **Vấn đề & Thay đổi**:
+  1. **GlobalPlayerBar Cleanup**:
+     - Loại bỏ hoàn toàn nút chuyển đổi `[ ÂM THANH | MV 4K ]` khỏi layout.
+     - Thiết lập tự động ẩn hoàn toàn (`if (activeZone === 'video') return null;`) khi ở Video Zone.
+     - Nâng vị trí thanh player lên `bottom-8 sm:bottom-10` nổi nhẹ nhàng phía trên dòng cyber footer.
+     - Thiết kế giao diện **Fullscreen Immersive Lyrics** (Cover art/Meta bên trái, dòng lyrics phát sáng bên phải với tương tác tua dòng).
+     - Thiết kế giao diện **Right-Side Slide-in Queue Drawer** (`w-full sm:w-[420px]` trượt từ cạnh phải màn hình) không che khuất đĩa than 3D bên trái.
+  2. **Discovery Feed Revamp**:
+     - Thanh bộ lọc Sticky Category Pills (`ALL`, `AI CURATED`, `EXCLUSIVE MVS`, `LOSSLESS AUDIO`).
+     - 3 swimlane phân loại: *AI Deep Resonance Mix* (điểm cộng hưởng AI % MATCH), *Trending 4K Vault Exclusives* (Banner 16:9 4K UHD), *Underground Rarities* (Lossless 24-bit).
+     - Tương tác thẻ trực tiếp: Quick Play, Add to Queue (`+`), Like (`Heart` -> `useTelemetry`).
+  3. **PlayerContext Expansion**:
+     - Bổ sung `addToQueue(track)` vào interface và provider context.
 
 ---
 

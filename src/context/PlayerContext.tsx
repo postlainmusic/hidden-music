@@ -38,6 +38,7 @@ export interface PlayerContextType {
 
   // Audio Controls
   playTrack: (track: TrackItem, album?: Album | null, playlist?: TrackItem[]) => void;
+  addToQueue: (track: TrackItem) => void;
   togglePlay: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
@@ -548,6 +549,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     playTrack(playlist[prevIndex], currentAlbum, playlist);
   }, [playlist, currentTrack, currentAlbum, playTrack]);
 
+  const addToQueue = useCallback((track: TrackItem) => {
+    setPlaylist((prev) => {
+      if (prev.some((t) => t.id === track.id)) return prev;
+      return [...prev, track];
+    });
+  }, []);
+
   const setVolume = useCallback((vol: number) => {
     setVolumeState(vol);
   }, []);
@@ -588,6 +596,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       videoRef,
       currentTimeRef,
       playTrack,
+      addToQueue,
       togglePlay,
       nextTrack,
       prevTrack,
