@@ -127,7 +127,7 @@ The application operates on two completely separate, mutually exclusive function
 
 ---
 
-## 📐 4. UI/UX DESIGN SYSTEM & RESPONSIVE RULES
+## 📐 4. UI/UX DESIGN SYSTEM & MODULAR PLAYER ARCHITECTURE
 
 | Layer | Z-Index | Component Description |
 | :--- | :---: | :--- |
@@ -135,14 +135,14 @@ The application operates on two completely separate, mutually exclusive function
 | **3D Stage & Visualizer**| `10` | Three.js Vinyl turntable, Monolith cards, particles |
 | **Footer Info Bar** | `20` | System status, encryption badge, DMCA/Terms links (Vault mode only) |
 | **Header Navigation** | `30` | `Navbar.tsx` with logo, Discovery link, user profile badge, settings |
-| **Global Player Dock** | `40` | `GlobalPlayerBar.tsx` (Single-line audio bar or Minimal video capsule) |
-| **Attached Drawers** | `45` | Desktop lyrics & queue attached bottom dock (`h-[220px]`, `rounded-t-2xl`) |
-| **Fullscreen Drawers** | `50` | Mobile expanded player sheet (`fixed inset-0`) |
+| **Global Player Root**| `40-50`| `GlobalPlayerBar.tsx` (Root Dispatcher / Orchestrator) |
+| **Desktop Player Bar** | `50` | `DesktopPlayerBar.tsx` (Unified frosted glass card `bg-zinc-950/40`, slide-up pure lyrics & queue) |
+| **Mobile Player Bar** | `50` | `MobilePlayerBar.tsx` (Capsule mini-bar `fixed bottom-4` & Full-height slide-up sheet) |
 | **Modals & Gatekeeper**| `50-60`| `VideoPaywallModal`, `ProfileModal`, `SettingsModal`, `VaultGate` |
 
-### Responsive Breakpoints:
-* **Mobile (< 768px)**: Compact bottom bar with thin top progress line. Tapping cover art opens the Fullscreen Mobile Player sheet with swipe-down dismissal.
-* **Desktop (≥ 768px)**: Integrated single-line dock. Seeker bar with 60FPS DOM updates. Lyrics & Queue open in an attached dock pinned smoothly above the player bar.
+### Responsive Player Modular Separation:
+* **Desktop (`md` and above)**: Isolated `DesktopPlayerBar.tsx` with continuous translucent glassmorphism (`bg-zinc-950/40 backdrop-blur-2xl`), pure centered synced lyrics, smooth cubic-bezier height expansion.
+* **Mobile (below `md`)**: Isolated `MobilePlayerBar.tsx` with touch-friendly capsule mini-bar and full-height slide-up sheet (`fixed inset-x-0 bottom-0 top-12`).
 
 ---
 

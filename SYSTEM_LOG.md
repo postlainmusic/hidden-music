@@ -18,6 +18,7 @@
 - [Giao dịch 010: Decoupled Two-Layer Drawer & Static Dock Architecture (`GlobalPlayerBar.tsx`)](#giao-dịch-010-decoupled-two-layer-drawer--static-dock-architecture-globalplayerbartsx)
 - [Giao dịch 011: Seamless Attached Glass Drawer & Remove Switcher Pill (`GlobalPlayerBar.tsx`)](#giao-dịch-011-seamless-attached-glass-drawer--remove-switcher-pill-globalplayerbartsx)
 - [Giao dịch 012: Unified Single-Card Translucent Glassmorphism & Pure Centered Lyrics (`GlobalPlayerBar.tsx`)](#giao-dịch-012-unified-single-card-translucent-glassmorphism--pure-centered-lyrics-globalplayerbartsx)
+- [Giao dịch 013: Modular Separation of DesktopPlayerBar & MobilePlayerBar](#giao-dịch-013-modular-separation-of-desktopplayerbar--mobileplayerbar)
 
 ---
 
@@ -161,6 +162,18 @@
   - **Kính mờ trong suốt (Translucent Frosted Glass)**: Sử dụng độ mờ `bg-zinc-950/40 backdrop-blur-2xl` cho phép nhìn xuyên thấu đĩa 3D phía sau đúng chuẩn thẩm mỹ Cyber-Aesthetic.
   - **Bỏ ảnh/tên album trong Lời bài hát**: Loại bỏ cột ảnh và tên bên trái; dành trọn không gian cho dòng lyrics phát sáng đồng bộ ở trung tâm.
   - **Hiệu ứng trượt mượt mà**: Sử dụng CSS transition `height` và `opacity` với easing `cubic-bezier(0.16, 1, 0.3, 1) 500ms`, trượt lên khi mở và trượt xuống khi bấm đóng hoặc bấm lại nút kích hoạt.
+
+---
+
+### Giao dịch 013: Modular Separation of DesktopPlayerBar & MobilePlayerBar
+* **Thời gian**: 19/08/2026 17:30
+* **Tệp đã tạo**: `src/components/ui/player/DesktopPlayerBar.tsx`, `src/components/ui/player/MobilePlayerBar.tsx`.
+* **Tệp đã sửa**: `src/components/ui/GlobalPlayerBar.tsx`, `PROJECT_BRAIN.md`.
+* **Vấn đề & Thay đổi**:
+  - **Tách biệt Module Desktop & Mobile**: Ngăn ngừa xung đột CSS responsive và tối ưu trải nghiệm theo từng kích thước màn hình.
+  - **DesktopPlayerBar (`md` trở lên)**: Đóng băng nguyên vẹn phiên bản Desktop kính mờ liền khối `bg-zinc-950/40 backdrop-blur-2xl` với dòng lời bài hát thuần túy căn giữa và hàng chờ phát.
+  - **MobilePlayerBar (dưới `md`)**: Thiết kế thanh mini-capsule nổi `fixed bottom-4 left-3 right-3` và Mobile Bottom Sheet trượt toàn màn hình (`fixed inset-x-0 bottom-0 top-12`) hỗ trợ chuyển tab Lời bài hát / Hàng chờ và điều khiển cảm ứng.
+  - **GlobalPlayerBar (Dispatcher)**: Đóng vai trò Root Dispatcher phân luồng hiển thị bằng CSS viewport classes.
 
 ---
 
