@@ -48,8 +48,6 @@ export default function GlobalPlayerBar() {
     repeatMode,
     activeZone,
     isPremium,
-    currentVideo,
-    isPiPActive,
     audioRef,
     currentTimeRef,
     playTrack,
@@ -116,7 +114,7 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // Standard Web MediaSession Integration (No native mobile bridge required)
+  // Standard Web MediaSession Integration
   useEffect(() => {
     if (typeof window === 'undefined' || !currentTrack) return;
 
@@ -154,7 +152,7 @@ export default function GlobalPlayerBar() {
     };
   }, [isMobileExpanded]);
 
-  // High-Performance 60FPS Direct DOM Timeline Updater
+  // High-Performance 60FPS Direct DOM Timeline Updater (AUDIO ZONE ONLY)
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
@@ -223,10 +221,11 @@ export default function GlobalPlayerBar() {
     }
   }, [activeLyricIdx, showLyrics, expandedTab]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (Audio Zone only)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (activeZone === 'video') return; // Do not conflict with Video Player shortcuts
 
       if (e.code === 'Space') {
         e.preventDefault();
@@ -252,7 +251,7 @@ export default function GlobalPlayerBar() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, seekTo, currentTime, duration, currentTimeRef]);
+  }, [activeZone, togglePlay, seekTo, currentTime, duration, currentTimeRef]);
 
   // Handle Swipe Down to dismiss Expanded Player
   const handleTouchStartSheet = (e: React.TouchEvent) => {
@@ -360,6 +359,62 @@ export default function GlobalPlayerBar() {
   const effectiveDuration = duration > 0 && isFinite(duration) ? duration : currentTrack.duration || 0;
   const hasDrawerOpen = showLyrics || showQueue;
 
+  // =========================================================================
+  // FIX BUG 1: MINIMAL STATE IN VIDEO ZONE (Prevents Duplicate Controls)
+  // =========================================================================
+  if (activeZone === 'video') {
+    return (
+      <div
+        ref={playerRootRef}
+        style={{
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+        }}
+        className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none px-3 sm:px-6 animate-fadeIn"
+      >
+        <div className="w-full max-w-2xl rounded-2xl border border-white/20 bg-zinc-950/90 shadow-[0_15px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl px-3 sm:px-5 py-2.5 flex items-center justify-between pointer-events-auto select-none">
+          {/* Left: Video Status & Track Information */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 flex items-center justify-center">
+              <Film className="w-4 h-4 text-white animate-pulse" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                <span className="text-[11px] sm:text-xs font-cyber font-extrabold text-white truncate uppercase tracking-wide">
+                  {currentTrack.title}
+                </span>
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-zinc-400 font-mono font-bold truncate uppercase mt-0.5">
+                {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
+              </span>
+            </div>
+          </div>
+
+          {/* Right: Master Switcher Pill (Back to Audio) */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center p-0.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
+              <button
+                onClick={switchToAudioZone}
+                className="px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider text-zinc-300 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1"
+                title="Quay lại phát âm thanh"
+              >
+                <Disc3 className="w-3 h-3 text-white" />
+                <span>ÂM THANH</span>
+              </button>
+              <button
+                disabled
+                className="px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider bg-white text-black shadow-md flex items-center gap-1 cursor-default"
+              >
+                <Film className="w-3 h-3" />
+                <span>VIDEO MV</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* ========================================================================= */}
@@ -404,17 +459,13 @@ export default function GlobalPlayerBar() {
             <div className="flex items-center p-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
               <button
                 onClick={switchToAudioZone}
-                className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider transition-all ${
-                  activeZone === 'audio' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
-                }`}
+                className="px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider bg-white text-black shadow-md transition-all"
               >
                 ÂM THANH
               </button>
               <button
                 onClick={handleToggleMVMode}
-                className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider transition-all flex items-center gap-1 ${
-                  activeZone === 'video' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
-                }`}
+                className="px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider text-zinc-400 hover:text-white transition-all flex items-center gap-1"
               >
                 <Film className="w-3 h-3" />
                 <span>VIDEO MV</span>
@@ -658,9 +709,11 @@ export default function GlobalPlayerBar() {
           isMobileExpanded ? 'opacity-0 translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0'
         }`}
       >
-        {/* 1. SEAMLESS ATTACHED DRAWER: LYRICS & QUEUE (DESKTOP) */}
+        {/* ========================================================================= */}
+        {/* FIX BUG 2: ELEGANT INTEGRATED DRAWER FOR LYRICS & QUEUE ON DESKTOP        */}
+        {/* ========================================================================= */}
         {hasDrawerOpen && (
-          <div className="w-full max-w-5xl h-[280px] sm:h-[360px] rounded-t-3xl border border-b-0 border-white/20 bg-zinc-950/98 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-3 sm:p-5 flex flex-col relative overflow-hidden pointer-events-auto font-mono z-10 animate-fadeIn">
+          <div className="w-full max-w-4xl h-[220px] sm:h-[260px] rounded-t-2xl border border-b-0 border-white/20 bg-zinc-950/95 shadow-[0_-15px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-3 sm:p-4 flex flex-col relative overflow-hidden pointer-events-auto font-mono z-10 animate-fadeIn">
             <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-shrink-0">
               <div className="flex items-center gap-2">
                 {showLyrics ? <Mic2 className="w-4 h-4 text-white" /> : <ListMusic className="w-4 h-4 text-white" />}
@@ -683,7 +736,7 @@ export default function GlobalPlayerBar() {
               {showLyrics && (
                 <div
                   ref={lyricsScrollRef}
-                  className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-24 sm:py-32 space-y-2.5 will-change-transform font-sans px-2"
+                  className="h-full overflow-y-auto overflow-x-hidden no-scrollbar text-center py-20 sm:py-24 space-y-2 will-change-transform font-sans px-2"
                   style={{
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
@@ -703,7 +756,7 @@ export default function GlobalPlayerBar() {
                           onClick={() => seekTo(line.time)}
                           className={`transition-colors duration-250 cursor-pointer select-none font-sans leading-relaxed ${
                             isActive
-                              ? 'text-white text-sm sm:text-base md:text-lg font-bold drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] opacity-100 py-1'
+                              ? 'text-white text-sm sm:text-base font-bold drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] opacity-100 py-0.5'
                               : 'text-slate-500 hover:text-slate-300 text-xs sm:text-sm font-medium opacity-50 hover:opacity-80 py-0.5'
                           }`}
                         >
@@ -717,7 +770,7 @@ export default function GlobalPlayerBar() {
 
               {showQueue && (
                 <div
-                  className="h-full overflow-y-auto overflow-x-hidden no-scrollbar space-y-1.5 py-2 pr-1 font-mono"
+                  className="h-full overflow-y-auto overflow-x-hidden no-scrollbar space-y-1 py-1.5 pr-1 font-mono"
                   style={{
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
@@ -734,7 +787,7 @@ export default function GlobalPlayerBar() {
                         <div
                           key={track.id || idx}
                           onClick={() => playTrack(track, currentAlbum, playlist)}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
                             isCur
                               ? 'bg-white/15 border-white text-white font-bold shadow-md'
                               : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
@@ -760,7 +813,7 @@ export default function GlobalPlayerBar() {
           </div>
         )}
 
-        {/* 2. DOCK BAR CONTAINER */}
+        {/* 2. DOCK BAR CONTAINER (AUDIO ZONE) */}
         <div
           className={`w-full max-w-5xl rounded-2xl md:rounded-3xl border border-white/20 bg-zinc-950/95 shadow-[0_15px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2 sm:p-2.5 md:p-3 flex flex-col gap-1 pointer-events-auto relative overflow-hidden transition-all duration-300 ${
             hasDrawerOpen ? 'rounded-t-none border-t-0' : ''
@@ -841,17 +894,13 @@ export default function GlobalPlayerBar() {
               <div className="hidden lg:flex items-center p-0.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md flex-shrink-0">
                 <button
                   onClick={switchToAudioZone}
-                  className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider transition-all ${
-                    activeZone === 'audio' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
-                  }`}
+                  className="px-2.5 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider bg-white text-black shadow-md transition-all"
                 >
                   ÂM THANH
                 </button>
                 <button
                   onClick={handleToggleMVMode}
-                  className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider transition-all flex items-center gap-1 ${
-                    activeZone === 'video' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
-                  }`}
+                  className="px-2.5 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider text-zinc-400 hover:text-white transition-all flex items-center gap-1"
                 >
                   <Film className="w-2.5 h-2.5" />
                   <span>MV 4K</span>
@@ -964,19 +1013,8 @@ export default function GlobalPlayerBar() {
               </span>
             </div>
 
-            {/* Right: Drawer Triggers, Web PiP & Volume Slider */}
+            {/* Right: Drawer Triggers & Volume Slider */}
             <div className="flex items-center gap-1 sm:gap-1.5 justify-end flex-shrink-0">
-              {/* Picture in Picture Button for Web */}
-              {hasVideoAvailable && (
-                <button
-                  onClick={togglePiP}
-                  title="Picture-in-Picture (P)"
-                  className="p-1.5 sm:p-2 rounded-full border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/15 transition-all"
-                >
-                  <PictureInPicture2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-
               <button
                 onClick={() => {
                   if (typeof window !== 'undefined' && window.innerWidth < 768) {
