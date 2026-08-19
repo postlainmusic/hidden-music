@@ -1,50 +1,69 @@
 # 🧠 HIDDEN MUSIC VAULT - AGENT & WORKSPACE INSTRUCTIONS
 
-> **MỤC ĐÍCH**: File này là kim chỉ nam cho tất cả các Agent/AI khi làm việc trong repository **Hidden Music Vault**. Luôn tuân thủ các quy tắc thiết kế, cấu trúc dữ liệu và quy trình kiểm thử/deploy bên dưới.
+> **MỤC ĐÍCH**: File này là kim chỉ nam cho tất cả các Agent/AI khi làm việc trong repository **Hidden Music Vault** (POSTLAIN). Mọi AI agent bắt buộc phải tuân thủ nghiêm ngặt các quy tắc thiết kế, cấu trúc dữ liệu và quy trình kiểm thử bên dưới.
 
 ---
 
-## 🎯 1. TỔNG QUAN VỀ DỰ ÁN
-* **Tên**: Hidden Music Vault (Kho Lưu Trữ Âm Nhạc & MV Bị Ẩn / Thu Hồi).
-* **Mục đích**: Nền tảng chuyên lưu trữ, phát trực tuyến và bảo tồn các album nhạc, bài hát và MV video hiếm hoặc bị cấm truyền thông.
-* **Tài liệu kiến trúc chi tiết**: Đọc file [PROJECT_BRAIN.md](file:///c:/Users/Admin/Documents/hidden-music/PROJECT_BRAIN.md) để nắm toàn bộ luồng dữ liệu và thông số kĩ thuật.
+## 🎯 1. NGUYÊN TẮC CỐT LÕI (CORE INVARIANTS — KHÔNG ĐƯỢC PHẠM)
+
+1. **Phân Tách Tuyệt Đối Audio Zone & Video Zone**:
+   - Audio Zone (`activeZone === 'audio'`) và Video Zone (`activeZone === 'video'`) là 2 không gian phát độc lập với vòng đời bộ nhớ tách biệt.
+   - **TUYỆT ĐỐI KHÔNG** gộp chung hoặc điều khiển đè lên nhau.
+   - Khi ở Video Zone, `GlobalPlayerBar` PHẢI ở chế độ **Minimal State** (chỉ hiển thị tiêu đề và nút chuyển đổi, không render thanh tua hay nút play/pause trùng lặp).
+2. **Pure Monochrome Cyber-Aesthetic (POSTLAIN Brand)**:
+   - Giao diện sử dụng tone màu đen sâu (`#000000`, `#07070a`), trắng (`#ffffff`), và các sắc thái `zinc-900`/`zinc-800` với viền `border-white/15`.
+   - **TUYỆT ĐỐI KHÔNG** dùng các màu neon sặc sỡ cho UI nền hoặc nút bấm.
+   - **Ảnh bìa Album (Cover Art)**: Luôn giữ nguyên 100% màu sắc thực tế nguyên bản của tác phẩm nghệ thuật.
+3. **100% Thuần Web Application**:
+   - Sử dụng các Web API chuẩn (`navigator.mediaSession`, `document.pictureInPictureElement`, `document.requestFullscreen`, `crypto.subtle`).
+   - **TUYỆT ĐỐI KHÔNG** thêm các cấu hình hay thư viện Native APK (Capacitor, TWA, Cordova).
+4. **Kỷ Luật Import Lucide Icons**:
+   - Mọi icon JSX `<IconName ... />` sử dụng trong component BẮT BUỘC phải được khai báo trong `import { IconName, ... } from 'lucide-react'`.
+   - Thiếu import icon sẽ gây lỗi sập toàn bộ ứng dụng (`ReferenceError: IconName is not defined`).
 
 ---
 
-## 🎨 2. NGUYÊN TẮC THIẾT KẾ (DESIGN SYSTEM & AESTHETICS)
-1. **Pure Monochrome B&W (Trắng - Đen Tối Giản)**:
-   * Chỉ sử dụng tone màu trắng `#ffffff`, đen `#000000`, và các sắc thái xám `slate-800`, `slate-900`.
-   * **TUYỆT ĐỐI KHÔNG** dùng các màu neon, màu sắc sặc sỡ cho UI nền và nút bấm.
-   * **Ảnh bìa Album (Cover Art)**: Luôn giữ nguyên màu sắc gốc thực tế của tác phẩm nghệ thuật.
-2. **Hiệu ứng Analog / CRT Visuals**:
-   * Phủ lớp hạt nhiễu TV cổ điển (`.tv-grain-overlay`).
-   * Phủ dải quét CRT scanlines tinh tế tạo cảm giác băng đĩa ngầm bí ẩn.
-3. **Cột 3D Monolith**:
-   * Cột hiển thị dọc giữa màn hình, tương tác nghiêng 3D (`perspective`, `rotateX`, `rotateY`) mượt mà theo chuyển động con trỏ chuột.
+## ⚙️ 2. QUY TRÌNH THỰC THI 4 BƯỚC BẮT BUỘC (EVERY TASK LIFECYCLE)
+
+Mỗi khi nhận yêu cầu sửa đổi, thêm tính năng hoặc fix bug, Agent PHẢI thực hiện đủ 4 bước tuần tự:
+
+```
+  ┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐
+  │ 1. PRE-FLIGHT CHECK  │ ───► │ 2. CODE EXECUTION    │ ───► │ 3. BUILD VERIFY      │ ───► │ 4. LOG & GIT PUSH    │
+  │ • Đọc PROJECT_BRAIN  │      │ • Viết code 100% full│      │ • Kiểm tra Types     │      │ • Update CHECKPOINT  │
+  │ • Check Invariants   │      │ • Không dùng snippet │      │ • Check icon imports │      │ • Append SYSTEM_LOG  │
+  │ • Check Icon Imports │      │ • Giữ styling chuẩn  │      │ • Edge runtime check │      │ • Commit & Push git  │
+  └──────────────────────┘      └──────────────────────┘      └──────────────────────┘      └──────────────────────┘
+```
+
+### Bước 1: Pre-flight Check (Kiểm tra Ngữ cảnh & Ràng buộc)
+- Đọc [PROJECT_BRAIN.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/PROJECT_BRAIN.md), [CURRENT_CHECKPOINT.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/CURRENT_CHECKPOINT.md) và [SYSTEM_LOG.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/SYSTEM_LOG.md).
+- Kiểm tra danh sách import để không bỏ sót dependency hoặc icon.
+
+### Bước 2: Code Execution (Viết Code Đầy Đủ & Chuẩn Xác)
+- Xuất toàn bộ mã nguồn hoàn chỉnh (100% complete file). **Không bao giờ dùng comment rút gọn như `// ... existing code`**.
+- Tuân thủ TypeScript types trong [`src/types/database.ts`](file:///c:/Users/Admin/Documents/GitHub/hidden-music/src/types/database.ts).
+- Các page/route mới cần khai báo `export const runtime = 'edge';` và `export const dynamic = 'force-dynamic';` để tương thích hoàn toàn với Cloudflare Pages.
+
+### Bước 3: Verification & Integrity Check (Kiểm tra Tính Toàn Vẹn)
+- Rà soát syntax, responsive breakpoints trên cả Desktop và Mobile.
+- Đảm bảo cơ chế bảo vệ phiên đăng nhập và MediaSession hoạt động chính xác.
+
+### Bước 4: Post-flight Update, Logging & Deploy
+- Cập nhật tệp [CURRENT_CHECKPOINT.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/CURRENT_CHECKPOINT.md) với trạng thái mới nhất.
+- Ghi nhận nhật ký thay đổi vào [SYSTEM_LOG.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/SYSTEM_LOG.md).
+- Tạo commit theo chuẩn Conventional Commits (`feat: ...`, `fix: ...`, `refactor: ...`, `perf: ...`, `ci: ...`).
+- Push code lên nhánh `main` để GitHub Actions CI/CD tự động build & deploy.
 
 ---
 
-## 🗄 3. CẤU TRÚC DỮ LIỆU & SUPABASE
+## 🗄️ 3. SUPABASE & DATABASE SCHEMA CONTEXT
+
 * **Project Ref**: `muemwfqynfljpmvxmpep`
 * **URL**: `https://muemwfqynfljpmvxmpep.supabase.co`
 * **Database Tables**:
-  * `public.profiles`: Quản lý người dùng và phân quyền `role` (`user` | `admin`).
+  * `public.profiles`: Quản lý tài khoản, `role` (`user` | `admin`), `plan` (`free` | `vip` | `premium`), `has_video_subscription`.
   * `public.albums`: Thư mục đĩa Album (id, title, artist, original_year, cover_url, is_published).
-  * `public.tracks`: Từng bài hát / MV bên trong Album (id, album_id, title, media_type, audio_url, video_url, lyrics, duration).
-* **Storage Buckets**:
-  * `audio-files`: Tệp âm thanh/video mp3, wav, flac, mp4.
-  * `cover-arts`: Ảnh bìa album thực tế.
-* **RLS Policies**: Thiết lập mở quyền `FOR ALL USING (true) WITH CHECK (true)` để đảm bảo các tác vụ ghi từ Client/Admin luôn thông suốt.
-
----
-
-## ⚙️ 4. QUY TRÌNH CHỈNH SỬA & DEPLOY BẮT BUỘC (MỖI PHIÊN LÀM VIỆC)
-Mỗi khi nhận yêu cầu thêm tính năng, fix bug hoặc thay đổi giao diện, Agent PHẢI thực hiện đủ 4 bước:
-1. **Kiểm tra ngữ cảnh**: Đọc [PROJECT_BRAIN.md](file:///c:/Users/Admin/Documents/hidden-music/PROJECT_BRAIN.md) và các file liên quan trước khi sửa code.
-2. **Viết code chất lượng cao**:
-   * Tuân thủ TypeScript types trong [src/types/database.ts](file:///c:/Users/Admin/Documents/hidden-music/src/types/database.ts).
-   * Không bỏ sót xử lý lỗi và fallback giao diện.
-3. **Kiểm tra tính toàn vẹn (Testing & Linting)**: Đảm bảo không có lỗi cú pháp hoặc gãy luồng logic.
-4. **Commit & Push GitHub**:
-   * Viết commit message theo chuẩn Conventional Commits (`feat: ...`, `fix: ...`, `refactor: ...`).
-   * Push code lên nhánh `main` để Vercel CI/CD tự động build & deploy phiên bản mới.
+  * `public.tracks`: Từng bài hát / MV bên trong Album (id, album_id, title, media_type, audio_url, video_url, cover_url, lyrics, duration).
+  * `public.vouchers`: Quản lý mã kích hoạt gói VIP (id, code, plan_type, max_uses, used_count, is_active).
+* **Storage Buckets**: `audio-files` (lossless audio/video stream), `cover-arts` (high-res artwork).

@@ -1,29 +1,42 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 18/08/2026
-> **Trạng thái**: Hoàn thiện Hệ thống Voucher / Passcode, Admin Voucher Manager, Tắt Footer Audio Zone & Tối ưu hiệu ứng chuyển cảnh mượt mà.
+> **Thời gian cập nhật**: 19/08/2026 16:00 (GMT+7)  
+> **Nhánh hoạt động**: `main`  
+> **Commit Hash triển khai gần nhất**: [`8e9ed02`](https://github.com/postlainmusic/hidden-music/commit/8e9ed02)  
+> **Trạng thái hệ thống**: Ổn định • Đã tối ưu hóa CI/CD Cache • Audio/Video Zone phân tách triệt để • Không còn lỗi crash.
 
 ---
 
-## 🎯 CÁC HẠNG MỤC ĐÃ HOÀN THÀNH:
-1. **Hệ thống Voucher / Passcode & Loại bỏ Dùng thử nhanh**:
-   - Loại bỏ nút "DÙNG THỬ NHANH" (icon tia sét) trong `VideoPaywallModal.tsx`.
-   - Giữ lại ô nhập Voucher / Passcode với nút "ÁP DỤNG".
-   - API `/api/vouchers/redeem` xác thực mã trực tiếp từ bảng `vouchers` Supabase (kiểm tra trạng thái kích hoạt, ngày hết hạn, giới hạn số lượt sử dụng) và tự động nâng cấp VIP cho user.
-   - Thêm tab **"QUẢN LÝ VOUCHER / PASSCODE"** trong Admin Portal (`src/components/admin/AdminVoucherManagement.tsx`):
-     + Form tạo mã: Tự nhập hoặc sinh mã ngẫu nhiên, chọn Gói tháng / Trọn đời VIP, thiết lập số lượt dùng tối đa, hạn sử dụng.
-     + Danh sách mã: Hiển thị Code (nút Copy), Loại gói, Số lượt dùng/tối đa, Trạng thái (Active/Expired/Disabled), Nút Bật/Tắt và Xóa.
-     + API quản lý `/api/admin/vouchers` (GET list, POST create/toggle/delete).
-2. **Tắt Footer trong Audio Zone**:
-   - Ẩn toàn bộ thanh Footer thông tin hệ thống (System Mode, Encryption, Terms...) khi người dùng ở giao diện Audio Zone (`viewMode === 'album'`) và Video Zone.
-   - Footer chỉ hiển thị ở giao diện trang chủ 3D Vault (`viewMode === 'vault'`).
-   - Đảm bảo layout thông thoáng, không che khuất Player Controls.
-3. **Tối ưu hiệu ứng chuyển cảnh (Audio Zone <-> Video Zone)**:
-   - Thêm hiệu ứng chuyển động mượt mà `animate-zoneFadeIn` và `animate-zoneFadeInSubtle` (Fade kết hợp Scale & Slide nhẹ nhàng).
-   - Tối ưu đồng bộ luồng âm thanh/video: Tạm dừng âm thanh sạch sẽ khi vào Video Zone, dọn dẹp bộ nhớ đệm video khi quay lại Audio Zone, tránh tình trạng giật/khựng âm thanh.
+## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
+
+1. **Dọn dẹp triệt để nợ kỹ thuật (Technical Debt Removal)**:
+   - Đã xóa toàn bộ cấu hình thử nghiệm Native/PWA/Capacitor/TWA thừa (`capacitor.config.json`, `twa-manifest.json`, `worker/`, `.github/workflows/build-apk.yml`, `deploy.bat`, `deploy.ps1`, `wrangler.toml`).
+   - Đưa kiến trúc dự án về 100% Next.js 14+ Web Application chuẩn mực.
+
+2. **Nâng cấp Hệ thống Multimedia Super App (Music & 4K MV)**:
+   - **PlayerContext (`src/context/PlayerContext.tsx`)**: Quản lý trạng thái đa phương tiện độc lập (`activeZone: 'audio' | 'video'`, `isPremium`, `currentVideo`, `switchToAudioZone`, `switchToVideoZone`).
+   - **Video Zone Engine (`src/components/video/PremiumVideoPlayer.tsx`)**: Trình phát video chất lượng cao hỗ trợ Picture-in-Picture chuẩn Web, Fullscreen API, bộ chọn tốc độ và timeline scrubber mượt mà.
+   - **Paywall Overlay (`src/components/video/PaywallOverlay.tsx`)**: Khung chặn video cao cấp với giao diện Glassmorphism và CTA nâng cấp.
+   - **AI Discovery Feed (`src/components/discovery/DiscoveryFeed.tsx` & `src/app/discover/page.tsx`)**: Giao diện khám phá âm nhạc & MV theo luồng thẻ ngang trực quan.
+   - **Telemetry Pipeline (`src/hooks/useTelemetry.ts` & `src/app/api/telemetry/route.ts`)**: Thu thập tín hiệu hành vi người dùng (`play`, `progress`, `skip`, `heart`, `paywall_view`) thời gian thực.
+
+3. **Khắc phục lỗi Crash & Tối ưu UI/UX (Phase 1 Fixes)**:
+   - **Fix Crash `ReferenceError: Sparkles is not defined`**: Rà soát và import đầy đủ `Sparkles` trong `Navbar.tsx` và toàn bộ các component liên quan.
+   - **Fix Bug 1 (Duplicate Controls in Video Zone)**: Chuyển `GlobalPlayerBar.tsx` sang Minimal State khi ở Video Zone (chỉ hiển thị tên bài và Master Switcher, ẩn thanh tua và nút play/pause audio).
+   - **Fix Bug 2 (Desktop Drawer Layout Overlap)**: Tái thiết kế ngăn kéo Lời bài hát & Danh sách phát thành dock gắn liền phía trên thanh player (`w-full max-w-4xl`, `h-[220px] sm:h-[260px]`, `rounded-t-2xl`, glassmorphism mờ tối) không che khuất đĩa 3D Monolith.
+
+4. **Tối ưu hóa CI/CD GitHub Actions (`.github/workflows/deploy.yml`)**:
+   - Tích hợp **Aggressive Dual-Layer Caching**: Cache gói `npm` qua `actions/setup-node@v4` và cache toàn bộ `.next/cache` + `.vercel/cache` qua `actions/cache@v4`.
+   - Giảm thời gian build từ ~2 phút xuống mức tối thiểu trong các lần push tiếp theo.
+   - Thiết lập `export const runtime = 'edge';` và `export const dynamic = 'force-dynamic';` cho toàn bộ các route.
 
 ---
 
-## 🚀 CÁC BƯỚC TIẾP THEO:
-1. Commit & push toàn bộ codebase lên GitHub repository (`main`) để Vercel CI/CD tự động deploy.
+## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
+1. **Phase 2: Premium Video Engine Enhancement**:
+   - Bổ sung cấu hình adaptive streaming cho Cloudflare R2 CDN buckets.
+   - Hoàn thiện trải nghiệm chuyển vùng mượt mà giữa Audio Playlist và Video Theater.
+2. **Phase 3: Web Paywall & Monetization Polish**:
+   - Kiểm thử cổng thanh toán payOS VietQR tự động và cơ chế đối soát kích hoạt gói VIP tức thì.
+   - Kiểm tra tương thích mã kích hoạt Voucher/Passcode từ Admin Portal.

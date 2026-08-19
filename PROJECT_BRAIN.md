@@ -1,138 +1,160 @@
-# 🧠 HIDDEN MUSIC VAULT - PROJECT BRAIN & ARCHITECTURE SPECIFICATION
+# 🧠 HIDDEN MUSIC VAULT - PROJECT BRAIN & ARCHITECTURAL SPECIFICATION
 
-> **Document Purpose**: Đây là file tài liệu kiến trúc toàn diện của dự án **Hidden Music Vault**. Mỗi phiên làm việc mới của AI/Developer CHỈ CẦN đọc file này và file [CURRENT_CHECKPOINT.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/CURRENT_CHECKPOINT.md) là nắm 100% tiến độ và các bước làm tiếp theo!
-
----
-
-## 📌 TIẾP TỤC DỰ ÁN TỪ CHECKPOINT: Đọc [CURRENT_CHECKPOINT.md](file:///c:/Users/Admin/Documents/GitHub/hidden-music/CURRENT_CHECKPOINT.md)
-
----
-
-## 🎯 1. TỔNG QUAN DỰ ÁN (PROJECT OVERVIEW)
-* **Tên dự án**: Hidden Music Vault (Kho Lưu Trữ Âm Nhạc & MV Bị Thu Hồi / Ẩn).
-* **Mục đích**: Nền tảng chuyên lưu trữ, phát trực tuyến và bảo tồn các album nhạc, bài hát và MV video hiếm hoặc bị cấm truyền thông.
-* **Phong cách thiết kế (Design System & Aesthetic)**:
-  * **Trắng - Đen Tối Giản (Pure Monochrome B&W)**: Tone màu trắng `#ffffff`, đen `#000000`, và các sắc thái xám `slate-800`, `slate-900`. Không dùng màu neon sặc sỡ cho UI.
-  * **Ảnh bìa Album (Cover Art)**: Luôn giữ nguyên màu sắc gốc thực tế của tác phẩm nghệ thuật (`grayscale={0}`).
-  * **Hiệu ứng Analog / CRT Visuals**: Phủ lớp hạt nhiễu TV cổ điển (`.tv-grain-overlay`) và dải quét CRT scanlines tinh tế.
-  * **Cột 3D Monolith**: Cột hiển thị dọc giữa màn hình, tương tác nghiêng 3D (`perspective`, `rotateX`, `rotateY`) mượt mà theo chuyển động con trỏ chuột.
-  * **Bộ Font Quốc Tế & Việt Hóa**: Sử dụng font **Gotham** (Medium, Ultra, Thin) và **DFVN Grafika** cho độ sắc nét tối đa trên tiếng Việt có dấu.
+> **SINGLE SOURCE OF ARCHITECTURAL TRUTH**  
+> *Project*: **Hidden Music Vault** (POSTLAIN Brand)  
+> *Target Architecture*: Next.js 14+ (App Router) • Pure Web Application • Cloudflare Pages / Vercel Edge Runtime  
+> *Database & Storage*: Supabase PostgreSQL • Cloudflare R2 CDN  
 
 ---
 
-## 🏗 2. KIẾN TRÚC 2 PHÂN VÙNG ĐỘC LẬP (DECOUPLED DUAL-ZONE ARCHITECTURE)
+## 🔒 1. CORE ARCHITECTURAL INVARIANTS (LOCKED — NEVER MODIFY)
 
-Hệ thống phân tách triệt để 2 không gian phát độc lập:
+These principles are the foundational pillars of Hidden Music Vault. Under no circumstances should any developer or AI agent violate or alter these invariants.
+
+### Invariant 1: Strict Decoupled Dual-Zone Architecture (Audio Zone vs Video Zone)
+The application operates on two completely separate, mutually exclusive functional zones:
 
 ```
-                               ┌─────────────────────────────┐
-                               │     HIDDEN MUSIC VAULT      │
-                               └──────────────┬──────────────┘
-                                              │
-                      ┌───────────────────────┴───────────────────────┐
-                      ▼                                               ▼
-          [AUDIO ZONE - ÂM NHẠC]                          [VIDEO ZONE - MV THEATER]
-    ┌───────────────────────────────────┐           ┌───────────────────────────────────┐
-    │ - GlobalPlayerBar toàn màn hình   │           │ - Card Theater tỷ lệ 2/3 chuẩn HD │
-    │ - Thanh Seekbar kéo dài 100%      │   GATE    │ - Trình phát Video độc lập        │
-    │ - Beat Pulse & Gothic Lyrics      │ ◄───────► │ - Compact Playlist & Comments     │
-    │ - Không tải / không chạy video    │  PAYWALL  │ - Dừng & hủy hoàn toàn Audio/Bar  │
-    │ - Nút Video + Gatekeeper Paywall  │           │ - Nút Audio quay lại Audio Zone   │
-    └───────────────────────────────────┘           └───────────────────────────────────┘
+                              ┌────────────────────────────────────────┐
+                              │          HIDDEN MUSIC VAULT            │
+                              └───────────────────┬────────────────────┘
+                                                  │
+                      ┌───────────────────────────┴───────────────────────────┐
+                      ▼                                                       ▼
+          [AUDIO ZONE - HI-RES MUSIC]                             [VIDEO ZONE - 4K MV THEATER]
+    ┌─────────────────────────────────────────┐             ┌─────────────────────────────────────────┐
+    │ • Full-featured GlobalPlayerBar         │             │ • Native 4K/1080p Theater Video Player  │
+    │ • 60FPS Direct DOM Seeker & Scrubber    │    MUTUAL   │ • Video Player Has ITS OWN Controls     │
+    │ • Real-time LRC Gothic Lyrics Sync      │  EXCLUSION  │ • GlobalPlayerBar ENTERS MINIMAL STATE  │
+    │ • Web Audio Sub-Punch Beat Visualizer   │ ◄─────────► │   (No audio seeker, no duplicate play)  │
+    │ • Zero-gap HTML5 Audio Preloading Engine│             │ • Dừng & hủy hoàn toàn Audio Stream     │
+    │ • Master Switcher to Video MV           │             │ • Master Switcher to Audio Zone         │
+    └─────────────────────────────────────────┘             └─────────────────────────────────────────┘
 ```
+
+1. **State Machine Separation**:
+   - Audio Zone is active when `activeZone === 'audio'`. Audio element streams lossless FLAC/MP3/M4A/WAV.
+   - Video Zone is active when `activeZone === 'video'`. Video element streams direct MP4/HLS from Cloudflare R2 CDN.
+2. **Zero Audio Clash / Memory Leak Policy**:
+   - When entering Video Zone: The native audio element (`audioRef.current`) is immediately paused, its `src` wiped, and garbage-collected (`audioRef.current.src = ''; audioRef.current.load();`).
+   - When returning to Audio Zone: Video playback is immediately paused, freeing GPU/video buffers.
+3. **No Duplicate Controls (Minimal Bar Invariant)**:
+   - In Video Zone, the bottom `GlobalPlayerBar` MUST remain in its **Minimal State** (only Track Title, Artist, and the `[ 🎵 ÂM THANH | 🎬 VIDEO MV ]` switcher button). It MUST NEVER render audio seekers, audio play/pause, or skip buttons that duplicate video controls.
 
 ---
 
-## ⚡️ 3. CƠ SỞ DỮ LIỆU & SUPABASE CONFIGURATION
+### Invariant 2: Pure Monochrome Cyber-Aesthetic & Design System (POSTLAIN Brand)
+1. **Color Palette**:
+   - Backgrounds: `#000000` (Pure Black), `#07070a`, `#090a0f` (Deep Cyber Space).
+   - Accents & Highlights: `#ffffff` (Pure White), `#f4f4f5` (Zinc 100).
+   - Containers & Panels: `zinc-950/90`, `zinc-900/80` with glassmorphic borders `border-white/15` or `border-white/20`.
+   - **RULE**: **NO saturated neon greens, blues, or rainbow colors** for UI frames, cards, or buttons.
+2. **Cover Art Authenticity**:
+   - Album & Track Cover Arts MUST retain 100% original, rich, true-to-life colors (`grayscale: 0`). Never apply monochromatic filters to artwork.
+3. **Analog & CRT Retro Atmosphere**:
+   - Covered with `.tv-grain-overlay` (subtle noise simulation) and `.crt-scanlines` (tactile analog CRT line sweeps).
+4. **Typography Hierarchy**:
+   - `font-cyber`: Geometric futuristic bold uppercase titles (**DFVN Grafika**, **Gotham Ultra**).
+   - `font-mono`: Data readouts, timecodes, hashes, technical badges (**JetBrains Mono**).
+   - `font-sans`: Body copy, descriptions, lyrics (**Outfit**, **Be Vietnam Pro**).
+
+---
+
+### Invariant 3: 3D Monolith Vinyl Canvas Integrity
+- Centered 3D Vinyl turntable powered by Three.js (`@react-three/fiber` & `@react-three/drei`).
+- Interactive physics tilt reacting smoothly to mouse pointer coordinates (`perspective`, `rotateX`, `rotateY`).
+- Uncompressed cover artwork mapped directly onto the center vinyl label sticker.
+
+---
+
+### Invariant 4: 100% Pure Web Application (Zero Native APK Bridge Logic)
+- All streaming, picture-in-picture, and media controls use standard HTML5 Web APIs:
+  - `navigator.mediaSession` for lockscreen / OS metadata.
+  - `document.pictureInPictureElement` / `video.requestPictureInPicture()` for standard Web PiP.
+  - `document.requestFullscreen()` for cinema viewing.
+  - Web Crypto API (`crypto.subtle`) for secure signatures.
+- **RULE**: **NO Capacitor, TWA, Cordova, or Android Java Bridges**.
+
+---
+
+### Invariant 5: Lucide Icon Import Rigor
+- **STRICT MANDATE**: Whenever a JSX icon `<IconName ... />` is used in any component, `IconName` MUST be explicitly declared in `import { IconName, ... } from 'lucide-react'`.
+- Missing icon imports cause catastrophic runtime `ReferenceError` crashes during SSR/Client hydration.
+
+---
+
+## 🗺️ 2. ACTIVE SYSTEM ROADMAP (OPEN FOR EXTENSION)
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                              ACTIVE ROADMAP PHASES                                 │
+├───────────────────┬───────────────────┬───────────────────┬────────────────────────┤
+│     PHASE 1       │      PHASE 2      │      PHASE 3      │        PHASE 4         │
+│  Context & Player │   Video Engine &  │    AI Discovery   │   CI/CD Optimization   │
+│  State Expansion  │   Paywall Overlay │   Feed & Telemetry│    & Production Polish │
+├───────────────────┼───────────────────┼───────────────────┼────────────────────────┤
+│ • PlayerContext   │ • PremiumVideo    │ • DiscoveryFeed   │ • Dual-layer Caching   │
+│   (isPremium,     │   Player (PiP,    │   (/discover)     │   (npm + .next/cache)  │
+│    currentVideo)  │   Speed Selector) │ • useTelemetry    │ • Edge Runtime across  │
+│ • Minimal State   │ • PaywallOverlay  │ • /api/telemetry  │   all routes & APIs    │
+│   in Video Zone   │ • payOS & Voucher │ • Curated/Trending│ • Zero build warnings  │
+└───────────────────┴───────────────────┴───────────────────┴────────────────────────┘
+```
+
+1. **AI Discovery & Recommendation Feed (`/discover`)**:
+   - Horizontal swimlanes ("Trending 4K MVs", "Curated for PostLain", "Vault Rarities").
+   - Real-time telemetry ingestion via `useTelemetry()` hook sending behavioral signals (`play`, `progress`, `skip`, `heart`, `paywall_view`) to `/api/telemetry`.
+2. **Premium Paywall & Access Gatekeeper**:
+   - `VideoPaywallModal.tsx`: Automated VietQR checkout via payOS gateway + Voucher passcode activation.
+   - `PaywallOverlay.tsx`: Non-blocking video overlay with upgrade CTA.
+3. **Adaptive Bitrate Video Streaming**:
+   - HTML5 `<video>` engine configured for high-speed edge streaming from Cloudflare R2 CDN buckets.
+
+---
+
+## 🗄️ 3. DATABASE SCHEMA & SUPABASE INTEGRATION
 
 * **Project Ref**: `muemwfqynfljpmvxmpep`
-* **URL REST API**: `https://muemwfqynfljpmvxmpep.supabase.co`
-* **Database Tables**:
-  * `public.profiles`: Quản lý người dùng và phân quyền `role` (`user` | `admin`), gói dịch vụ `plan` và cờ `has_video_subscription`.
-  * `public.albums`: Thư mục đĩa Album (id, title, artist, original_year, cover_url, is_published).
-  * `public.tracks`: Từng bài hát / MV bên trong Album (id, album_id, title, media_type, audio_url, video_url, lyrics, duration).
+* **URL**: `https://muemwfqynfljpmvxmpep.supabase.co`
+* **Tables**:
+  * `public.profiles`: `id`, `email`, `display_name`, `role` (`user` | `admin`), `plan` (`free` | `vip` | `premium`), `has_video_subscription` (boolean), `is_video_paid` (boolean), `created_at`.
+  * `public.albums`: `id`, `title`, `artist`, `original_year`, `cover_url`, `is_published`, `created_at`.
+  * `public.tracks`: `id`, `album_id`, `title`, `artist`, `media_type` (`audio` | `video`), `audio_url`, `video_url`, `cover_url`, `lyrics`, `duration`, `created_at`.
+  * `public.vouchers`: `id`, `code`, `plan_type` (`monthly` | `lifetime`), `max_uses`, `used_count`, `expires_at`, `is_active`, `created_at`.
 * **Storage Buckets**:
-  * `audio-files`: Tệp âm thanh/video mp3, wav, flac, mp4.
-  * `cover-arts`: Ảnh bìa album thực tế.
-* **RLS Policies**: Mở quyền `FOR ALL USING (true) WITH CHECK (true)` để đảm bảo các tác vụ ghi từ Client/Admin luôn thông suốt.
+  * `audio-files`: Hi-Res FLAC, MP3, MP4 uncompressed files.
+  * `cover-arts`: Full-resolution authentic album cover artwork.
 
 ---
 
-## 🎵 4. HỆ THỐNG PHÁT NHẠC & MV ĐA ĐỊNH DẠNG (GLOBAL PLAYER & THEATER ENGINE)
+## 📐 4. UI/UX DESIGN SYSTEM & RESPONSIVE RULES
 
-1. **Audio Zone (GlobalPlayerBar)**:
-   * Thanh Seekbar kéo dài toàn chiều rộng giao diện cho trải nghiệm nghe nhạc thuần túy.
-   * Đồng bộ lời bài hát Gothic LRC mượt mà không viền.
-   * Phản hồi bắt beat Web Audio API (58Hz Sub-Punch Kick & 280Hz Snare Crack).
-   * Tự động ẩn Playbar hoàn toàn khi chuyển qua Video Zone.
-2. **Video Zone (Theater 2/3 Ratio)**:
-   * Khung phát Video HTML5 chiếm tỷ lệ 2/3 với đầy đủ controls (Play/Pause, Seekbar, Volume, Mute, Fullscreen, Next/Prev).
-   * Cột bên phải (1/3) chứa Compact Playlist và Tab Thảo luận / Bình luận.
-   * Nút bấm **AUDIO ZONE** chuyển đổi quay lại Audio Zone an toàn, dừng video và khôi phục Playbar.
-3. **Video Access Gatekeeper**:
-   * Kiểm tra quyền `hasVideoSubscription`.
-   * Tự động bật Modal `VideoPaywallModal` khi người dùng chưa nâng cấp gói dịch vụ.
+| Layer | Z-Index | Component Description |
+| :--- | :---: | :--- |
+| **Canvas Background** | `0` | Deep black background, ambient glow, CRT scanline overlay |
+| **3D Stage & Visualizer**| `10` | Three.js Vinyl turntable, Monolith cards, particles |
+| **Footer Info Bar** | `20` | System status, encryption badge, DMCA/Terms links (Vault mode only) |
+| **Header Navigation** | `30` | `Navbar.tsx` with logo, Discovery link, user profile badge, settings |
+| **Global Player Dock** | `40` | `GlobalPlayerBar.tsx` (Single-line audio bar or Minimal video capsule) |
+| **Attached Drawers** | `45` | Desktop lyrics & queue attached bottom dock (`h-[220px]`, `rounded-t-2xl`) |
+| **Fullscreen Drawers** | `50` | Mobile expanded player sheet (`fixed inset-0`) |
+| **Modals & Gatekeeper**| `50-60`| `VideoPaywallModal`, `ProfileModal`, `SettingsModal`, `VaultGate` |
 
----
-
-## ⌨️ 5. BẢNG PHÍM TẮT BONG BÓNG (SHORTCUTS BUBBLE)
-
-* **Phím tắt toàn cục**:
-  * `ESC` hoặc `?` hoặc `H`: Bật / Tắt Bong bóng phím tắt nhanh.
-  * `Space`: Phát / Tạm dừng (Play / Pause).
-  * `←` / `→`: Chuyển bài trước / Bài kế tiếp.
-  * `L`: Mở / Đóng giao diện Lời bài hát (Gothic Lyrics).
-  * `Q`: Mở / Đóng Danh sách phát (Queue).
-  * `S`: Bật / Tắt chế độ Trộn bài (Shuffle).
-  * `R`: Chuyển chế độ Lặp bài (Repeat Off / One / All).
-  * `F5`: Tải lại trang và giữ nguyên toàn bộ phiên đăng nhập.
-  * `Ctrl + Shift + F5`: Hard Reset, xóa sạch session và đăng xuất an toàn.
+### Responsive Breakpoints:
+* **Mobile (< 768px)**: Compact bottom bar with thin top progress line. Tapping cover art opens the Fullscreen Mobile Player sheet with swipe-down dismissal.
+* **Desktop (≥ 768px)**: Integrated single-line dock. Seeker bar with 60FPS DOM updates. Lyrics & Queue open in an attached dock pinned smoothly above the player bar.
 
 ---
 
-## 🔐 6. TRANG QUẢN TRỊ ADMIN (`/admin`)
+## ⌨️ 5. GLOBAL SHORTCUTS REFERENCE
 
-* **Đường dẫn bí mật**: `/admin`
-* **Tài khoản Admin mặc định**: `Lucii@1108` (hoặc đăng nhập bằng Google Mail admin).
-* **Tách biệt 2 trường dữ liệu độc lập**:
-  * **Ô 1: Tệp Âm thanh / URL Audio (.mp3 / .flac)**.
-  * **Ô 2: Tệp Video / URL MV (.mp4 từ Cloudflare R2 / Supabase)**.
-* Đã loại bỏ hoàn toàn các trường và logic tính toán Video Offset không cần thiết.
-
----
-
-## 📂 7. CẤU TRÚC THƯ MỤC DỰ ÁN (PROJECT STRUCTURE)
-
-```
-c:\Users\Admin\Documents\hidden-music\
-├── PROJECT_BRAIN.md                  <-- File bộ não kiến trúc này
-├── CURRENT_CHECKPOINT.md             <-- Checkpoint tiến độ
-├── AGENTS.md                         <-- Hướng dẫn vận hành AI
-├── .agents/skills/                   <-- Vault Skills (vault-manager, vault-deploy)
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx                <-- Root layout & Grain & ShortcutsDrawer
-│   │   ├── globals.css               <-- CSS TV Grain Noise, CRT Scanlines, @font-face
-│   │   ├── page.tsx                  <-- Trang chủ Cột 3D Vault
-│   │   ├── admin/page.tsx            <-- Trang Admin Quản lý Album / Track độc lập
-│   │   └── album/[id]/page.tsx       <-- Trang Chi Tiết Thư Mục Album
-│   ├── components/
-│   │   ├── 3d/
-│   │   │   ├── VaultScene.tsx        <-- Cột 3D Monolith & Giao diện Video Zone 2/3 Theater
-│   │   │   └── VaultPillar3D.tsx     <-- Cột 3D Album Card
-│   │   └── ui/
-│   │       ├── GlobalPlayerBar.tsx   <-- Trình phát nhạc thuần Audio với timeline kéo dài
-│   │       ├── VideoPaywallModal.tsx <-- Cổng nâng cấp gói Video Pass độc quyền
-│   │       ├── AlbumComments.tsx     <-- Hệ thống bình luận & thảo luận
-│   │       ├── ShortcutsDrawer.tsx   <-- Bong bóng phím tắt trượt thông minh
-│   │       ├── CinematicVisualizer.tsx <-- Hiệu ứng beat visualizer
-│   │       └── VaultGate.tsx         <-- Cổng đăng nhập bảo mật
-│   ├── context/
-│   │   └── PlayerContext.tsx         <-- State phân tách Audio Zone & Video Zone
-│   ├── lib/
-│   │   ├── authSession.ts            <-- Quản lý Session & Quyền Gói Video Subscription
-│   │   ├── lrcParser.ts              <-- Trình đọc lời .LRC
-│   │   └── supabase/                 <-- Client kết nối Supabase
-│   └── types/
-│       └── database.ts               <-- TypeScript Interfaces (Album & TrackItem)
-```
+* `Space`: Play / Pause toggle.
+* `←` / `→`: Seek backward / forward 5 seconds.
+* `L`: Toggle Gothic Lyrics drawer.
+* `Q`: Toggle Queue / Playlist drawer.
+* `S`: Toggle Shuffle mode.
+* `R`: Toggle Repeat mode (`off` $\rightarrow$ `all` $\rightarrow$ `one`).
+* `P`: Toggle Web Picture-in-Picture for video.
+* `F`: Toggle Fullscreen mode.
+* `M`: Toggle Audio/Video Mute.
+* `Ctrl + Shift + F5`: Hard reset session and purge local credentials.
