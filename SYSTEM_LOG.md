@@ -15,6 +15,7 @@
 - [Giao dịch 007: Comprehensive Deep Code Audit & Verification of Items 2 to 9](#giao-dịch-007-comprehensive-deep-code-audit--verification-of-items-2-to-9)
 - [Giao dịch 008: Playbar Cleanup, Footer Spacing & Discovery Feed Revamp](#giao-dịch-008-playbar-cleanup-footer-spacing--discovery-feed-revamp)
 - [Giao dịch 009: Unified Expandable Bottom Sheet Refactor (`GlobalPlayerBar.tsx`)](#giao-dịch-009-unified-expandable-bottom-sheet-refactor-globalplayerbartsx)
+- [Giao dịch 010: Decoupled Two-Layer Drawer & Static Dock Architecture (`GlobalPlayerBar.tsx`)](#giao-dịch-010-decoupled-two-layer-drawer--static-dock-architecture-globalplayerbartsx)
 
 ---
 
@@ -127,6 +128,16 @@
   - **Trạng thái thu gọn (Compact State)**: Chiều cao `74px - 80px`, đặt nổi tại `bottom-6 sm:bottom-8` tránh đè footer.
   - **Trạng thái mở rộng (Expanded State)**: Trượt mượt mà lên trên đạt `480px - 540px` (hiển thị Lyrics Stream hoặc Queue List), thanh điều khiển playback vẫn nằm cố định liền mạch ở đáy khối.
   - **Tự động ẩn 100% trong Video Zone**: `if (activeZone === 'video') return null;`.
+
+---
+
+### Giao dịch 010: Decoupled Two-Layer Drawer & Static Dock Architecture (`GlobalPlayerBar.tsx`)
+* **Thời gian**: 19/08/2026 17:05
+* **Tệp đã sửa**: `src/components/ui/GlobalPlayerBar.tsx`.
+* **Vấn đề & Thay đổi**:
+  - **Khắc phục lỗi biến dạng dock**: Tách `GlobalPlayerBar.tsx` thành 2 tầng anh em (Two Decoupled Sibling Layers) bên trong container `fixed bottom-8 left-1/2 -translate-x-1/2 max-w-5xl`.
+  - **Layer 1 (Slide-Up Drawer)**: Khung chứa Lời bài hát / Hàng chờ phát độc lập (`opacity-100 translate-y-0 max-h-[60vh] h-[480px] mb-3` khi mở, `h-0 opacity-0 mb-0` khi đóng).
+  - **Layer 2 (Immutable Static Playbar Dock)**: Thanh dock điều khiển nằm cố định phía dưới (`w-full bg-[#0c0d12]/92 backdrop-blur-2xl border border-white/15 rounded-2xl sm:rounded-3xl px-3 sm:px-5 py-2.5 sm:py-3 shadow-xl`), **không bao giờ thay đổi chiều cao hoặc biến dạng**.
 
 ---
 
