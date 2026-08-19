@@ -1,17 +1,17 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 19/08/2026 17:12 (GMT+7)  
+> **Thời gian cập nhật**: 19/08/2026 17:25 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Hoàn thành tối ưu giao diện Lời bài hát & Hàng chờ phát: Thiết kế dính liền trực tiếp mép trên thanh playbar, nền kính mờ trong suốt nhẹ (`bg-black/75 backdrop-blur-xl`), xóa bỏ nút chuyển đổi pill giữa lyrics/queue.
+> **Trạng thái hệ thống**: Hoàn thành tái cấu trúc `GlobalPlayerBar.tsx` thành khối kính mờ trong suốt thống nhất 1 Card (`bg-zinc-950/40 backdrop-blur-2xl border-white/15`), loại bỏ cột ảnh/tên album trong Lời bài hát để tập trung 100% vào dòng lyrics phát sáng, hiệu ứng trượt lên/xuống mượt mà không có khoảng hở.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Giao diện Lời bài hát & Hàng chờ phát dính liền (Seamless Attached Glass Drawer)**:
-   - **Gắn liền trực tiếp**: Loại bỏ hoàn toàn khoảng cách hở (`mb-3` $\rightarrow$ `mb-0`), phần Drawer bo tròn cạnh trên (`rounded-t-2xl sm:rounded-t-3xl border-b-0`) và gắn liền vào phần Playbar bên dưới (`rounded-b-2xl sm:rounded-b-3xl border-t border-white/10`).
-   - **Độ trong suốt & Nền mờ nhẹ**: Sử dụng kính mờ trong suốt đồng điệu với Playbar (`bg-black/75 backdrop-blur-xl border border-white/15`).
-   - **Xóa bỏ nút chuyển đổi pill**: Không còn nút `[ LỜI BÀI HÁT | DANH SÁCH ]` trong header của Drawer. Mở qua phím tắt (`L` / `Q`) hoặc nút bấm tương ứng trên Playbar.
+1. **Giao diện Liền 1 khối Kính mờ trong suốt (`GlobalPlayerBar.tsx`)**:
+   - **Thống nhất 1 Card duy nhất**: Toàn bộ Lời bài hát / Hàng chờ và Thanh điều khiển nằm chung trong một vỏ kính mờ `bg-zinc-950/40 backdrop-blur-2xl border border-white/15 rounded-3xl`, không có khoảng cách hở và nhìn xuyên thấu tinh tế đĩa 3D phía sau.
+   - **Tối giản Lời bài hát**: Loại bỏ hoàn toàn cột ảnh bìa và tên bài hát bên trái; tập trung toàn bộ không gian cho dòng lyrics phát sáng chạy đồng bộ ở trung tâm.
+   - **Hiệu ứng trượt mượt mà**: Sử dụng CSS transition `height` và `opacity` với hàm `cubic-bezier(0.16, 1, 0.3, 1)` thời lượng `500ms`, bấm nút trượt mở lên và bấm lại trượt thu gọn xuống êm ái.
    - **Tự động ẩn trong Video Zone**: `if (activeZone === 'video') return null;`.
 
 ---

@@ -17,6 +17,7 @@
 - [Giao dịch 009: Unified Expandable Bottom Sheet Refactor (`GlobalPlayerBar.tsx`)](#giao-dịch-009-unified-expandable-bottom-sheet-refactor-globalplayerbartsx)
 - [Giao dịch 010: Decoupled Two-Layer Drawer & Static Dock Architecture (`GlobalPlayerBar.tsx`)](#giao-dịch-010-decoupled-two-layer-drawer--static-dock-architecture-globalplayerbartsx)
 - [Giao dịch 011: Seamless Attached Glass Drawer & Remove Switcher Pill (`GlobalPlayerBar.tsx`)](#giao-dịch-011-seamless-attached-glass-drawer--remove-switcher-pill-globalplayerbartsx)
+- [Giao dịch 012: Unified Single-Card Translucent Glassmorphism & Pure Centered Lyrics (`GlobalPlayerBar.tsx`)](#giao-dịch-012-unified-single-card-translucent-glassmorphism--pure-centered-lyrics-globalplayerbartsx)
 
 ---
 
@@ -149,6 +150,17 @@
   - **Giao diện Dính liền (Seamless Attached)**: Loại bỏ hoàn toàn khoảng hở (`mb-3` $\rightarrow$ `mb-0`), Drawer dính liền trực tiếp mép trên của Playbar.
   - **Kính mờ trong suốt nhẹ**: Đổi nền sang `bg-black/75 backdrop-blur-xl border-white/15` đồng điệu tuyệt đối với độ trong suốt của Playbar.
   - **Xóa bỏ nút chuyển đổi pill**: Loại bỏ nút `[ LỜI BÀI HÁT | DANH SÁCH ]` trong header của Drawer, giữ giao diện tối giản tinh tế.
+
+---
+
+### Giao dịch 012: Unified Single-Card Translucent Glassmorphism & Pure Centered Lyrics (`GlobalPlayerBar.tsx`)
+* **Thời gian**: 19/08/2026 17:25
+* **Tệp đã sửa**: `src/components/ui/GlobalPlayerBar.tsx`.
+* **Vấn đề & Thay đổi**:
+  - **Liền 1 khối thống nhất 1 Card**: Toàn bộ Playbar và Drawer nằm chung trong 1 vỏ thẻ kính mờ `bg-zinc-950/40 backdrop-blur-2xl border border-white/15 rounded-3xl`, không có bất kỳ khoảng hở hay đường chia cắt nào.
+  - **Kính mờ trong suốt (Translucent Frosted Glass)**: Sử dụng độ mờ `bg-zinc-950/40 backdrop-blur-2xl` cho phép nhìn xuyên thấu đĩa 3D phía sau đúng chuẩn thẩm mỹ Cyber-Aesthetic.
+  - **Bỏ ảnh/tên album trong Lời bài hát**: Loại bỏ cột ảnh và tên bên trái; dành trọn không gian cho dòng lyrics phát sáng đồng bộ ở trung tâm.
+  - **Hiệu ứng trượt mượt mà**: Sử dụng CSS transition `height` và `opacity` với easing `cubic-bezier(0.16, 1, 0.3, 1) 500ms`, trượt lên khi mở và trượt xuống khi bấm đóng hoặc bấm lại nút kích hoạt.
 
 ---
 
