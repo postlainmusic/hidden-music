@@ -1,5 +1,8 @@
 'use client';
 
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {

@@ -12,6 +12,7 @@ import { usePlayer } from '@/context/PlayerContext';
 import { getStoredUserSession, hasActiveSession } from '@/lib/authSession';
 import VaultGate from '@/components/ui/VaultGate';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export default function DiscoverPage() {
