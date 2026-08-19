@@ -1,25 +1,33 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 19/08/2026 17:30 (GMT+7)  
+> **Thời gian cập nhật**: 19/08/2026 17:45 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Hoàn thành tái cấu trúc Modular Player Bar — Phân tách thành 2 component độc lập `DesktopPlayerBar.tsx` (Viewport Desktop `md` trở lên) và `MobilePlayerBar.tsx` (Viewport Mobile dưới `md`) được điều phối bởi `GlobalPlayerBar.tsx`.
+> **Trạng thái hệ thống**: Hoàn tất tích hợp Mobile Gesture Engine (vuốt ngang đổi bài trên mini-bar, vuốt dọc xuống đóng Fullscreen Player), thiết kế chuẩn Streaming App cho MobilePlayerBar, xóa sạch hoàn toàn các tàn dư APK/PWA.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Kiến trúc Modular Player Bar**:
-   - **`DesktopPlayerBar.tsx` (Viewport Desktop)**: Đóng băng nguyên vẹn mã nguồn chuẩn Desktop: Thẻ kính mờ trong suốt `bg-zinc-950/40 backdrop-blur-2xl border-white/15`, Lời bài hát thuần túy căn giữa phát sáng đồng bộ, Hàng chờ phát, và hiệu ứng trượt mở rộng/thu gọn mượt mà.
-   - **`MobilePlayerBar.tsx` (Viewport Mobile)**: Capsule mini-bar đặt nổi tại `fixed bottom-4 left-3 right-3`, thanh tiến trình mảnh trên cùng, nút Play/Pause và nút mở rộng; Bottom Sheet trượt toàn màn hình (`fixed inset-x-0 bottom-0 top-12`) hỗ trợ chuyển tab Lời bài hát / Hàng chờ và điều khiển đầy đủ.
-   - **`GlobalPlayerBar.tsx` (Root Dispatcher)**: Điều phối render theo responsive class (`hidden md:contents` cho Desktop và `block md:hidden` cho Mobile). Tự động ẩn hoàn toàn trong Video Zone (`if (activeZone === 'video') return null;`).
+1. **Thanh tẩy Toàn bộ Tàn dư APK / PWA**:
+   - Quét và xác nhận 100% không còn bất kỳ nút bấm "Cài đặt APK", "Download APK", hay sự kiện `beforeinstallprompt` trong toàn bộ codebase.
+   - Ứng dụng hoạt động thuần Web Application 100%.
 
-2. **Khóa Kiến trúc vào Hệ thống**:
-   - Cập nhật bảng phân tầng giao diện trong `PROJECT_BRAIN.md`.
-   - Ghi nhận vào `SYSTEM_LOG.md`.
+2. **Mobile Gesture Engine & Native Streaming Player UI (`MobilePlayerBar.tsx`)**:
+   - **Compact Mini-Player (Thu gọn)**:
+     * Nhấp bất kỳ đâu trên thanh mini-bar để mở rộng (`onClick={() => setIsExpanded(true)}`), không dùng nút mũi tên riêng biệt.
+     * Tích hợp trực tiếp các nút Play/Pause và Quick Next (`e.stopPropagation()`).
+     * **Vuốt ngang chuyển bài (Horizontal Swipe Gesture)**: Vuốt sang trái đổi bài kế tiếp (`nextTrack`), vuốt sang phải quay lại bài trước (`prevTrack`) kèm hiệu ứng dịch chuyển ngang mượt mà.
+   - **Fullscreen Expanded Mobile Player (Toàn màn hình)**:
+     * **Vuốt dọc xuống để đóng (Vertical Swipe-Down Dismiss)**: Vuốt xuống $\Delta Y > 60\text{px}$ để thu gọn sheet về mini-bar.
+     * Thanh kéo trên cùng tối giản (`w-10 h-1 bg-white/25 rounded-full`).
+     * Giao diện phát chuẩn Streaming (Apple Music / Spotify style): Ảnh bìa nổi bật ở trung tâm, thông tin bài hát và nút Yêu thích (`Heart` $\rightarrow$ `useTelemetry`), thanh tua toàn chiều rộng với thời gian thực, cụm điều khiển trung tâm với nút Play/Pause to tròn (`w-16 h-16 bg-white text-black`), 2 nút chuyển nhanh Lời bài hát (`Mic2`) và Hàng chờ (`ListMusic`) ở 2 góc đáy.
+
+3. **Bảo tồn Tuyệt đối Desktop (`DesktopPlayerBar.tsx`)**:
+   - Giữ nguyên vẹn 100% mã nguồn và trải nghiệm trên Desktop.
 
 ---
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Kiểm thử responsive trên các kích thước màn hình thiết bị thực tế.
+1. Kiểm thử người dùng trên thiết bị di động thực tế.
 2. Tiếp tục hoàn thiện Theater Mode cho Video Zone.
