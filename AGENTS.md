@@ -67,3 +67,18 @@ Mỗi khi nhận yêu cầu sửa đổi, thêm tính năng hoặc fix bug, Agen
   * `public.tracks`: Từng bài hát / MV bên trong Album (id, album_id, title, media_type, audio_url, video_url, cover_url, lyrics, duration).
   * `public.vouchers`: Quản lý mã kích hoạt gói VIP (id, code, plan_type, max_uses, used_count, is_active).
 * **Storage Buckets**: `audio-files` (lossless audio/video stream), `cover-arts` (high-res artwork).
+
+---
+
+## 📸 4. QUY CHUẨN KIỂM TOÁN HÌNH ẢNH & ĐÓNG BĂNG BỘ NHỚ (VISUAL VERIFICATION & MEMORY PROTOCOL)
+
+1. **Sau mỗi lần sửa đổi code (Post-Edit Verification)**:
+   - Chụp ảnh màn hình giao diện đã sửa và lưu vào thư mục `screenshots/` theo cú pháp:
+     `screenshots/PENDING_[FEATURE_NAME]_[YYYYMMDD_HHMM].png`
+   - Báo cáo tóm tắt cho người dùng kèm đường dẫn chính xác của tệp ảnh để người dùng xem xét.
+2. **Khi người dùng phê duyệt ("Duyệt [FEATURE_NAME]")**:
+   - Di chuyển và đổi tên tệp ảnh từ `screenshots/` sang `memory/`:
+     `memory/APPROVED_[FEATURE_NAME].png`
+   - Đóng băng các thông số CSS & Layout vào mục `## Visual Memory & UI Invariants` trong `PROJECT_BRAIN.md`.
+   - Ghi nhận sự kiện phê duyệt vào `SYSTEM_LOG.md`.
+

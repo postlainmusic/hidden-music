@@ -150,11 +150,35 @@ The application operates on two completely separate, mutually exclusive function
 
 * `Space`: Play / Pause toggle.
 * `←` / `→`: Seek backward / forward 5 seconds.
-* `L`: Toggle Gothic Lyrics drawer.
-* `Q`: Toggle Queue / Playlist drawer.
+* `L`: Toggle Fullscreen Immersive Gothic Lyrics stream.
+* `Q`: Toggle Right-Side Queue drawer.
 * `S`: Toggle Shuffle mode.
-* `R`: Toggle Repeat mode (`off` $\rightarrow$ `all` $\rightarrow$ `one`).
+* `R`: Toggle Repeat mode (`off` → `all` → `one`).
 * `P`: Toggle Web Picture-in-Picture for video.
 * `F`: Toggle Fullscreen mode.
 * `M`: Toggle Audio/Video Mute.
+* `Esc`: Close open Drawers / Overlays / Modals.
 * `Ctrl + Shift + F5`: Hard reset session and purge local credentials.
+
+---
+
+## 📸 6. QUY TRÌNH KIỂM TOÁN HÌNH ẢNH & LƯU TRỮ BỘ NHỚ (VISUAL VERIFICATION & MEMORY PROTOCOL)
+
+1. **Cấu trúc thư mục**:
+   - `screenshots/`: Thư mục chứa ảnh chụp màn hình kiểm tra tự động sau mỗi lần sửa đổi code dạng `screenshots/PENDING_[FEATURE_NAME]_[YYYYMMDD_HHMM].png`.
+   - `memory/`: Thư mục lưu trữ vĩnh viễn các chuẩn giao diện thị giác đã được người dùng phê duyệt dạng `memory/APPROVED_[FEATURE_NAME].png`.
+2. **Quy trình kiểm tra sau sửa đổi (Post-Edit Workflow)**:
+   - Bước 1: Kiểm tra biên dịch & cú pháp đảm bảo 0 lỗi.
+   - Bước 2: Chụp ảnh trực quan giao diện đã sửa và lưu vào `screenshots/`.
+   - Bước 3: Báo cáo kèm đường dẫn chính xác cho người dùng kiểm tra.
+3. **Quy trình Phê duyệt & Đóng băng Bộ nhớ (Approval & Memory Archival)**:
+   - Khi người dùng gửi lệnh phê duyệt (ví dụ: "Duyệt [FEATURE_NAME]"):
+     + Di chuyển & đổi tên ảnh từ `screenshots/` sang `memory/APPROVED_[FEATURE_NAME].png`.
+     + Cập nhật mục `## Visual Memory & UI Invariants` trong file này với tên tệp, thông số kích thước và CSS đã xác thực.
+     + Ghi nhận sự kiện phê duyệt vào `SYSTEM_LOG.md`.
+
+---
+
+## 🖼️ 7. VISUAL MEMORY & UI INVARIANTS (CHUẨN GIAO DIỆN ĐÃ PHÊ DUYỆT)
+
+*Mục này đóng băng các chuẩn giao diện thị giác đã được người dùng phê duyệt để các thế hệ AI tiếp theo đối chiếu và không làm lệch layout.*
