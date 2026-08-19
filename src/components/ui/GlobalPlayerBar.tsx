@@ -19,8 +19,6 @@ import {
   ChevronDown,
   Loader2,
   Sparkles,
-  ShieldCheck,
-  Plus,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
@@ -46,7 +44,6 @@ export default function GlobalPlayerBar() {
     shuffleMode,
     repeatMode,
     activeZone,
-    isPremium,
     audioRef,
     currentTimeRef,
     playTrack,
@@ -61,16 +58,10 @@ export default function GlobalPlayerBar() {
 
   const [mounted, setMounted] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
-  const [showQueue, setShowQueue] = useState(false);
-  const [showLyrics, setShowLyrics] = useState(false);
+  const [expandedMode, setExpandedMode] = useState<'none' | 'lyrics' | 'queue'>('none');
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
-  // Mobile Expanded Player Modal State
-  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
-  const [expandedTab, setExpandedTab] = useState<'player' | 'lyrics' | 'queue'>('player');
-
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
-  const expandedLyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const playerRootRef = useRef<HTMLDivElement | null>(null);
   const timelineRafIdRef = useRef<number | null>(null);
   const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -82,13 +73,7 @@ export default function GlobalPlayerBar() {
   const seekerInputRef = useRef<HTMLInputElement | null>(null);
   const mobileSeekerInputRef = useRef<HTMLInputElement | null>(null);
   const mobileProgressBarRef = useRef<HTMLDivElement | null>(null);
-  const expandedCurrentTimeRef = useRef<HTMLSpanElement | null>(null);
-  const expandedSeekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
-
-  // Touch Drag to Dismiss State
-  const touchStartYRef = useRef<number>(0);
-  const touchCurrentYRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -127,10 +112,11 @@ export default function GlobalPlayerBar() {
     }
   }, [currentTrack, currentAlbum, isPlaying]);
 
-  // Click outside to close volume slider
+  // Click outside to collapse
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (playerRootRef.current && !playerRootRef.current.contains(e.target as Node)) {
+        setExpandedMode('none');
         setShowVolumeSlider(false);
       }
     };
@@ -158,9 +144,6 @@ export default function GlobalPlayerBar() {
         if (seekerInputRef.current) {
           seekerInputRef.current.value = String(liveSec);
         }
-        if (expandedSeekerInputRef.current) {
-          expandedSeekerInputRef.current.value = String(liveSec);
-        }
         if (mobileSeekerInputRef.current) {
           mobileSeekerInputRef.current.value = String(liveSec);
         }
@@ -170,9 +153,6 @@ export default function GlobalPlayerBar() {
         }
         if (currentTimeTextRef.current) {
           currentTimeTextRef.current.textContent = formatTime(liveSec);
-        }
-        if (expandedCurrentTimeRef.current) {
-          expandedCurrentTimeRef.current.textContent = formatTime(liveSec);
         }
       }
       timelineRafIdRef.current = requestAnimationFrame(updateDirectTimeline);
@@ -197,9 +177,9 @@ export default function GlobalPlayerBar() {
 
   // Smooth scroll lyrics
   useEffect(() => {
-    if ((!showLyrics && expandedTab !== 'lyrics') || activeLyricIdx < 0) return;
+    if (expandedMode !== 'lyrics' || activeLyricIdx < 0) return;
 
-    const container = showLyrics ? lyricsScrollRef.current : expandedLyricsScrollRef.current;
+    const container = lyricsScrollRef.current;
     if (!container) return;
 
     const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
@@ -210,7 +190,7 @@ export default function GlobalPlayerBar() {
         inline: 'nearest',
       });
     }
-  }, [activeLyricIdx, showLyrics, expandedTab]);
+  }, [activeLyricIdx, expandedMode]);
 
   // Keyboard shortcuts (Audio Zone only)
   useEffect(() => {
@@ -223,10 +203,10 @@ export default function GlobalPlayerBar() {
         togglePlay();
       } else if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
-        setShowLyrics((prev) => !prev);
+        setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'));
       } else if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault();
-        setShowQueue((prev) => !prev);
+        setExpandedMode((prev) => (prev === 'queue' ? 'none' : 'queue'));
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         const cur = currentTimeRef?.current ?? currentTime;
@@ -236,32 +216,14 @@ export default function GlobalPlayerBar() {
         const cur = currentTimeRef?.current ?? currentTime;
         seekTo(Math.min(duration || 999, cur + 5));
       } else if (e.key === 'Escape') {
-        if (showLyrics) setShowLyrics(false);
-        if (showQueue) setShowQueue(false);
-        if (isMobileExpanded) setIsMobileExpanded(false);
+        setExpandedMode('none');
+        setShowVolumeSlider(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeZone, togglePlay, seekTo, currentTime, duration, currentTimeRef, showLyrics, showQueue, isMobileExpanded]);
-
-  // Handle Swipe Down to dismiss Expanded Player
-  const handleTouchStartSheet = (e: React.TouchEvent) => {
-    touchStartYRef.current = e.touches[0].clientY;
-    touchCurrentYRef.current = e.touches[0].clientY;
-  };
-
-  const handleTouchMoveSheet = (e: React.TouchEvent) => {
-    touchCurrentYRef.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEndSheet = () => {
-    const deltaY = touchCurrentYRef.current - touchStartYRef.current;
-    if (deltaY > 100) {
-      setIsMobileExpanded(false);
-    }
-  };
+  }, [activeZone, togglePlay, seekTo, currentTime, duration, currentTimeRef]);
 
   // iOS Vertical Capsule Volume Slider
   const calculateVolumeFromClientY = useCallback(
@@ -343,434 +305,193 @@ export default function GlobalPlayerBar() {
   }
 
   const effectiveDuration = duration > 0 && isFinite(duration) ? duration : currentTrack.duration || 0;
+  const isExpanded = expandedMode !== 'none';
 
   return (
-    <>
-      {/* ========================================================================= */}
-      {/* 1. FULLSCREEN IMMERSIVE LYRICS OVERLAY (DESKTOP & TABLET)                 */}
-      {/* ========================================================================= */}
-      {showLyrics && (
-        <div className="fixed inset-0 z-50 bg-black/92 backdrop-blur-3xl text-white flex flex-col justify-between p-6 sm:p-10 md:p-14 animate-fadeIn select-none">
-          {/* Top Header & Close Button */}
-          <div className="flex items-center justify-between w-full flex-shrink-0 border-b border-white/10 pb-4">
-            <div className="flex items-center gap-3">
-              <Mic2 className="w-5 h-5 text-white animate-pulse" />
-              <span className="text-xs uppercase tracking-widest font-cyber font-black text-white">
-                LỜI BÀI HÁT // GOTHIC LYRICS STREAM
-              </span>
-            </div>
-            <button
-              onClick={() => setShowLyrics(false)}
-              className="p-2 rounded-full bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-all"
-              title="Đóng lời bài hát (Esc)"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Main Content Area: Split View (Left: Artwork/Meta, Right: Lyrics Stream) */}
-          <div className="flex-1 min-h-0 my-6 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-16 overflow-hidden">
-            {/* Left Column: Artwork & Track Bio */}
-            <div className="hidden md:flex flex-col items-center md:items-start text-left w-72 lg:w-96 flex-shrink-0">
-              <div className="relative w-64 h-64 lg:w-80 lg:h-80 rounded-3xl overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,0.95)] border border-white/20 bg-zinc-950 flex items-center justify-center mb-6">
-                {currentAlbum?.cover_url ? (
-                  <img
-                    src={currentAlbum.cover_url}
-                    alt={currentAlbum.title || 'Cover'}
-                    className={`w-full h-full object-cover transition-transform duration-700 ${isPlaying ? 'scale-105' : 'scale-100'}`}
-                  />
-                ) : (
-                  <Disc3 className="w-24 h-24 text-white/40 animate-spin" />
-                )}
-              </div>
-              <h2 className="text-xl lg:text-2xl font-cyber font-black text-white truncate max-w-full uppercase">
-                {currentTrack.title}
-              </h2>
-              <p className="text-sm font-mono text-zinc-400 truncate max-w-full uppercase mt-1">
-                {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
-              </p>
-              <p className="text-xs font-mono text-zinc-500 truncate max-w-full uppercase mt-0.5">
-                {currentAlbum?.title || 'HIDDEN DISC'}
-              </p>
-            </div>
-
-            {/* Right Column: Synced Lyrics Stream */}
-            <div
-              ref={lyricsScrollRef}
-              className="flex-1 w-full h-full overflow-y-auto no-scrollbar text-center md:text-left py-28 md:py-36 space-y-6 md:space-y-8 font-sans px-4"
-              style={{
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-              }}
-            >
-              {parsedLyrics.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 text-sm uppercase tracking-widest font-mono">
-                  Chưa có lời bài hát cho tác phẩm này
-                </div>
-              ) : (
-                parsedLyrics.map((line, idx) => {
-                  const isActive = idx === activeLyricIdx;
-                  return (
-                    <p
-                      key={idx}
-                      data-active-lyric={isActive ? 'true' : 'false'}
-                      onClick={() => seekTo(line.time)}
-                      className={`transition-all duration-300 cursor-pointer select-none leading-relaxed ${
-                        isActive
-                          ? 'text-white text-2xl sm:text-3xl md:text-4xl font-extrabold drop-shadow-[0_0_20px_rgba(255,255,255,0.8)] scale-[1.02] opacity-100'
-                          : 'text-zinc-500 hover:text-zinc-300 text-base sm:text-lg md:text-xl font-medium opacity-40 hover:opacity-75'
-                      }`}
-                    >
-                      {line.text}
-                    </p>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Bottom Hint */}
-          <div className="flex items-center justify-between text-xs font-mono text-zinc-500 border-t border-white/10 pt-3">
-            <span>NHẤP VÀO DÒNG LỜI ĐỂ TUA ĐẾN ĐOẠN ĐÓ</span>
-            <span className="hidden sm:inline">NHẤN ESC ĐỂ ĐÓNG</span>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. RIGHT-SIDE SLIDE-IN QUEUE DRAWER (DESKTOP & MOBILE)                    */}
-      {/* ========================================================================= */}
-      {showQueue && (
-        <>
-          {/* Backdrop for click away */}
-          <div
-            onClick={() => setShowQueue(false)}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-fadeIn"
-          />
-          <aside className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0d12]/98 backdrop-blur-3xl border-l border-white/15 z-50 p-5 shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col justify-between font-mono animate-slideInRight select-none">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-white/10 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <ListMusic className="w-5 h-5 text-white" />
-                <span className="text-xs uppercase font-extrabold tracking-widest text-white font-cyber">
-                  HÀNG CHỜ PHÁT ({playlist.length} BÀI)
-                </span>
-              </div>
-              <button
-                onClick={() => setShowQueue(false)}
-                className="p-1.5 rounded-full bg-white/10 hover:bg-white text-zinc-300 hover:text-black transition-all"
-                title="Đóng (Esc)"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Track list */}
-            <div className="flex-1 min-h-0 my-3 overflow-y-auto no-scrollbar space-y-2 pr-1">
-              {playlist.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs uppercase tracking-widest">
-                  Hàng chờ phát đang trống
-                </div>
-              ) : (
-                playlist.map((track, idx) => {
-                  const isCur = track.id === currentTrack.id;
-                  return (
-                    <div
-                      key={track.id || idx}
-                      onClick={() => playTrack(track, currentAlbum, playlist)}
-                      className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
-                        isCur
-                          ? 'bg-white/15 border-white text-white font-bold shadow-lg'
-                          : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-xs font-mono text-zinc-400 w-5 text-center flex-shrink-0">
-                          {String(idx + 1).padStart(2, '0')}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs truncate font-bold">{track.title}</p>
-                          <p className="text-[10px] text-zinc-400 truncate">{track.artist || currentAlbum?.artist}</p>
-                        </div>
-                      </div>
-                      {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Queue Footer */}
-            <div className="pt-3 border-t border-white/10 text-[11px] text-zinc-500 flex items-center justify-between">
-              <span>ĐANG PHÁT TỪ VAULT</span>
-              <span className="text-white font-bold">{formatTime(effectiveDuration)}</span>
-            </div>
-          </aside>
-        </>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 3. MOBILE FULLSCREEN EXPANDED SHEET                                      */}
-      {/* ========================================================================= */}
+    <div
+      ref={playerRootRef}
+      className="fixed bottom-6 sm:bottom-8 left-0 right-0 z-50 flex justify-center pointer-events-none px-3 sm:px-6 md:px-8 select-none"
+    >
+      {/* UNIFIED EXPANDABLE GLASSMORPHIC BOTTOM SHEET */}
       <div
-        onTouchStart={handleTouchStartSheet}
-        onTouchMove={handleTouchMoveSheet}
-        onTouchEnd={handleTouchEndSheet}
-        className={`fixed inset-0 z-50 md:hidden bg-[#07070a]/98 backdrop-blur-3xl text-white flex flex-col justify-between p-6 transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] select-none will-change-transform ${
-          isMobileExpanded ? 'translate-y-0 pointer-events-auto' : 'translate-y-full pointer-events-none'
+        className={`w-full max-w-5xl rounded-3xl border border-white/20 bg-[#0c0d12]/95 backdrop-blur-3xl shadow-[0_25px_60px_rgba(0,0,0,0.95)] pointer-events-auto overflow-hidden flex flex-col transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isExpanded
+            ? 'h-[480px] sm:h-[540px] max-h-[75vh]'
+            : 'h-[74px] sm:h-[80px]'
         }`}
-        style={{
-          paddingTop: 'max(24px, env(safe-area-inset-top))',
-          paddingBottom: 'max(28px, env(safe-area-inset-bottom))',
-        }}
       >
-        {/* Dynamic Background Glow */}
-        <div className="absolute inset-0 pointer-events-none -z-10 overflow-hidden opacity-30">
-          <div
-            className="absolute -top-1/4 -left-1/4 w-[150%] h-[150%] blur-[120px]"
-            style={{
-              backgroundImage: currentAlbum?.cover_url
-                ? `radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(59,130,246,0.15) 50%, transparent 80%)`
-                : 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-            }}
-          />
-        </div>
-
-        {/* Top Dismiss Bar */}
-        <div className="flex items-center justify-between w-full flex-shrink-0">
-          <button
-            onClick={() => setIsMobileExpanded(false)}
-            className="p-2 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all"
-            title="Thu nhỏ"
-          >
-            <ChevronDown className="w-5 h-5" />
-          </button>
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">ĐANG PHÁT TỪ VAULT</span>
-          <div className="w-9 h-9" />
-        </div>
-
-        {/* Center Main Viewport */}
-        <div className="flex-1 min-h-0 my-4 flex flex-col items-center justify-center relative overflow-hidden">
-          {expandedTab === 'player' && (
-            <div className="w-full flex flex-col items-center justify-center animate-fadeIn">
-              <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.9)] border border-white/20 bg-zinc-950 flex items-center justify-center">
-                {currentAlbum?.cover_url ? (
-                  <img
-                    src={currentAlbum.cover_url}
-                    alt={currentAlbum.title || 'Cover'}
-                    className={`w-full h-full object-cover transition-transform duration-700 ${isPlaying ? 'scale-105' : 'scale-100'}`}
-                  />
+        {/* ========================================================================= */}
+        {/* TOP UPWARD-EXPANDED CONTENT SECTION (Lyrics / Queue)                      */}
+        {/* ========================================================================= */}
+        {isExpanded && (
+          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 border-b border-white/10 overflow-hidden animate-fadeIn">
+            {/* Sheet Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                {expandedMode === 'lyrics' ? (
+                  <>
+                    <div className="p-1.5 rounded-lg bg-white/10 text-white">
+                      <Mic2 className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs uppercase font-cyber font-black tracking-wider text-white">
+                      LỜI BÀI HÁT // GOTHIC SYNCED STREAM
+                    </span>
+                  </>
                 ) : (
-                  <Disc3
-                    className="w-24 h-24 text-white/50 animate-spin"
-                    style={{ animationPlayState: isPlaying ? 'running' : 'paused', animationDuration: '4s' }}
-                  />
+                  <>
+                    <div className="p-1.5 rounded-lg bg-white/10 text-white">
+                      <ListMusic className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs uppercase font-cyber font-black tracking-wider text-white">
+                      HÀNG CHỜ PHÁT ({playlist.length} BÀI)
+                    </span>
+                  </>
                 )}
               </div>
-            </div>
-          )}
 
-          {expandedTab === 'lyrics' && (
-            <div
-              ref={expandedLyricsScrollRef}
-              className="w-full h-full overflow-y-auto text-center py-20 px-4 font-sans space-y-4 no-scrollbar animate-fadeIn"
-            >
-              {parsedLyrics.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-sm uppercase tracking-widest font-mono">
-                  Chưa có lời bài hát cho tác phẩm này
-                </div>
-              ) : (
-                parsedLyrics.map((line, idx) => {
-                  const isActive = idx === activeLyricIdx;
-                  return (
-                    <p
-                      key={idx}
-                      data-active-lyric={isActive ? 'true' : 'false'}
-                      onClick={() => seekTo(line.time)}
-                      className={`transition-all duration-300 cursor-pointer font-sans leading-relaxed ${
-                        isActive
-                          ? 'text-white text-lg sm:text-xl font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-105'
-                          : 'text-zinc-500 text-sm font-medium opacity-50'
-                      }`}
-                    >
-                      {line.text}
-                    </p>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {expandedTab === 'queue' && (
-            <div className="w-full h-full overflow-y-auto space-y-2 p-2 font-mono no-scrollbar animate-fadeIn">
-              <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-3 px-2">
-                HÀNG CHỜ PHÁT ({playlist.length} BÀI)
-              </h4>
-              {playlist.map((track, idx) => {
-                const isCur = track.id === currentTrack.id;
-                return (
-                  <div
-                    key={track.id || idx}
-                    onClick={() => playTrack(track, currentAlbum, playlist)}
-                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
-                      isCur
-                        ? 'bg-white/20 border-white text-white font-bold'
-                        : 'bg-white/5 border-white/10 text-zinc-300'
+              <div className="flex items-center gap-2">
+                {/* Switcher between lyrics and queue inside expanded sheet */}
+                <div className="flex items-center p-0.5 rounded-full bg-white/10 border border-white/15">
+                  <button
+                    onClick={() => setExpandedMode('lyrics')}
+                    className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold transition-all ${
+                      expandedMode === 'lyrics' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-xs font-mono text-zinc-400 w-5 text-center">
-                        {String(idx + 1).padStart(2, '0')}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs truncate font-bold">{track.title}</p>
-                        <p className="text-[10px] text-zinc-400 truncate">{track.artist || currentAlbum?.artist}</p>
-                      </div>
-                    </div>
-                    {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                    LỜI BÀI HÁT
+                  </button>
+                  <button
+                    onClick={() => setExpandedMode('queue')}
+                    className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold transition-all ${
+                      expandedMode === 'queue' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    DANH SÁCH
+                  </button>
+                </div>
 
-        {/* Bottom Controls */}
-        <div className="flex flex-col gap-4 w-full flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <h3 className="text-base sm:text-lg font-cyber font-black text-white truncate uppercase">
-                {currentTrack.title}
-              </h3>
-              <p className="text-xs font-mono text-zinc-400 truncate uppercase mt-0.5">
-                {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setExpandedTab(expandedTab === 'lyrics' ? 'player' : 'lyrics')}
-                className={`p-2 rounded-full border transition-all ${
-                  expandedTab === 'lyrics' ? 'bg-white text-black border-white' : 'bg-white/5 border-white/15 text-zinc-300'
-                }`}
-                title="Lyrics"
-              >
-                <Mic2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setExpandedTab(expandedTab === 'queue' ? 'player' : 'queue')}
-                className={`p-2 rounded-full border transition-all ${
-                  expandedTab === 'queue' ? 'bg-white text-black border-white' : 'bg-white/5 border-white/15 text-zinc-300'
-                }`}
-                title="Queue"
-              >
-                <ListMusic className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Seeker */}
-          <div className="flex flex-col gap-1.5 w-full">
-            <div className="relative w-full h-3 flex items-center">
-              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div
-                  ref={mobileProgressBarRef}
-                  style={{ width: `${(currentTime / effectiveDuration) * 100}%` }}
-                  className="h-full bg-white transition-[width] duration-75"
-                />
+                <button
+                  onClick={() => setExpandedMode('none')}
+                  className="p-1.5 rounded-full bg-white/10 hover:bg-white text-zinc-300 hover:text-black transition-all"
+                  title="Thu nhỏ (Esc)"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
               </div>
-              <input
-                ref={expandedSeekerInputRef}
-                type="range"
-                min={0}
-                max={effectiveDuration || 100}
-                defaultValue={currentTime}
-                onMouseDown={() => (isDraggingSeekerRef.current = true)}
-                onTouchStart={() => (isDraggingSeekerRef.current = true)}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  if (expandedCurrentTimeRef.current) {
-                    expandedCurrentTimeRef.current.textContent = formatTime(val);
-                  }
-                }}
-                onMouseUp={(e) => {
-                  isDraggingSeekerRef.current = false;
-                  seekTo(parseFloat((e.target as HTMLInputElement).value));
-                }}
-                onTouchEnd={(e) => {
-                  isDraggingSeekerRef.current = false;
-                  seekTo(parseFloat((e.target as HTMLInputElement).value));
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
             </div>
 
-            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span ref={expandedCurrentTimeRef}>{formatTime(currentTime)}</span>
-              <span>{formatTime(effectiveDuration)}</span>
-            </div>
-          </div>
+            {/* Sheet Body */}
+            <div className="flex-1 min-h-0 relative overflow-hidden my-2">
+              {/* Lyrics Stream Body */}
+              {expandedMode === 'lyrics' && (
+                <div className="h-full flex flex-col md:flex-row items-center justify-between gap-6 md:gap-10 overflow-hidden">
+                  {/* Left: Album cover in lyrics sheet */}
+                  <div className="hidden md:flex flex-col items-center text-center w-56 flex-shrink-0">
+                    <div className="relative w-44 h-44 rounded-2xl overflow-hidden shadow-2xl border border-white/20 bg-zinc-950 mb-3 flex items-center justify-center">
+                      {currentAlbum?.cover_url ? (
+                        <img
+                          src={currentAlbum.cover_url}
+                          alt={currentAlbum.title || 'Cover'}
+                          className={`w-full h-full object-cover transition-transform duration-700 ${isPlaying ? 'scale-105' : 'scale-100'}`}
+                        />
+                      ) : (
+                        <Disc3 className="w-16 h-16 text-zinc-700 animate-spin" />
+                      )}
+                    </div>
+                    <h3 className="text-sm font-cyber font-extrabold text-white truncate max-w-full uppercase">
+                      {currentTrack.title}
+                    </h3>
+                    <p className="text-xs font-mono text-zinc-400 truncate max-w-full uppercase mt-0.5">
+                      {currentTrack.artist || currentAlbum?.artist}
+                    </p>
+                  </div>
 
-          {/* Main Controls Row */}
-          <div className="flex items-center justify-between px-2 pt-1">
-            <button
-              onClick={toggleShuffle}
-              className={`p-2.5 rounded-full border transition-all ${
-                shuffleMode ? 'bg-white text-black border-white shadow-md' : 'bg-white/5 text-zinc-400 border-white/10'
-              }`}
-            >
-              <Shuffle className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={prevTrack}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-transform active:scale-95"
-            >
-              <SkipBack className="w-6 h-6 fill-current" />
-            </button>
-
-            <button
-              onClick={togglePlay}
-              className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-transform active:scale-95"
-            >
-              {isBuffering ? (
-                <Loader2 className="w-7 h-7 animate-spin" />
-              ) : isPlaying ? (
-                <Pause className="w-7 h-7 fill-current" />
-              ) : (
-                <Play className="w-7 h-7 fill-current ml-1" />
+                  {/* Right: Synced Lyrics */}
+                  <div
+                    ref={lyricsScrollRef}
+                    className="flex-1 w-full h-full overflow-y-auto no-scrollbar text-center md:text-left py-20 md:py-24 space-y-4 md:space-y-6 font-sans px-3"
+                    style={{
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none',
+                    }}
+                  >
+                    {parsedLyrics.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs uppercase tracking-widest font-mono">
+                        Chưa có lời bài hát cho tác phẩm này
+                      </div>
+                    ) : (
+                      parsedLyrics.map((line, idx) => {
+                        const isActive = idx === activeLyricIdx;
+                        return (
+                          <p
+                            key={idx}
+                            data-active-lyric={isActive ? 'true' : 'false'}
+                            onClick={() => seekTo(line.time)}
+                            className={`transition-all duration-300 cursor-pointer select-none leading-relaxed ${
+                              isActive
+                                ? 'text-white text-xl sm:text-2xl font-black drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] scale-[1.02] opacity-100'
+                                : 'text-zinc-500 hover:text-zinc-300 text-sm sm:text-base font-medium opacity-40 hover:opacity-75'
+                            }`}
+                          >
+                            {line.text}
+                          </p>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               )}
-            </button>
 
-            <button
-              onClick={nextTrack}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-transform active:scale-95"
-            >
-              <SkipForward className="w-6 h-6 fill-current" />
-            </button>
-
-            <button
-              onClick={toggleRepeat}
-              className={`p-2.5 rounded-full border transition-all ${
-                repeatMode !== 'off' ? 'bg-white text-black border-white shadow-md' : 'bg-white/5 text-zinc-400 border-white/10'
-              }`}
-            >
-              {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
-            </button>
+              {/* Queue List Body */}
+              {expandedMode === 'queue' && (
+                <div
+                  className="h-full overflow-y-auto no-scrollbar space-y-2 py-1 font-mono pr-1"
+                  style={{
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                  }}
+                >
+                  {playlist.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs uppercase tracking-widest">
+                      Hàng chờ phát đang trống
+                    </div>
+                  ) : (
+                    playlist.map((track, idx) => {
+                      const isCur = track.id === currentTrack.id;
+                      return (
+                        <div
+                          key={track.id || idx}
+                          onClick={() => playTrack(track, currentAlbum, playlist)}
+                          className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+                            isCur
+                              ? 'bg-white/15 border-white text-white font-bold shadow-md'
+                              : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="text-xs font-mono text-zinc-400 w-5 text-center flex-shrink-0">
+                              {String(idx + 1).padStart(2, '0')}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm truncate font-bold">{track.title}</p>
+                              <p className="text-[10px] text-zinc-400 truncate">{track.artist || currentAlbum?.artist}</p>
+                            </div>
+                          </div>
+                          {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* ========================================================================= */}
-      {/* 4. ELEVATED FLOATING DOCK PLAYBAR (ABOVE FOOTER)                          */}
-      {/* ========================================================================= */}
-      <div
-        ref={playerRootRef}
-        className={`fixed bottom-8 sm:bottom-10 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none px-3 sm:px-6 md:px-8 transition-all duration-300 ${
-          isMobileExpanded ? 'opacity-0 translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0'
-        }`}
-      >
-        <div className="w-full max-w-5xl rounded-2xl md:rounded-3xl border border-white/20 bg-zinc-950/95 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-2 sm:p-2.5 md:p-3 flex flex-col gap-1 pointer-events-auto relative overflow-hidden transition-all duration-300">
+        {/* ========================================================================= */}
+        {/* BASE DOCKED PLAYBACK ROW (ALWAYS VISIBLE AT BOTTOM OF CONTAINER)          */}
+        {/* ========================================================================= */}
+        <div className="w-full px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-1 flex-shrink-0">
           {/* Mobile Top Thin Progress Line */}
           <div className="md:hidden relative w-full h-1 bg-white/10 rounded-full overflow-hidden -mt-1 mb-1">
             <div
@@ -804,19 +525,14 @@ export default function GlobalPlayerBar() {
             />
           </div>
 
-          {/* SINGLE-ROW RESPONSIVE FLEXBOX */}
+          {/* MAIN SINGLE-ROW FLEXBOX */}
           <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
             {/* Left: Track Information & Cover */}
             <div
-              onClick={() => {
-                if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                  setIsMobileExpanded(true);
-                  setExpandedTab('player');
-                }
-              }}
-              className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-[220px] flex-shrink-0 cursor-pointer md:cursor-default group/trackinfo"
+              onClick={() => setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'))}
+              className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-[220px] flex-shrink-0 cursor-pointer group/trackinfo"
             >
-              <div className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-lg">
+              <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-md">
                 {currentAlbum?.cover_url ? (
                   <img
                     src={currentAlbum.cover_url}
@@ -832,7 +548,7 @@ export default function GlobalPlayerBar() {
               </div>
 
               <div className="flex flex-col min-w-0">
-                <span className="text-[11px] sm:text-xs font-cyber font-extrabold text-white truncate uppercase tracking-wide">
+                <span className="text-[11px] sm:text-xs font-cyber font-extrabold text-white truncate uppercase tracking-wide group-hover/trackinfo:text-zinc-200 transition-colors">
                   {currentTrack.title}
                 </span>
                 <span className="text-[9px] sm:text-[10px] text-zinc-400 font-mono font-bold truncate uppercase mt-0.5">
@@ -949,10 +665,10 @@ export default function GlobalPlayerBar() {
             {/* Right: Drawer Triggers & Volume Slider */}
             <div className="flex items-center gap-1.5 sm:gap-2 justify-end flex-shrink-0">
               <button
-                onClick={() => setShowLyrics((prev) => !prev)}
-                title="Lời bài hát toàn màn hình (L)"
+                onClick={() => setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'))}
+                title="Lời bài hát (L)"
                 className={`p-1.5 sm:p-2 rounded-full border transition-all ${
-                  showLyrics
+                  expandedMode === 'lyrics'
                     ? 'bg-white text-black border-white shadow-md'
                     : 'bg-white/5 text-zinc-300 border-white/10 hover:text-white hover:bg-white/15'
                 }`}
@@ -961,10 +677,10 @@ export default function GlobalPlayerBar() {
               </button>
 
               <button
-                onClick={() => setShowQueue((prev) => !prev)}
-                title="Danh sách phát bên phải (Q)"
+                onClick={() => setExpandedMode((prev) => (prev === 'queue' ? 'none' : 'queue'))}
+                title="Danh sách phát (Q)"
                 className={`p-1.5 sm:p-2 rounded-full border transition-all ${
-                  showQueue
+                  expandedMode === 'queue'
                     ? 'bg-white text-black border-white shadow-md'
                     : 'bg-white/5 text-zinc-300 border-white/10 hover:text-white hover:bg-white/15'
                 }`}
@@ -972,16 +688,14 @@ export default function GlobalPlayerBar() {
                 <ListMusic className="w-3.5 h-3.5" />
               </button>
 
-              {/* Volume Slider for Desktop */}
+              {/* Volume Slider */}
               <div
                 className="hidden md:block relative"
                 onMouseEnter={handleVolumeMouseEnter}
                 onMouseLeave={handleVolumeMouseLeave}
               >
                 <button
-                  onClick={() => {
-                    setShowVolumeSlider((prev) => !prev);
-                  }}
+                  onClick={() => setShowVolumeSlider((prev) => !prev)}
                   onDoubleClick={() => setVolume(volume > 0 ? 0 : 0.8)}
                   title={`Âm lượng: ${Math.round(volume * 100)}%`}
                   className={`p-1.5 sm:p-2 rounded-full border transition-all ${
@@ -1041,6 +755,6 @@ export default function GlobalPlayerBar() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

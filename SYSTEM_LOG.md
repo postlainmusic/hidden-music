@@ -14,6 +14,7 @@
 - [Giao dịch 006: Minimal Player in Video Zone & Desktop Drawer Redesign (`8e9ed02`)](#giao-dịch-006-minimal-player-in-video-zone--desktop-drawer-redesign-8e9ed02)
 - [Giao dịch 007: Comprehensive Deep Code Audit & Verification of Items 2 to 9](#giao-dịch-007-comprehensive-deep-code-audit--verification-of-items-2-to-9)
 - [Giao dịch 008: Playbar Cleanup, Footer Spacing & Discovery Feed Revamp](#giao-dịch-008-playbar-cleanup-footer-spacing--discovery-feed-revamp)
+- [Giao dịch 009: Unified Expandable Bottom Sheet Refactor (`GlobalPlayerBar.tsx`)](#giao-dịch-009-unified-expandable-bottom-sheet-refactor-globalplayerbartsx)
 
 ---
 
@@ -115,6 +116,17 @@
      - Tương tác thẻ trực tiếp: Quick Play, Add to Queue (`+`), Like (`Heart` -> `useTelemetry`).
   3. **PlayerContext Expansion**:
      - Bổ sung `addToQueue(track)` vào interface và provider context.
+
+---
+
+### Giao dịch 009: Unified Expandable Bottom Sheet Refactor (`GlobalPlayerBar.tsx`)
+* **Thời gian**: 19/08/2026 16:25
+* **Tệp đã sửa**: `src/components/ui/GlobalPlayerBar.tsx`.
+* **Vấn đề & Thay đổi**:
+  - **Kiến trúc Hợp nhất (Unified Architecture)**: Loại bỏ các overlay tách rời (`fixed inset-0`) hay drawer mép phải riêng biệt. Tích hợp toàn bộ Lời bài hát & Danh sách phát thành một khối đáy mở rộng (Expandable Bottom Sheet) duy nhất.
+  - **Trạng thái thu gọn (Compact State)**: Chiều cao `74px - 80px`, đặt nổi tại `bottom-6 sm:bottom-8` tránh đè footer.
+  - **Trạng thái mở rộng (Expanded State)**: Trượt mượt mà lên trên đạt `480px - 540px` (hiển thị Lyrics Stream hoặc Queue List), thanh điều khiển playback vẫn nằm cố định liền mạch ở đáy khối.
+  - **Tự động ẩn 100% trong Video Zone**: `if (activeZone === 'video') return null;`.
 
 ---
 
