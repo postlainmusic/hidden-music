@@ -16,6 +16,7 @@
 - [Giao dịch 008: Playbar Cleanup, Footer Spacing & Discovery Feed Revamp](#giao-dịch-008-playbar-cleanup-footer-spacing--discovery-feed-revamp)
 - [Giao dịch 009: Unified Expandable Bottom Sheet Refactor (`GlobalPlayerBar.tsx`)](#giao-dịch-009-unified-expandable-bottom-sheet-refactor-globalplayerbartsx)
 - [Giao dịch 010: Decoupled Two-Layer Drawer & Static Dock Architecture (`GlobalPlayerBar.tsx`)](#giao-dịch-010-decoupled-two-layer-drawer--static-dock-architecture-globalplayerbartsx)
+- [Giao dịch 011: Seamless Attached Glass Drawer & Remove Switcher Pill (`GlobalPlayerBar.tsx`)](#giao-dịch-011-seamless-attached-glass-drawer--remove-switcher-pill-globalplayerbartsx)
 
 ---
 
@@ -138,6 +139,16 @@
   - **Khắc phục lỗi biến dạng dock**: Tách `GlobalPlayerBar.tsx` thành 2 tầng anh em (Two Decoupled Sibling Layers) bên trong container `fixed bottom-8 left-1/2 -translate-x-1/2 max-w-5xl`.
   - **Layer 1 (Slide-Up Drawer)**: Khung chứa Lời bài hát / Hàng chờ phát độc lập (`opacity-100 translate-y-0 max-h-[60vh] h-[480px] mb-3` khi mở, `h-0 opacity-0 mb-0` khi đóng).
   - **Layer 2 (Immutable Static Playbar Dock)**: Thanh dock điều khiển nằm cố định phía dưới (`w-full bg-[#0c0d12]/92 backdrop-blur-2xl border border-white/15 rounded-2xl sm:rounded-3xl px-3 sm:px-5 py-2.5 sm:py-3 shadow-xl`), **không bao giờ thay đổi chiều cao hoặc biến dạng**.
+
+---
+
+### Giao dịch 011: Seamless Attached Glass Drawer & Remove Switcher Pill (`GlobalPlayerBar.tsx`)
+* **Thời gian**: 19/08/2026 17:12
+* **Tệp đã sửa**: `src/components/ui/GlobalPlayerBar.tsx`.
+* **Vấn đề & Thay đổi**:
+  - **Giao diện Dính liền (Seamless Attached)**: Loại bỏ hoàn toàn khoảng hở (`mb-3` $\rightarrow$ `mb-0`), Drawer dính liền trực tiếp mép trên của Playbar.
+  - **Kính mờ trong suốt nhẹ**: Đổi nền sang `bg-black/75 backdrop-blur-xl border-white/15` đồng điệu tuyệt đối với độ trong suốt của Playbar.
+  - **Xóa bỏ nút chuyển đổi pill**: Loại bỏ nút `[ LỜI BÀI HÁT | DANH SÁCH ]` trong header của Drawer, giữ giao diện tối giản tinh tế.
 
 ---
 

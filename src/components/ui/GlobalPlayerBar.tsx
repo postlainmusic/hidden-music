@@ -18,7 +18,6 @@ import {
   X,
   ChevronDown,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
@@ -310,20 +309,20 @@ export default function GlobalPlayerBar() {
   return (
     <div
       ref={playerRootRef}
-      className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-5xl z-50 pointer-events-none px-3 sm:px-6 select-none flex flex-col justify-end"
+      className="fixed bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 w-full max-w-5xl z-50 pointer-events-none px-3 sm:px-6 select-none flex flex-col justify-end"
     >
       {/* ========================================================================= */}
-      {/* LAYER 1: SEPARATE SLIDE-UP DRAWER (Lyrics & Queue)                        */}
+      {/* 1. SEAMLESSLY ATTACHED TRANSLUCENT DRAWER (Lyrics & Queue)                */}
       {/* ========================================================================= */}
       <div
         className={`w-full transition-all duration-300 ease-out origin-bottom ${
           isDrawerOpen
-            ? 'opacity-100 translate-y-0 pointer-events-auto mb-3 max-h-[60vh] h-[480px]'
-            : 'opacity-0 translate-y-4 pointer-events-none h-0 mb-0 overflow-hidden'
+            ? 'opacity-100 translate-y-0 pointer-events-auto max-h-[60vh] h-[440px] sm:h-[480px]'
+            : 'opacity-0 translate-y-2 pointer-events-none h-0 overflow-hidden'
         }`}
       >
-        <div className="w-full h-full bg-[#0c0d12]/95 backdrop-blur-2xl border border-white/15 rounded-2xl sm:rounded-3xl p-4 sm:p-6 overflow-hidden flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
-          {/* Drawer Header */}
+        <div className="w-full h-full bg-black/75 backdrop-blur-xl border border-b-0 border-white/15 rounded-t-2xl sm:rounded-t-3xl p-4 sm:p-6 overflow-hidden flex flex-col shadow-[0_-15px_40px_rgba(0,0,0,0.8)]">
+          {/* Drawer Header (Clean Title + Close button - NO SWITCHER) */}
           <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-shrink-0">
             <div className="flex items-center gap-2.5">
               {expandedMode === 'lyrics' ? (
@@ -347,35 +346,13 @@ export default function GlobalPlayerBar() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Switcher Tab */}
-              <div className="flex items-center p-0.5 rounded-full bg-white/10 border border-white/15">
-                <button
-                  onClick={() => setExpandedMode('lyrics')}
-                  className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold transition-all ${
-                    expandedMode === 'lyrics' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  LỜI BÀI HÁT
-                </button>
-                <button
-                  onClick={() => setExpandedMode('queue')}
-                  className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold transition-all ${
-                    expandedMode === 'queue' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  DANH SÁCH
-                </button>
-              </div>
-
-              <button
-                onClick={() => setExpandedMode('none')}
-                className="p-1.5 rounded-full bg-white/10 hover:bg-white text-zinc-300 hover:text-black transition-all"
-                title="Đóng (Esc)"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => setExpandedMode('none')}
+              className="p-1.5 rounded-full bg-white/10 hover:bg-white text-zinc-300 hover:text-black transition-all"
+              title="Thu nhỏ (Esc)"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Drawer Body */}
@@ -385,7 +362,7 @@ export default function GlobalPlayerBar() {
               <div className="h-full flex flex-col md:flex-row items-center justify-between gap-6 md:gap-10 overflow-hidden">
                 {/* Left: Artwork / Meta (Desktop) */}
                 <div className="hidden md:flex flex-col items-center text-center w-52 flex-shrink-0">
-                  <div className="relative w-40 h-40 rounded-2xl overflow-hidden shadow-2xl border border-white/20 bg-zinc-950 mb-3 flex items-center justify-center">
+                  <div className="relative w-36 h-36 lg:w-40 lg:h-40 rounded-2xl overflow-hidden shadow-2xl border border-white/20 bg-zinc-950 mb-3 flex items-center justify-center">
                     {currentAlbum?.cover_url ? (
                       <img
                         src={currentAlbum.cover_url}
@@ -487,9 +464,15 @@ export default function GlobalPlayerBar() {
       </div>
 
       {/* ========================================================================= */}
-      {/* LAYER 2: IMMUTABLE STATIC PLAYBAR DOCK (NEVER CHANGES HEIGHT OR MORPHS)   */}
+      {/* 2. DOCKED PLAYBAR (SEAMLESSLY ATTACHED BELOW DRAWER)                     */}
       {/* ========================================================================= */}
-      <div className="pointer-events-auto w-full bg-[#0c0d12]/92 backdrop-blur-2xl border border-white/15 rounded-2xl sm:rounded-3xl px-3 sm:px-5 py-2.5 sm:py-3 shadow-xl flex flex-col gap-1">
+      <div
+        className={`pointer-events-auto w-full bg-black/80 backdrop-blur-xl border border-white/15 px-3 sm:px-5 py-2.5 sm:py-3 shadow-xl flex flex-col gap-1 transition-all duration-300 ${
+          isDrawerOpen
+            ? 'rounded-b-2xl sm:rounded-b-3xl border-t border-white/10'
+            : 'rounded-2xl sm:rounded-3xl'
+        }`}
+      >
         {/* Mobile Top Thin Progress Line */}
         <div className="md:hidden relative w-full h-1 bg-white/10 rounded-full overflow-hidden -mt-1 mb-1">
           <div
