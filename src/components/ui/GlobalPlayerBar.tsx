@@ -18,6 +18,10 @@ import {
   X,
   ChevronDown,
   Loader2,
+  Film,
+  PictureInPicture2,
+  Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
@@ -43,6 +47,9 @@ export default function GlobalPlayerBar() {
     shuffleMode,
     repeatMode,
     activeZone,
+    isPremium,
+    currentVideo,
+    isPiPActive,
     audioRef,
     currentTimeRef,
     playTrack,
@@ -53,6 +60,10 @@ export default function GlobalPlayerBar() {
     setVolume,
     toggleShuffle,
     toggleRepeat,
+    switchToAudioZone,
+    switchToVideoZone,
+    openPaywall,
+    togglePiP,
   } = usePlayer();
 
   const [mounted, setMounted] = useState(false);
@@ -60,7 +71,7 @@ export default function GlobalPlayerBar() {
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
-  
+
   // Mobile Expanded Player Modal State
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [expandedTab, setExpandedTab] = useState<'player' | 'lyrics' | 'queue'>('player');
@@ -86,6 +97,8 @@ export default function GlobalPlayerBar() {
   const touchStartYRef = useRef<number>(0);
   const touchCurrentYRef = useRef<number>(0);
 
+  const hasVideoAvailable = Boolean(currentTrack?.video_url || currentTrack?.media_type === 'video');
+
   useEffect(() => {
     setMounted(true);
     setIsAuth(hasActiveSession());
@@ -103,50 +116,15 @@ export default function GlobalPlayerBar() {
     };
   }, []);
 
-  // =========================================================================
-  // NATIVE ANDROID SYSTEM NOTIFICATION & WIDGET BRIDGE (BI-DIRECTIONAL)
-  // =========================================================================
+  // Standard Web MediaSession Integration (No native mobile bridge required)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Lắng nghe lệnh từ Notification & Home Screen Widgets
-    (window as any).__vault_media_action = (action: string) => {
-      if (action === 'PLAY_PAUSE') togglePlay();
-      else if (action === 'PREV') prevTrack();
-      else if (action === 'NEXT') nextTrack();
-    };
-
-    (window as any).__vault_media_seek = (posSec: number) => {
-      seekTo(posSec);
-    };
-
-    if (!currentTrack) {
-      if ((window as any).AndroidMediaBridge?.clearMedia) {
-        (window as any).AndroidMediaBridge.clearMedia();
-      }
-      return;
-    }
+    if (typeof window === 'undefined' || !currentTrack) return;
 
     const coverUrl = currentAlbum?.cover_url || '';
     const trackTitle = currentTrack.title || 'Unknown Track';
     const trackArtist = currentTrack.artist || currentAlbum?.artist || 'POSTLAIN';
     const albumTitle = currentAlbum?.title || 'Hidden Music Vault';
-    const effectiveDur = duration > 0 && isFinite(duration) ? duration : (currentTrack.duration || 0);
 
-    // Bắn sang Native Android để update đồng thời Notification và Home Widgets
-    if ((window as any).AndroidMediaBridge?.updateMedia) {
-      (window as any).AndroidMediaBridge.updateMedia(
-        trackTitle,
-        trackArtist,
-        albumTitle,
-        coverUrl,
-        isPlaying,
-        currentTime,
-        effectiveDur
-      );
-    }
-
-    // Web MediaSession
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: trackTitle,
@@ -156,7 +134,7 @@ export default function GlobalPlayerBar() {
       });
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
-  }, [currentTrack, currentAlbum, isPlaying, currentTime, duration, togglePlay, prevTrack, nextTrack, seekTo]);
+  }, [currentTrack, currentAlbum, isPlaying]);
 
   // Click outside to close drawers and volume slider
   useEffect(() => {
@@ -231,7 +209,7 @@ export default function GlobalPlayerBar() {
   // Smooth scroll lyrics
   useEffect(() => {
     if ((!showLyrics && expandedTab !== 'lyrics') || activeLyricIdx < 0) return;
-    
+
     const container = showLyrics ? lyricsScrollRef.current : expandedLyricsScrollRef.current;
     if (!container) return;
 
@@ -248,56 +226,33 @@ export default function GlobalPlayerBar() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
-        return;
-      }
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
 
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
-      } else if (e.code === 'KeyL') {
+      } else if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
-        if (isMobileExpanded) {
-          setExpandedTab((prev) => (prev === 'lyrics' ? 'player' : 'lyrics'));
-        } else {
-          setShowLyrics((prev) => !prev);
-          setShowQueue(false);
-        }
-      } else if (e.code === 'KeyQ') {
+        setShowLyrics((prev) => !prev);
+        setShowQueue(false);
+      } else if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault();
-        if (isMobileExpanded) {
-          setExpandedTab((prev) => (prev === 'queue' ? 'player' : 'queue'));
-        } else {
-          setShowQueue((prev) => !prev);
-          setShowLyrics(false);
-        }
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault();
-        const cur = currentTimeRef?.current ?? currentTime;
-        seekTo(Math.min(duration, cur + 5));
-      } else if (e.code === 'ArrowLeft') {
+        setShowQueue((prev) => !prev);
+        setShowLyrics(false);
+      } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         const cur = currentTimeRef?.current ?? currentTime;
         seekTo(Math.max(0, cur - 5));
-      } else if (e.code === 'Escape') {
-        if (isMobileExpanded) {
-          setIsMobileExpanded(false);
-        } else {
-          setShowLyrics(false);
-          setShowQueue(false);
-          setShowVolumeSlider(false);
-        }
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const cur = currentTimeRef?.current ?? currentTime;
+        seekTo(Math.min(duration || 999, cur + 5));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, seekTo, currentTime, duration, currentTimeRef, isMobileExpanded]);
+  }, [togglePlay, seekTo, currentTime, duration, currentTimeRef]);
 
   // Handle Swipe Down to dismiss Expanded Player
   const handleTouchStartSheet = (e: React.TouchEvent) => {
@@ -384,7 +339,21 @@ export default function GlobalPlayerBar() {
     }, 450);
   };
 
-  if (!mounted || !isAuth || activeZone !== 'audio' || !currentTrack) {
+  const handleToggleMVMode = () => {
+    if (activeZone === 'video') {
+      switchToAudioZone();
+    } else {
+      if (!isPremium && currentTrack?.media_type === 'video') {
+        openPaywall();
+        return;
+      }
+      if (currentTrack) {
+        switchToVideoZone(currentTrack, currentAlbum);
+      }
+    }
+  };
+
+  if (!mounted || !isAuth || !currentTrack) {
     return null;
   }
 
@@ -420,7 +389,7 @@ export default function GlobalPlayerBar() {
           />
         </div>
 
-        {/* Top Dismiss Bar & Title */}
+        {/* Top Dismiss Bar & Mode Switcher */}
         <div className="flex items-center justify-between w-full flex-shrink-0">
           <button
             onClick={() => setIsMobileExpanded(false)}
@@ -430,14 +399,28 @@ export default function GlobalPlayerBar() {
             <ChevronDown className="w-5 h-5" />
           </button>
 
-          <div className="flex flex-col items-center text-center">
-            <span className="text-[10px] uppercase font-mono tracking-widest text-slate-400 font-bold">
-              ĐANG PHÁT TỪ ALBUM
-            </span>
-            <span className="text-xs font-cyber font-extrabold text-white truncate max-w-[200px]">
-              {currentAlbum?.title || 'HIDDEN VAULT'}
-            </span>
-          </div>
+          {/* YouTube Music style Switcher Pill (Audio / MV) */}
+          {hasVideoAvailable && (
+            <div className="flex items-center p-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
+              <button
+                onClick={switchToAudioZone}
+                className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider transition-all ${
+                  activeZone === 'audio' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                ÂM THANH
+              </button>
+              <button
+                onClick={handleToggleMVMode}
+                className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider transition-all flex items-center gap-1 ${
+                  activeZone === 'video' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Film className="w-3 h-3" />
+                <span>VIDEO MV</span>
+              </button>
+            </div>
+          )}
 
           <div className="w-9 h-9" />
         </div>
@@ -451,10 +434,22 @@ export default function GlobalPlayerBar() {
                   <img
                     src={currentAlbum.cover_url}
                     alt={currentAlbum.title || 'Cover'}
-                    className={`w-full h-full object-cover transition-transform duration-700 ${isPlaying ? 'scale-105' : 'scale-100'}`}
+                    className={`w-full h-full object-cover transition-transform duration-700 ${
+                      isPlaying ? 'scale-105' : 'scale-100'
+                    }`}
                   />
                 ) : (
-                  <Disc3 className="w-24 h-24 text-white/40 animate-spin-slow" />
+                  <Disc3
+                    className="w-24 h-24 text-white/50 animate-spin"
+                    style={{ animationPlayState: isPlaying ? 'running' : 'paused', animationDuration: '4s' }}
+                  />
+                )}
+
+                {hasVideoAvailable && (
+                  <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/80 border border-white/20 text-[9px] font-mono font-bold text-white backdrop-blur-md flex items-center gap-1">
+                    <Film className="w-3 h-3 text-white" />
+                    <span>4K MV</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -463,11 +458,10 @@ export default function GlobalPlayerBar() {
           {expandedTab === 'lyrics' && (
             <div
               ref={expandedLyricsScrollRef}
-              className="h-full w-full overflow-y-auto no-scrollbar text-center py-24 space-y-3 font-sans px-3 animate-fadeIn"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="w-full h-full overflow-y-auto overflow-x-hidden text-center py-20 px-4 font-sans space-y-4 no-scrollbar animate-fadeIn"
             >
               {parsedLyrics.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs uppercase font-mono tracking-widest">
+                <div className="h-full flex flex-col items-center justify-center text-slate-500 text-sm uppercase tracking-widest font-mono">
                   Chưa có lời bài hát cho tác phẩm này
                 </div>
               ) : (
@@ -478,10 +472,10 @@ export default function GlobalPlayerBar() {
                       key={idx}
                       data-active-lyric={isActive ? 'true' : 'false'}
                       onClick={() => seekTo(line.time)}
-                      className={`cursor-pointer transition-all duration-200 leading-relaxed ${
+                      className={`transition-all duration-300 cursor-pointer font-sans leading-relaxed ${
                         isActive
-                          ? 'text-white text-base font-bold drop-shadow-[0_0_12px_rgba(255,255,255,0.7)] opacity-100 py-1 scale-105'
-                          : 'text-slate-500 text-sm font-medium opacity-50 py-0.5'
+                          ? 'text-white text-lg sm:text-xl font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-105'
+                          : 'text-slate-500 text-sm font-medium opacity-50'
                       }`}
                     >
                       {line.text}
@@ -493,10 +487,10 @@ export default function GlobalPlayerBar() {
           )}
 
           {expandedTab === 'queue' && (
-            <div
-              className="h-full w-full overflow-y-auto no-scrollbar space-y-2 py-2 font-mono animate-fadeIn"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
+            <div className="w-full h-full overflow-y-auto overflow-x-hidden space-y-2 p-2 font-mono no-scrollbar animate-fadeIn">
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 px-2">
+                HÀNG CHỜ PHÁT ({playlist.length} BÀI)
+              </h4>
               {playlist.map((track, idx) => {
                 const isCur = track.id === currentTrack.id;
                 return (
@@ -511,14 +505,14 @@ export default function GlobalPlayerBar() {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="text-xs font-mono text-slate-400 w-5 text-center">
-                        {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
+                        {String(idx + 1).padStart(2, '0')}
                       </span>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs truncate uppercase">{track.title}</span>
-                        <span className="text-[10px] text-slate-400 truncate">{track.artist || 'VAULT ARTIST'}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs truncate font-bold">{track.title}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{track.artist || currentAlbum?.artist}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-400 ml-2">{formatTime(track.duration || 0)}</span>
+                    {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
                   </div>
                 );
               })}
@@ -526,56 +520,58 @@ export default function GlobalPlayerBar() {
           )}
         </div>
 
-        {/* Bottom Controls Area */}
-        <div className="w-full flex flex-col gap-4 flex-shrink-0">
+        {/* Bottom Metadata, Seeker, and Main Controls */}
+        <div className="flex flex-col gap-4 w-full flex-shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex flex-col min-w-0 pr-4">
-              <h3 className="text-lg font-cyber font-extrabold text-white truncate uppercase tracking-wide">
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-cyber font-black text-white truncate uppercase">
                 {currentTrack.title}
               </h3>
-              <p className="text-xs text-slate-400 font-mono font-bold truncate uppercase mt-0.5">
-                {currentTrack.artist || currentAlbum?.artist || 'VAULT ARTIST'}
+              <p className="text-xs font-mono text-slate-400 truncate uppercase mt-0.5">
+                {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setExpandedTab((prev) => (prev === 'lyrics' ? 'player' : 'lyrics'))}
-                className={`p-2.5 rounded-full border transition-all ${
-                  expandedTab === 'lyrics'
-                    ? 'bg-white text-black border-white shadow-lg'
-                    : 'bg-white/10 text-slate-300 border-white/15'
+                onClick={() => setExpandedTab(expandedTab === 'lyrics' ? 'player' : 'lyrics')}
+                className={`p-2 rounded-full border transition-all ${
+                  expandedTab === 'lyrics' ? 'bg-white text-black border-white' : 'bg-white/5 border-white/15 text-slate-300'
                 }`}
+                title="Lyrics"
               >
                 <Mic2 className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setExpandedTab((prev) => (prev === 'queue' ? 'player' : 'queue'))}
-                className={`p-2.5 rounded-full border transition-all ${
-                  expandedTab === 'queue'
-                    ? 'bg-white text-black border-white shadow-lg'
-                    : 'bg-white/10 text-slate-300 border-white/15'
+                onClick={() => setExpandedTab(expandedTab === 'queue' ? 'player' : 'queue')}
+                className={`p-2 rounded-full border transition-all ${
+                  expandedTab === 'queue' ? 'bg-white text-black border-white' : 'bg-white/5 border-white/15 text-slate-300'
                 }`}
+                title="Queue"
               >
                 <ListMusic className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="w-full flex flex-col gap-1.5">
-            <div className="relative w-full flex items-center">
+          {/* Seeker */}
+          <div className="flex flex-col gap-1.5 w-full">
+            <div className="relative w-full h-3 flex items-center">
+              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  ref={mobileProgressBarRef}
+                  style={{ width: `${(currentTime / effectiveDuration) * 100}%` }}
+                  className="h-full bg-white transition-[width] duration-75"
+                />
+              </div>
               <input
                 ref={expandedSeekerInputRef}
                 type="range"
                 min={0}
                 max={effectiveDuration || 100}
                 defaultValue={currentTime}
-                onMouseDown={() => {
-                  isDraggingSeekerRef.current = true;
-                }}
-                onTouchStart={() => {
-                  isDraggingSeekerRef.current = true;
-                }}
+                onMouseDown={() => (isDraggingSeekerRef.current = true)}
+                onTouchStart={() => (isDraggingSeekerRef.current = true)}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   if (expandedCurrentTimeRef.current) {
@@ -590,22 +586,22 @@ export default function GlobalPlayerBar() {
                   isDraggingSeekerRef.current = false;
                   seekTo(parseFloat((e.target as HTMLInputElement).value));
                 }}
-                className="w-full h-2 rounded-full appearance-none cursor-pointer border border-white/20 bg-zinc-800 shadow-inner"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
             </div>
-            <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-400 tabular-nums">
+
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
               <span ref={expandedCurrentTimeRef}>{formatTime(currentTime)}</span>
               <span>{formatTime(effectiveDuration)}</span>
             </div>
           </div>
 
+          {/* Main Controls Row */}
           <div className="flex items-center justify-between px-2 pt-1">
             <button
               onClick={toggleShuffle}
               className={`p-2.5 rounded-full border transition-all ${
-                shuffleMode
-                  ? 'bg-white text-black border-white shadow-md'
-                  : 'bg-white/5 text-slate-400 border-white/10'
+                shuffleMode ? 'bg-white text-black border-white shadow-md' : 'bg-white/5 text-slate-400 border-white/10'
               }`}
             >
               <Shuffle className="w-4 h-4" />
@@ -641,9 +637,7 @@ export default function GlobalPlayerBar() {
             <button
               onClick={toggleRepeat}
               className={`p-2.5 rounded-full border transition-all ${
-                repeatMode !== 'off'
-                  ? 'bg-white text-black border-white shadow-md'
-                  : 'bg-white/5 text-slate-400 border-white/10'
+                repeatMode !== 'off' ? 'bg-white text-black border-white shadow-md' : 'bg-white/5 text-slate-400 border-white/10'
               }`}
             >
               {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
@@ -748,18 +742,14 @@ export default function GlobalPlayerBar() {
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <span className="text-[10px] font-mono text-slate-400 w-5 text-center flex-shrink-0">
-                              {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
+                              {String(idx + 1).padStart(2, '0')}
                             </span>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs truncate uppercase">{track.title}</span>
-                              <span className="text-[10px] text-slate-400 truncate">
-                                {track.artist || currentAlbum?.artist || 'VAULT ARTIST'}
-                              </span>
+                            <div className="min-w-0">
+                              <p className="text-xs truncate font-bold">{track.title}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{track.artist || currentAlbum?.artist}</p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-mono text-slate-400 flex-shrink-0 ml-2">
-                            {formatTime(track.duration || 0)}
-                          </span>
+                          {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
                         </div>
                       );
                     })
@@ -770,20 +760,18 @@ export default function GlobalPlayerBar() {
           </div>
         )}
 
-        {/* 2. DOCK PLAYBAR */}
+        {/* 2. DOCK BAR CONTAINER */}
         <div
-          className={`w-full max-w-5xl rounded-2xl md:rounded-3xl border border-white/20 bg-zinc-950/98 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2.5 sm:p-3 pointer-events-auto relative overflow-hidden transition-all duration-200 select-none ${
-            hasDrawerOpen ? '-mt-[1px] rounded-t-none border-t-0' : ''
+          className={`w-full max-w-5xl rounded-2xl md:rounded-3xl border border-white/20 bg-zinc-950/95 shadow-[0_15px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2 sm:p-2.5 md:p-3 flex flex-col gap-1 pointer-events-auto relative overflow-hidden transition-all duration-300 ${
+            hasDrawerOpen ? 'rounded-t-none border-t-0' : ''
           }`}
         >
-          {/* Mobile Top Progress Bar Line */}
-          <div className="block md:hidden absolute top-0 left-0 right-0 h-[2.5px] bg-white/10 overflow-hidden">
+          {/* Mobile Top Thin Progress Line */}
+          <div className="md:hidden relative w-full h-1 bg-white/10 rounded-full overflow-hidden -mt-1 mb-1">
             <div
               ref={mobileProgressBarRef}
-              className="h-full bg-white transition-[width] duration-100 ease-linear shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-              style={{
-                width: `${effectiveDuration > 0 ? (currentTime / effectiveDuration) * 100 : 0}%`,
-              }}
+              style={{ width: `${(currentTime / effectiveDuration) * 100}%` }}
+              className="h-full bg-white transition-[width] duration-75"
             />
             <input
               ref={mobileSeekerInputRef}
@@ -791,12 +779,8 @@ export default function GlobalPlayerBar() {
               min={0}
               max={effectiveDuration || 100}
               defaultValue={currentTime}
-              onMouseDown={() => {
-                isDraggingSeekerRef.current = true;
-              }}
-              onTouchStart={() => {
-                isDraggingSeekerRef.current = true;
-              }}
+              onMouseDown={() => (isDraggingSeekerRef.current = true)}
+              onTouchStart={() => (isDraggingSeekerRef.current = true)}
               onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 if (mobileProgressBarRef.current && effectiveDuration > 0) {
@@ -817,8 +801,7 @@ export default function GlobalPlayerBar() {
 
           {/* SINGLE-ROW RESPONSIVE FLEXBOX */}
           <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
-            
-            {/* Left: Track Information & Cover (TAP TO EXPAND ON MOBILE) */}
+            {/* Left: Track Information & Cover */}
             <div
               onClick={() => {
                 if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -826,7 +809,7 @@ export default function GlobalPlayerBar() {
                   setExpandedTab('player');
                 }
               }}
-              className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[130px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0 cursor-pointer md:cursor-default"
+              className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[130px] xs:max-w-[170px] sm:max-w-[210px] flex-shrink-0 cursor-pointer md:cursor-default group/trackinfo"
             >
               <div className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl overflow-hidden border border-white/20 bg-zinc-900 flex-shrink-0 shadow-lg">
                 {currentAlbum?.cover_url ? (
@@ -852,6 +835,29 @@ export default function GlobalPlayerBar() {
                 </span>
               </div>
             </div>
+
+            {/* YouTube Music style Switcher Pill (Audio / MV Mode) for Desktop */}
+            {hasVideoAvailable && (
+              <div className="hidden lg:flex items-center p-0.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md flex-shrink-0">
+                <button
+                  onClick={switchToAudioZone}
+                  className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider transition-all ${
+                    activeZone === 'audio' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  ÂM THANH
+                </button>
+                <button
+                  onClick={handleToggleMVMode}
+                  className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider transition-all flex items-center gap-1 ${
+                    activeZone === 'video' ? 'bg-white text-black shadow-md' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Film className="w-2.5 h-2.5" />
+                  <span>MV 4K</span>
+                </button>
+              </div>
+            )}
 
             {/* Center: Controls + Inline Timeline */}
             <div className="flex items-center justify-center md:justify-start gap-1.5 sm:gap-3 flex-1 min-w-0">
@@ -958,8 +964,19 @@ export default function GlobalPlayerBar() {
               </span>
             </div>
 
-            {/* Right: Drawer Triggers & Volume Slider */}
+            {/* Right: Drawer Triggers, Web PiP & Volume Slider */}
             <div className="flex items-center gap-1 sm:gap-1.5 justify-end flex-shrink-0">
+              {/* Picture in Picture Button for Web */}
+              {hasVideoAvailable && (
+                <button
+                  onClick={togglePiP}
+                  title="Picture-in-Picture (P)"
+                  className="p-1.5 sm:p-2 rounded-full border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/15 transition-all"
+                >
+                  <PictureInPicture2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -1066,9 +1083,7 @@ export default function GlobalPlayerBar() {
                 )}
               </div>
             </div>
-
           </div>
-
         </div>
       </div>
     </>

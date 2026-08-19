@@ -3,12 +3,13 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
-import { hasActiveSession } from '@/lib/authSession';
+import { hasActiveSession, hasVideoSubscription, activateVideoSubscription } from '@/lib/authSession';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
 
-type RepeatMode = 'off' | 'all' | 'one';
+export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface PlayerContextType {
+  // Audio & Core Track States
   currentTrack: TrackItem | null;
   currentAlbum: Album | null;
   playlist: TrackItem[];
@@ -21,8 +22,21 @@ export interface PlayerContextType {
   repeatMode: RepeatMode;
   isCinematicFxEnabled: boolean;
   activeZone: PlayerZone;
+
+  // Multimedia Super App & Scaling States
+  isPremium: boolean;
+  currentVideo: TrackItem | null;
+  isFullscreen: boolean;
+  isPaywallOpen: boolean;
+  isPiPActive: boolean;
+  videoPlaybackRate: number;
+
+  // Native Elements & References
   audioRef: React.RefObject<HTMLAudioElement>;
+  videoRef: React.RefObject<HTMLVideoElement>;
   currentTimeRef: React.RefObject<number>;
+
+  // Audio Controls
   playTrack: (track: TrackItem, album?: Album | null, playlist?: TrackItem[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -35,9 +49,25 @@ export interface PlayerContextType {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   toggleCinematicFx: () => void;
+
+  // Video & Zone Controls
   setActiveZone: (zone: PlayerZone) => void;
   switchToAudioZone: () => void;
-  switchToVideoZone: (track?: TrackItem) => void;
+  switchToVideoZone: (track?: TrackItem, album?: Album | null) => void;
+  playVideo: (track: TrackItem, album?: Album | null) => void;
+  closeVideo: () => void;
+
+  // Premium & Paywall Controls
+  setIsPremium: React.Dispatch<React.SetStateAction<boolean>>;
+  openPaywall: () => void;
+  closePaywall: () => void;
+  handleUpgrade: (plan?: string) => Promise<void>;
+
+  // Fullscreen & Web Picture-in-Picture Controls
+  setIsFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
+  toggleFullscreen: (element?: HTMLElement | null) => Promise<void>;
+  togglePiP: () => Promise<void>;
+  setVideoPlaybackRate: (rate: number) => void;
 }
 
 const PLAYER_STATE_KEY = 'hidden_vault_player_state';
@@ -45,6 +75,7 @@ const PLAYER_STATE_KEY = 'hidden_vault_player_state';
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
+  // Audio & Core State
   const [currentTrack, setCurrentTrack] = useState<TrackItem | null>(null);
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
   const [playlist, setPlaylist] = useState<TrackItem[]>([]);
@@ -58,18 +89,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isCinematicFxEnabled, setIsCinematicFxEnabled] = useState(true);
   const [activeZone, setActiveZone] = useState<PlayerZone>('audio');
 
+  // Multimedia Super App & Scaling States
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [currentVideo, setCurrentVideo] = useState<TrackItem | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isPaywallOpen, setIsPaywallOpen] = useState<boolean>(false);
+  const [isPiPActive, setIsPiPActive] = useState<boolean>(false);
+  const [videoPlaybackRate, setVideoPlaybackRateState] = useState<number>(1.0);
+
+  // References
   const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const currentTimeRef = useRef<number>(0);
   const lastStateUpdateTimeRef = useRef<number>(0);
+
+  // Sync Premium State with Auth Session & Local Storage
+  const checkAndSyncPremium = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const hasSub = hasVideoSubscription();
+    setIsPremium(hasSub);
+  }, []);
 
   // Restore player state safely on client mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    checkAndSyncPremium();
+
     const syncPlayerWithAuth = () => {
+      checkAndSyncPremium();
+
       if (!hasActiveSession()) {
         setCurrentTrack(null);
         setCurrentAlbum(null);
+        setCurrentVideo(null);
         setPlaylist([]);
         setIsPlaying(false);
         try {
@@ -84,6 +137,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(saved);
           if (parsed?.currentTrack) setCurrentTrack(parsed.currentTrack);
           if (parsed?.currentAlbum) setCurrentAlbum(parsed.currentAlbum);
+          if (parsed?.currentVideo) setCurrentVideo(parsed.currentVideo);
+          if (parsed?.activeZone) setActiveZone(parsed.activeZone);
           if (Array.isArray(parsed?.playlist)) setPlaylist(parsed.playlist);
           if (typeof parsed?.currentTime === 'number') {
             setCurrentTime(parsed.currentTime);
@@ -101,11 +156,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     syncPlayerWithAuth();
 
     window.addEventListener('vault_auth_change', syncPlayerWithAuth);
+    window.addEventListener('vault_profile_updated', syncPlayerWithAuth);
     window.addEventListener('storage', syncPlayerWithAuth);
 
     return () => {
       window.removeEventListener('vault_auth_change', syncPlayerWithAuth);
+      window.removeEventListener('vault_profile_updated', syncPlayerWithAuth);
       window.removeEventListener('storage', syncPlayerWithAuth);
+    };
+  }, [checkAndSyncPremium]);
+
+  // Fullscreen Change Listener for HTML5 API
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = Boolean(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
     };
   }, []);
 
@@ -113,12 +197,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      if (currentTrack) {
+      if (currentTrack || currentVideo) {
         localStorage.setItem(
           PLAYER_STATE_KEY,
           JSON.stringify({
             currentTrack,
             currentAlbum,
+            currentVideo,
+            activeZone,
             playlist,
             currentTime: Math.floor(currentTimeRef.current),
             volume,
@@ -128,7 +214,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         );
       }
     } catch {}
-  }, [currentTrack, currentAlbum, playlist, volume, shuffleMode, repeatMode]);
+  }, [currentTrack, currentAlbum, currentVideo, activeZone, playlist, volume, shuffleMode, repeatMode]);
 
   const rawTrackUrl = currentTrack?.audio_url || '';
   const trackUrl = useMemo(() => {
@@ -157,10 +243,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Switch to Audio Zone cleanly
   const switchToAudioZone = useCallback(() => {
     setActiveZone('audio');
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {}
+    }
   }, []);
 
   // Switch to Video Zone cleanly (frees RAM, unloads audio stream completely)
-  const switchToVideoZone = useCallback((track?: TrackItem) => {
+  const switchToVideoZone = useCallback((track?: TrackItem, album?: Album | null) => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';
@@ -172,8 +263,118 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsBuffering(false);
     if (track) {
       setCurrentTrack(track);
+      setCurrentVideo(track);
+    }
+    if (album) {
+      setCurrentAlbum(album);
     }
     setActiveZone('video');
+  }, []);
+
+  // Play Video directly with paywall check
+  const playVideo = useCallback(
+    (track: TrackItem, album?: Album | null) => {
+      // Pause native audio stream immediately
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        try {
+          audioRef.current.load();
+        } catch {}
+      }
+
+      setCurrentVideo(track);
+      setCurrentTrack(track);
+      if (album) setCurrentAlbum(album);
+      setActiveZone('video');
+      setIsPlaying(true);
+      setIsBuffering(false);
+      setCurrentTime(0);
+      currentTimeRef.current = 0;
+    },
+    []
+  );
+
+  // Close Video Zone and return to Audio Player
+  const closeVideo = useCallback(() => {
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {}
+    }
+    setCurrentVideo(null);
+    setActiveZone('audio');
+  }, []);
+
+  // Paywall Modal Controls
+  const openPaywall = useCallback(() => {
+    setIsPaywallOpen(true);
+  }, []);
+
+  const closePaywall = useCallback(() => {
+    setIsPaywallOpen(false);
+  }, []);
+
+  // Simulated Web Subscription / Upgrade Flow
+  const handleUpgrade = useCallback(async (plan = 'vip') => {
+    try {
+      activateVideoSubscription();
+      setIsPremium(true);
+      setIsPaywallOpen(false);
+      window.dispatchEvent(new CustomEvent('vault_auth_change'));
+    } catch (err) {
+      console.error('Upgrade process failed:', err);
+    }
+  }, []);
+
+  // HTML5 Fullscreen API Handler
+  const toggleFullscreen = useCallback(async (element?: HTMLElement | null) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const target = element || document.documentElement;
+      if (!document.fullscreenElement) {
+        if (target.requestFullscreen) {
+          await target.requestFullscreen();
+        } else if ((target as any).webkitRequestFullscreen) {
+          await (target as any).webkitRequestFullscreen();
+        } else if ((target as any).msRequestFullscreen) {
+          await (target as any).msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle notice:', err);
+    }
+  }, []);
+
+  // Standard Web Picture-in-Picture (PiP)
+  const togglePiP = useCallback(async () => {
+    if (typeof window === 'undefined' || !videoRef.current) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPiPActive(false);
+      } else if (document.pictureInPictureEnabled) {
+        await videoRef.current.requestPictureInPicture();
+        setIsPiPActive(true);
+      }
+    } catch (err) {
+      console.warn('PiP toggle notice:', err);
+    }
+  }, []);
+
+  const setVideoPlaybackRate = useCallback((rate: number) => {
+    setVideoPlaybackRateState(rate);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
   }, []);
 
   // Hard Refresh Handler
@@ -208,9 +409,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleHardRefresh, true);
   }, []);
 
-  // Sync Volume to Native Audio
+  // Sync Volume to Native Audio and Video
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
+    if (videoRef.current) videoRef.current.volume = volume;
   }, [volume]);
 
   // Sync Play / Pause state with audio element (Audio Zone ONLY)
@@ -284,6 +486,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const togglePlay = useCallback(() => {
+    if (activeZone === 'video') {
+      if (!videoRef.current) return;
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+      return;
+    }
+
     if (!currentTrack || !audioRef.current) return;
     if (isPlaying) {
       setIsPlaying(false);
@@ -291,13 +505,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setActiveZone('audio');
       setIsPlaying(true);
     }
-  }, [currentTrack, isPlaying]);
+  }, [activeZone, currentTrack, isPlaying]);
 
-  const seekTo = useCallback((time: number) => {
-    currentTimeRef.current = time;
-    setCurrentTime(time);
-    if (audioRef.current) audioRef.current.currentTime = time;
-  }, []);
+  const seekTo = useCallback(
+    (time: number) => {
+      currentTimeRef.current = time;
+      setCurrentTime(time);
+      if (activeZone === 'video' && videoRef.current) {
+        videoRef.current.currentTime = time;
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = time;
+      }
+    },
+    [activeZone]
+  );
 
   const nextTrack = useCallback(() => {
     if (!playlist || playlist.length === 0 || !currentTrack) return;
@@ -357,7 +578,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       repeatMode,
       isCinematicFxEnabled,
       activeZone,
+      isPremium,
+      currentVideo,
+      isFullscreen,
+      isPaywallOpen,
+      isPiPActive,
+      videoPlaybackRate,
       audioRef,
+      videoRef,
       currentTimeRef,
       playTrack,
       togglePlay,
@@ -374,6 +602,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setActiveZone,
       switchToAudioZone,
       switchToVideoZone,
+      playVideo,
+      closeVideo,
+      setIsPremium,
+      openPaywall,
+      closePaywall,
+      handleUpgrade,
+      setIsFullscreen,
+      toggleFullscreen,
+      togglePiP,
+      setVideoPlaybackRate,
     }),
     [
       currentTrack,
@@ -388,6 +626,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       repeatMode,
       isCinematicFxEnabled,
       activeZone,
+      isPremium,
+      currentVideo,
+      isFullscreen,
+      isPaywallOpen,
+      isPiPActive,
+      videoPlaybackRate,
       playTrack,
       togglePlay,
       nextTrack,
@@ -399,6 +643,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleCinematicFx,
       switchToAudioZone,
       switchToVideoZone,
+      playVideo,
+      closeVideo,
+      openPaywall,
+      closePaywall,
+      handleUpgrade,
+      toggleFullscreen,
+      togglePiP,
+      setVideoPlaybackRate,
     ]
   );
 

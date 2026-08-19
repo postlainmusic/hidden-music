@@ -127,13 +127,25 @@ export default function Navbar({
           </Link>
         </div>
 
-        {/* Center: Title if provided */}
-        {title && (
-          <div className="hidden md:flex items-center gap-2 text-slate-300 font-mono text-xs max-w-xs truncate">
-            <span className="text-white/30">•</span>
-            <span className="uppercase tracking-widest font-extrabold truncate text-white">{title}</span>
-          </div>
-        )}
+        {/* Center: Title or Discover Link */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/discover"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider transition-all"
+            title="AI Multimedia Discovery Feed"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">DISCOVERY FEED</span>
+            <span className="sm:hidden">FEED</span>
+          </Link>
+
+          {title && (
+            <div className="hidden md:flex items-center gap-2 text-slate-300 font-mono text-xs max-w-xs truncate">
+              <span className="text-white/30">•</span>
+              <span className="uppercase tracking-widest font-extrabold truncate text-white">{title}</span>
+            </div>
+          )}
+        </div>
 
         {/* Right: User Display Name Badge & Settings Button */}
         <div className="flex items-center gap-1 sm:gap-2 font-mono flex-shrink-0">
