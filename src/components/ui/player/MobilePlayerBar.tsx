@@ -94,7 +94,6 @@ export default function MobilePlayerBar() {
 
   // Gestures
   const touchStartXRef = useRef<number>(0);
-  touchStartXRef.current = 0;
   const touchStartYRef = useRef<number>(0);
   const touchDeltaXRef = useRef<number>(0);
   const [swipeOffsetX, setSwipeOffsetX] = useState<number>(0);
@@ -280,7 +279,6 @@ export default function MobilePlayerBar() {
       const s = snareStrobeRef.current;
       const nrg = smoothEnergyRef.current;
 
-      // Crimson Impact Color
       const kickDelta = Math.max(0, k - 1.0);
       const kickWeight = Math.min(1.0, kickDelta / 0.04); 
       const g = Math.floor(255 - kickWeight * 205);
@@ -640,7 +638,6 @@ export default function MobilePlayerBar() {
             {/* PLAYER VIEW */}
             {activeView === 'player' && (
               <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible">
-                {/* Khung bìa đĩa */}
                 <div
                   ref={expandCoverRef}
                   className="relative w-[72vw] max-w-[260px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center mb-6 border border-white/20 will-change-transform z-10 flex-shrink-0"
@@ -688,24 +685,24 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* LYRICS VIEW — TỐI ƯU CHỐNG NHẢY DÒNG & FADE MỜ VIỀN */}
+            {/* LYRICS VIEW — CHUẨN YOUTUBE MUSIC & SPOTIFY: GIỮ NGUYÊN 100% SIZE CHỮ, KHÔNG NHẢY DÒNG */}
             {activeView === 'lyrics' && (
               <div
                 ref={lyricsScrollRef}
-                className="w-full h-full overflow-y-auto no-scrollbar text-center py-16 space-y-4 font-sans px-4 animate-fadeIn relative"
+                className="w-full h-full overflow-y-auto no-scrollbar py-12 px-6 animate-fadeIn relative"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
-                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)',
-                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)',
+                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
                 }}
               >
                 {parsedLyrics.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-400 text-xs uppercase tracking-widest font-mono">
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs uppercase tracking-widest font-mono text-center">
                     Chưa có lời bài hát cho tác phẩm này
                   </div>
                 ) : (
-                  <div className="w-full max-w-sm sm:max-w-md mx-auto py-6 space-y-4">
+                  <div className="w-full max-w-md mx-auto py-8 space-y-6">
                     {parsedLyrics.map((line, idx) => {
                       const isActive = idx === activeLyricIdx;
                       return (
@@ -713,10 +710,10 @@ export default function MobilePlayerBar() {
                           key={idx}
                           data-active-mobile-lyric={isActive ? 'true' : 'false'}
                           onClick={() => seekTo(line.time)}
-                          className={`transition-all duration-300 cursor-pointer select-none leading-relaxed tracking-wide ${
+                          className={`text-[17px] leading-relaxed font-bold tracking-tight text-left select-none cursor-pointer transition-colors duration-300 ${
                             isActive
-                              ? 'text-white text-[16px] sm:text-[17px] font-bold opacity-100 drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]'
-                              : 'text-zinc-500 text-[14.5px] sm:text-[15px] font-medium opacity-30 hover:opacity-60'
+                              ? 'text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.4)]'
+                              : 'text-white/25 hover:text-white/50'
                           }`}
                         >
                           {line.text}
