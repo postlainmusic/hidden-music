@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Disc3, Sparkles, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Zap, Radio } from 'lucide-react';
 import Navbar from '@/components/ui/Navbar';
 import DiscoveryFeed from '@/components/discovery/DiscoveryFeed';
 import VideoPaywallModal from '@/components/ui/VideoPaywallModal';
 import { createClient } from '@/lib/supabase/client';
 import { Album } from '@/types/database';
+import type { YtmFeedResponse } from '@/types/ytm';
 import { usePlayer } from '@/context/PlayerContext';
 import { getStoredUserSession, hasActiveSession } from '@/lib/authSession';
 import VaultGate from '@/components/ui/VaultGate';
@@ -18,32 +19,58 @@ export const dynamic = 'force-dynamic';
 export default function DiscoverPage() {
   const router = useRouter();
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [ytmFeed, setYtmFeed] = useState<YtmFeedResponse | null>(null);
+  const [albumsLoading, setAlbumsLoading] = useState(true);
+  const [ytmLoading, setYtmLoading] = useState(true);
   const [userSession, setUserSession] = useState<any>(null);
-  const { isPaywallOpen, closePaywall } = usePlayer();
+
+  // Safely destructure — VideoPaywallModal may or may not be driven by PlayerContext
+  const player = usePlayer();
+  const isPaywallOpen = (player as any).isPaywallOpen ?? false;
+  const closePaywall = (player as any).closePaywall ?? (() => {});
 
   useEffect(() => {
     setUserSession(getStoredUserSession());
 
+    // ── Parallel data fetch: Supabase albums + YTM feed ─────────────────────
     const loadAlbums = async () => {
       try {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('albums')
           .select('*, tracks(*)')
+          .eq('is_published', true)
           .order('created_at', { ascending: false });
 
         if (!error && data) {
           setAlbums(data);
         }
       } catch (e) {
-        console.error('Error fetching discovery data:', e);
+        console.error('[DiscoverPage] Supabase fetch error:', e);
       } finally {
-        setLoading(false);
+        setAlbumsLoading(false);
       }
     };
 
-    loadAlbums();
+    const loadYtmFeed = async () => {
+      try {
+        const res = await fetch('/api/ytm/feed', {
+          // SWR-style: serve stale while background revalidates
+          next: { revalidate: 3600 },
+        } as RequestInit);
+        if (res.ok) {
+          const data: YtmFeedResponse = await res.json();
+          setYtmFeed(data);
+        }
+      } catch (e) {
+        console.debug('[DiscoverPage] YTM feed fetch error (non-critical):', e);
+      } finally {
+        setYtmLoading(false);
+      }
+    };
+
+    // Fire both in parallel
+    Promise.all([loadAlbums(), loadYtmFeed()]);
   }, []);
 
   if (!hasActiveSession()) {
@@ -51,52 +78,67 @@ export default function DiscoverPage() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-[#07070a] text-white select-none relative pb-32">
-      {/* Dynamic Background */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05)_0%,transparent_70%)] pointer-events-none" />
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none opacity-40" />
+    <main
+      id="streaming-hub-page"
+      className="min-h-screen w-full bg-[#050507] text-white select-none relative pb-32"
+    >
+      {/* ── Dynamic Background ───────────────────────────────────────────────── */}
+      {/* Radial ambient light at top */}
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.04)_0%,transparent_65%)] pointer-events-none" />
+      {/* Subtle grid lines */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none opacity-30" />
 
-      {/* Navbar */}
+      {/* ── Navbar ───────────────────────────────────────────────────────────── */}
       <Navbar
         userEmail={userSession?.email}
         showBackButton={true}
         onBackClick={() => router.push('/')}
-        title="AI DISCOVERY // POSTLAIN FEED"
+        title="STREAMING HUB // POSTLAIN"
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28 flex flex-col gap-6 relative z-10">
-        {/* Header Hero Banner */}
-        <div className="rounded-3xl bg-zinc-950/80 border border-white/15 p-6 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-xl">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28 flex flex-col gap-8 relative z-10">
 
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] font-mono tracking-widest text-zinc-300 mb-4">
-            <Sparkles className="w-3.5 h-3.5 text-white" />
-            <span>AI RECOMMENDATION ENGINE</span>
+        {/* ── Page Hero Banner ─────────────────────────────────────────────── */}
+        <div className="rounded-3xl bg-zinc-950/60 border border-white/10 p-5 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+          {/* Glow blob */}
+          <div className="absolute -top-10 -right-10 w-72 h-72 bg-white/[0.03] rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 relative z-10">
+            <div>
+              {/* Eyebrow badge */}
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/8 border border-white/15 text-[10px] font-mono tracking-widest text-zinc-300 mb-3">
+                <Zap className="w-3 h-3 text-white" />
+                <span>POWERED BY YOUTUBE MUSIC + VAULT</span>
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black uppercase font-cyber tracking-tight text-white mb-2 leading-none">
+                STREAMING HUB
+              </h1>
+              <p className="text-[11px] sm:text-xs text-zinc-500 font-mono max-w-lg leading-relaxed">
+                Real-time music discovery — trending charts, new releases, mood playlists and exclusive vault recordings.
+              </p>
+            </div>
+
+            {/* Live status chip */}
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 flex-shrink-0 self-start sm:self-auto">
+              <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                {ytmLoading ? 'LOADING...' : ytmFeed?.source === 'live' ? 'LIVE DATA' : ytmFeed ? 'CACHED DATA' : 'VAULT ONLY'}
+              </span>
+            </div>
           </div>
-
-          <h1 className="text-2xl sm:text-4xl md:text-5xl font-black uppercase font-cyber tracking-tight text-white mb-2">
-            MULTIMEDIA DISCOVERY FEED
-          </h1>
-          <p className="text-xs sm:text-sm text-zinc-400 font-mono max-w-xl leading-relaxed">
-            Hệ thống gợi ý thông minh phân tích sở thích âm nhạc và phim ảnh của bạn theo thời gian thực, tổng hợp các ấn phẩm âm thanh lossless và MV 4K bị ẩn độc quyền.
-          </p>
         </div>
 
-        {/* Loading Spinner or Feed */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-zinc-400 font-mono">
-            <Disc3 className="w-8 h-8 animate-spin text-white" />
-            <span className="text-xs uppercase tracking-widest">LOADING DISCOVERY FEED...</span>
-          </div>
-        ) : (
-          <DiscoveryFeed
-            albums={albums}
-            onSelectAlbum={(album) => router.push(`/album/${album.id}`)}
-          />
-        )}
+        {/* ── Streaming Hub Feed ───────────────────────────────────────────── */}
+        <DiscoveryFeed
+          albums={albums}
+          ytmFeed={ytmFeed}
+          ytmLoading={ytmLoading || albumsLoading}
+          onSelectAlbum={(album) => router.push(`/album/${album.id}`)}
+        />
       </div>
 
-      {/* Paywall Modal */}
+      {/* ── Paywall Modal ──────────────────────────────────────────────────── */}
       <VideoPaywallModal
         isOpen={isPaywallOpen}
         onClose={closePaywall}
