@@ -29,6 +29,7 @@ const formatTime = (secs: number) => {
 };
 
 export default function MobilePlayerBar() {
+  // 1. Hydration Guard (Chống crash SSR của Next.js)
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -36,7 +37,7 @@ export default function MobilePlayerBar() {
 
   const playerContext = usePlayer();
 
-  // Bọc lớp phòng thủ an toàn tuyệt đối chống crash màn hình đen
+  // 2. Safe Fallback Guard (Bảo vệ tuyệt đối chống undefined context)
   const {
     currentTrack = null,
     currentAlbum = null,
@@ -63,13 +64,12 @@ export default function MobilePlayerBar() {
     toggleRepeat = () => {},
   } = playerContext || {};
 
+  // Safe Telemetry
   let sendTelemetry = (_payload: any) => {};
   try {
     const tele = useTelemetry();
     if (tele?.sendTelemetry) sendTelemetry = tele.sendTelemetry;
-  } catch {
-    // Tránh ngoại lệ nếu TelemetryProvider chưa bọc
-  }
+  } catch {}
 
   const safeQueue = Array.isArray(userQueue) ? userQueue : [];
   const safePlaylist = Array.isArray(playlist) ? playlist : [];
@@ -85,7 +85,7 @@ export default function MobilePlayerBar() {
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
-  // Hardware-Accelerated DOM Elements (Chỉ can thiệp qua GPU Layer)
+  // Direct GPU DOM Nodes (Chỉ dùng transform & opacity, không dùng repaint CPU)
   const miniBarRef = useRef<HTMLDivElement | null>(null);
   const miniGlowBackdropRef = useRef<HTMLDivElement | null>(null);
   const miniCoverRef = useRef<HTMLDivElement | null>(null);
@@ -123,43 +123,52 @@ export default function MobilePlayerBar() {
   const sheetTouchDeltaYRef = useRef<number>(0);
   const [sheetOffsetY, setSheetOffsetY] = useState<number>(0);
 
-  // Seeker refs & Throttled UI Render
+  // Seeker refs & Throttled Text
   const expandedCurrentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const expandedSeekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
   const lastLoggedSecRef = useRef<number>(-1);
 
-  // Physics Spring State (Hooke's Law Damping - Namida Style)
-  const kickScaleRef = useRef<number>(1.0);
-  const targetKickScaleRef = useRef<number>(1.0);
-  const snareStrobeRef = useRef<number>(0.0);
-  const targetSnareStrobeRef = useRef<number>(0.0);
+  // 3. DSP & Hooke's Law Physics Engine (Thuật toán theo kiến trúc Namida)
+  const kickScaleRef = useRef<number>(1);
+  const targetKickScaleRef = useRef<number>(1);
+  const snareStrobeRef = useRef<number>(0);
+  const targetSnareStrobeRef = useRef<number>(0);
 
-  // Lightweight DSP Signal Processor (Tối ưu 128 bins siêu nhẹ)
-  const bassEmaRef = useRef<number>(10);
-  const midEmaRef = useRef<number>(8);
-  const lastKickTimeRef = useRef<number>(0);
-  const lastSnareTimeRef = useRef<number>(0);
+  const fastBassRef = useRef<number>(0);
+  const slowBassRef = useRef<number>(0);
+  const lastKickHitTimeRef = useRef<number>(0);
 
-  // 60FPS Live Stage Engine — Zero-Lag Hardware Acceleration
+  const fastMidRef = useRef<number>(0);
+  const slowMidRef = useRef<number>(0);
+  const fastHighRef = useRef<number>(0);
+  const slowHighRef = useRef<number>(0);
+  const lastSnareHitTimeRef = useRef<number>(0);
+
+  const smoothBasslineRef = useRef<number>(0);
+  const smoothEnergyRef = useRef<number>(0);
+
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-      kickScaleRef.current = 1.0;
-      targetKickScaleRef.current = 1.0;
-      snareStrobeRef.current = 0.0;
-      targetSnareStrobeRef.current = 0.0;
+      targetKickScaleRef.current = 0;
+      kickScaleRef.current = 1;
+      targetSnareStrobeRef.current = 0;
+      snareStrobeRef.current = 0;
+      fastBassRef.current = 0; slowBassRef.current = 0;
+      fastMidRef.current = 0; slowMidRef.current = 0;
+      fastHighRef.current = 0; slowHighRef.current = 0;
+      smoothBasslineRef.current = 0; smoothEnergyRef.current = 0;
       return;
     }
 
-    // Sử dụng bộ đệm 128 bins để giảm 90% tải tính toán CPU
-    const dataArray = new Uint8Array(128);
+    const dataArray = new Uint8Array(512);
 
-    const liveStageShow = () => {
+    const liveStageEngine = () => {
       const now = performance.now();
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
 
-      // Cập nhật Seeker Text (chỉ re-render text khi đổi giây)
+      // Cập nhật Seeker Text không gây reflow toàn trang
       if (!isDraggingSeekerRef.current) {
         const floorSec = Math.floor(liveSec);
         if (expandedSeekerInputRef.current) {
@@ -175,61 +184,81 @@ export default function MobilePlayerBar() {
         try {
           analyserRef.current.getByteFrequencyData(dataArray);
 
-          // 1. Phân tích Sub-Bass / Kick (Bins 1 -> 3 ~ 40Hz - 130Hz)
-          const bassInst = (dataArray[1] + dataArray[2] + dataArray[3]) / 3;
+          // 1. SUB-BASS / KICK (Bins 2-6: ~43Hz - 130Hz)
+          let bassSum = 0;
+          for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
+          const currentBass = bassSum * 0.2;
+          const fB = fastBassRef.current * 0.15 + currentBass * 0.85;
+          const sB = slowBassRef.current * 0.88 + currentBass * 0.12;
+          fastBassRef.current = fB;
+          slowBassRef.current = sB;
+          const bassFlux = Math.max(0, fB - sB);
 
-          // 2. Phân tích Snare / Transient (Bins 15 -> 28 ~ 1.8kHz - 3.8kHz)
+          // 2. BASSLINE / 808 (Bins 3-12)
+          let basslineSum = 0;
+          for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
+          smoothBasslineRef.current += ((basslineSum * 0.000392) - smoothBasslineRef.current) * 0.22;
+
+          // 3. SNARE DUAL-BAND CONFIRMATION
           let midSum = 0;
-          for (let i = 15; i <= 28; i++) midSum += dataArray[i];
-          const midInst = midSum / 14;
+          for (let i = 35; i <= 92; i++) midSum += dataArray[i];
+          const currentMid = midSum / 58;
+          const fM = fastMidRef.current * 0.15 + currentMid * 0.85;
+          const sM = slowMidRef.current * 0.88 + currentMid * 0.12;
+          fastMidRef.current = fM;
+          slowMidRef.current = sM;
+          const midFlux = Math.max(0, fM - sM);
 
-          // Cập nhật trung bình động Exponential Moving Average (EMA)
-          bassEmaRef.current += (bassInst - bassEmaRef.current) * 0.05;
-          midEmaRef.current += (midInst - midEmaRef.current) * 0.05;
+          let highSum = 0;
+          for (let i = 95; i <= 210; i++) highSum += dataArray[i];
+          const currentHigh = highSum / 116;
+          const fH = fastHighRef.current * 0.15 + currentHigh * 0.85;
+          const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
+          fastHighRef.current = fH;
+          slowHighRef.current = sH;
+          const highFlux = Math.max(0, fH - sH);
 
-          // [KICK TRIGGER]: Nhận diện cú dậm trống có trọng lực
-          const bassVariance = bassInst - bassEmaRef.current;
-          if (bassInst > 60 && bassVariance > 16 && now - lastKickTimeRef.current > 120) {
-            lastKickTimeRef.current = now;
-            const force = Math.min(0.035, 0.012 + bassVariance / 600);
+          // 4. TOTAL AMBIENT ENERGY (Sampled)
+          let totalSum = 0;
+          for (let i = 0; i < 256; i += 4) totalSum += dataArray[i];
+          smoothEnergyRef.current += ((totalSum / 16320) - smoothEnergyRef.current) * 0.15;
+
+          // TRIGGERS (Namida Dynamic Peak Gate)
+          const is808Sustaining = currentBass > 150 && bassFlux < 9.0;
+          if (bassFlux > 12.0 && !is808Sustaining && now - lastKickHitTimeRef.current > 120) {
+            lastKickHitTimeRef.current = now;
+            const force = Math.min(0.038, 0.015 + bassFlux / 600);
             targetKickScaleRef.current += force;
           }
 
-          // [SNARE/CLAP TRIGGER]: Chớp sáng nhẹ
-          const midVariance = midInst - midEmaRef.current;
-          if (midInst > 45 && midVariance > 14 && now - lastSnareTimeRef.current > 130) {
-            lastSnareTimeRef.current = now;
-            targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.3, midVariance / 35));
+          const isSnare = midFlux > 4.0 && highFlux > 1.8;
+          if (isSnare && now - lastSnareHitTimeRef.current > 125) {
+            lastSnareHitTimeRef.current = now;
+            targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
           }
-        } catch {
-          // Bỏ qua lỗi audio stream mà không crash app
-        }
+        } catch {}
       }
 
-      // =========================================================================
-      // PHYSICS ENGINE: HOOKE'S LAW (ĐỘ ĐẦM CHẮC & XẢ MƯỢT TỰ NHIÊN)
-      // =========================================================================
+      // HOOKE'S LAW PHYSICS INTERPOLATION
       const tension = 0.32;
       const dampening = 0.60;
       const displacement = kickScaleRef.current - 1.0;
       targetKickScaleRef.current -= displacement * tension;
       targetKickScaleRef.current *= dampening;
       kickScaleRef.current += targetKickScaleRef.current;
-
-      // Khóa cứng biên độ nảy an toàn tuyệt đối
+      
       if (kickScaleRef.current < 0.99) kickScaleRef.current = 0.99;
-      if (kickScaleRef.current > 1.035) kickScaleRef.current = 1.035;
+      if (kickScaleRef.current > 1.038) kickScaleRef.current = 1.038;
 
       snareStrobeRef.current += (targetSnareStrobeRef.current - snareStrobeRef.current) * 0.55;
       targetSnareStrobeRef.current *= 0.72;
 
       const k = kickScaleRef.current;
       const s = snareStrobeRef.current;
+      const nrg = smoothEnergyRef.current;
       const kickDelta = Math.max(0, k - 1.0);
 
-      // =========================================================================
-      // MINI PLAYER (GPU ACCELERATED VIA TRANSFORM3D & OPACITY)
-      // =========================================================================
+      // DIRECT GPU COMPOSITING (ZERO REFLOW)
       if (miniBarRef.current) {
         miniBarRef.current.style.transform = `translate3d(${swipeOffsetX}px, 0, 0) scale3d(${1 + kickDelta * 0.25}, ${1 + kickDelta * 0.25}, 1)`;
       }
@@ -247,16 +276,13 @@ export default function MobilePlayerBar() {
         miniPlayBtnRef.current.style.transform = `scale3d(${1 + kickDelta * 1.0}, ${1 + kickDelta * 1.0}, 1)`;
       }
 
-      // =========================================================================
-      // EXPANDED PLAYER (GPU COMPOSITING - KHÔNG GÂY REPAINT NỀN)
-      // =========================================================================
       if (expandCoverRef.current) {
         expandCoverRef.current.style.transform = `scale3d(${k}, ${k}, 1)`;
       }
 
       if (expandCoverGlowRef.current) {
-        expandCoverGlowRef.current.style.opacity = `${0.2 + kickDelta * 6.0 + s * 0.35}`;
-        expandCoverGlowRef.current.style.transform = `scale3d(${1 + kickDelta * 2.2}, ${1 + kickDelta * 2.2}, 1)`;
+        expandCoverGlowRef.current.style.opacity = `${0.18 + kickDelta * 5.5 + s * 0.35}`;
+        expandCoverGlowRef.current.style.transform = `scale3d(${1 + kickDelta * 2.0}, ${1 + kickDelta * 2.0}, 1)`;
       }
 
       if (expandPlayBtnRef.current) {
@@ -264,24 +290,25 @@ export default function MobilePlayerBar() {
       }
 
       if (expandAmbientBgRef.current) {
-        expandAmbientBgRef.current.style.opacity = `${0.25 + kickDelta * 3.5 + s * 0.2}`;
+        expandAmbientBgRef.current.style.opacity = `${0.22 + kickDelta * 3.0 + s * 0.2 + nrg * 0.15}`;
         expandAmbientBgRef.current.style.transform = `scale3d(${1 + kickDelta * 0.35}, ${1 + kickDelta * 0.35}, 1)`;
       }
 
       if (expandLaserBorderRef.current) {
-        expandLaserBorderRef.current.style.opacity = `${0.1 + s * 0.75 + kickDelta * 2.5}`;
+        expandLaserBorderRef.current.style.opacity = `${0.1 + s * 0.75 + kickDelta * 2.5 + nrg * 0.15}`;
       }
 
-      rafIdRef.current = requestAnimationFrame(liveStageShow);
+      rafIdRef.current = requestAnimationFrame(liveStageEngine);
     };
 
-    rafIdRef.current = requestAnimationFrame(liveStageShow);
+    rafIdRef.current = requestAnimationFrame(liveStageEngine);
 
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, swipeOffsetX]);
+  }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, swipeOffsetX, effectiveDuration, shuffleMode, repeatMode, activeView]);
 
+  // 4. Lyrics Parser (Cùng font-size, không bao giờ nhảy dòng)
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
     try {
@@ -410,14 +437,11 @@ export default function MobilePlayerBar() {
     [isLiked, currentTrack, sendTelemetry]
   );
 
-  // Không render trên Server để tránh lệch Hydration SSR
   if (!isMounted || !currentTrack) return null;
 
   return (
     <>
-      {/* ========================================================================= */}
-      {/* 1. MINI-PLAYER STAGE PERFORMANCE                                          */}
-      {/* ========================================================================= */}
+      {/* 1. MINI-PLAYER */}
       <div
         className="fixed bottom-4 left-3 right-3 z-40 pointer-events-auto select-none"
         onTouchStart={handleMiniTouchStart}
@@ -429,7 +453,6 @@ export default function MobilePlayerBar() {
           }
         }}
       >
-        {/* Glow Nền Sau */}
         <div
           ref={miniGlowBackdropRef}
           className="absolute inset-0 -inset-x-2 -inset-y-1 bg-white/20 rounded-3xl blur-xl pointer-events-none transition-opacity duration-75 will-change-transform"
@@ -534,9 +557,7 @@ export default function MobilePlayerBar() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 2. EXPANDED FULLSCREEN STAGE PERFORMANCE                                  */}
-      {/* ========================================================================= */}
+      {/* 2. EXPANDED FULLSCREEN */}
       {isExpanded && (
         <div
           ref={expandRootRef}
@@ -546,7 +567,7 @@ export default function MobilePlayerBar() {
           style={{ transform: `translateY(${sheetOffsetY}px)` }}
           className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-6 pb-10 select-none animate-fadeIn transition-transform duration-75 overflow-hidden"
         >
-          {/* Pre-baked GPU Light */}
+          {/* Pre-baked GPU Ambient Backdrop */}
           <div
             ref={expandAmbientBgRef}
             className="absolute inset-0 pointer-events-none opacity-20 will-change-transform transition-opacity duration-75"
@@ -555,7 +576,6 @@ export default function MobilePlayerBar() {
             }}
           />
 
-          {/* Top Laser Border */}
           <div
             ref={expandLaserBorderRef}
             className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-20 transition-opacity pointer-events-none"
@@ -578,12 +598,11 @@ export default function MobilePlayerBar() {
             </div>
           </div>
 
-          {/* Main Stage Viewport (Không gian mở không bị chém viền) */}
+          {/* Main Stage Viewport */}
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-visible z-10">
             {/* PLAYER VIEW */}
             {activeView === 'player' && (
               <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible">
-                {/* Khung bìa đĩa nảy đầm chắc chuẩn Namida Engine */}
                 <div className="relative flex items-center justify-center mb-6 flex-shrink-0">
                   <div
                     ref={expandCoverGlowRef}
@@ -637,7 +656,7 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* LYRICS VIEW — CHUẨN YOUTUBE MUSIC & SPOTIFY: GIỮ NGUYÊN 100% SIZE CHỮ, KHÔNG NHẢY DÒNG */}
+            {/* LYRICS VIEW — GIỮ NGUYÊN 100% SIZE CHỮ, KHÔNG NHẢY DÒNG */}
             {activeView === 'lyrics' && (
               <div
                 ref={lyricsScrollRef}
@@ -645,8 +664,6 @@ export default function MobilePlayerBar() {
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
-                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
-                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
                 }}
               >
                 {parsedLyrics.length === 0 ? (
@@ -677,7 +694,7 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* QUEUE VIEW (ĐÃ BỌC SAFE FALLBACK TOÀN DIỆN) */}
+            {/* QUEUE VIEW — SAFE GUARDS */}
             {activeView === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-2 animate-fadeIn"
@@ -686,7 +703,6 @@ export default function MobilePlayerBar() {
                   msOverflowStyle: 'none',
                 }}
               >
-                {/* 1. USER QUEUE */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1 mb-1">
                     <div className="flex items-center gap-2">
@@ -749,7 +765,6 @@ export default function MobilePlayerBar() {
                   )}
                 </div>
 
-                {/* 2. UPCOMING / PLAYLIST */}
                 {safePlaylist.length > 0 && (
                   <div className="space-y-1 pt-2 border-t border-white/5">
                     <div className="flex items-center justify-between px-1 mb-1">
@@ -795,7 +810,6 @@ export default function MobilePlayerBar() {
 
           {/* Bottom Area */}
           <div className="w-full flex flex-col gap-4 flex-shrink-0 pt-2 relative z-20">
-            {/* Seekbar */}
             <div className="flex flex-col gap-1.5 w-full px-2">
               <div className="relative w-full flex items-center">
                 <input
