@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * StreamingHub — DiscoveryFeed.tsx (v3)
+ * StreamingHub — DiscoveryFeed.tsx (v4)
  *
  * Multi-Platform In-App Streaming Hub:
- *  - YouTube Music (Lossless & Streaming Audio)
- *  - Official Music Videos (In-App Video Zone & Audio toggle)
- *  - SoundCloud (Underground, Vinahouse, Phonk, Chillmix)
+ *  - YouTube Music & Official Music Videos (In-App Cinema Video Modal)
+ *  - SoundCloud Underground (Vinahouse, Phonk, Chillmix)
  *  - Vault Lossless (Supabase / R2 master recordings)
+ *  - Interactive User Queue Management (Add, Remove, Clear, Auto-Random Fallback)
  *
  * Zero external redirects. 100% in-app closed loop.
  */
@@ -44,6 +44,7 @@ import {
   Video,
   RadioTower,
   Flame,
+  Volume2,
 } from 'lucide-react';
 import { Album, TrackItem } from '@/types/database';
 import type {
@@ -180,11 +181,13 @@ interface TrackRowProps {
   rank?: number;
   isPlaying: boolean;
   isCurrent: boolean;
+  isQueued?: boolean;
   onPlay: () => void;
+  onAddToQueue?: () => void;
   onWatchVideo?: () => void;
 }
 
-function TrackRow({ track, rank, isPlaying, isCurrent, onPlay, onWatchVideo }: TrackRowProps) {
+function TrackRow({ track, rank, isPlaying, isCurrent, isQueued, onPlay, onAddToQueue, onWatchVideo }: TrackRowProps) {
   return (
     <div
       id={`track-row-${track.ytmId}`}
@@ -231,18 +234,36 @@ function TrackRow({ track, rank, isPlaying, isCurrent, onPlay, onWatchVideo }: T
           </p>
         </div>
       </div>
-      {onWatchVideo && track.mediaType === 'video' && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onWatchVideo();
-          }}
-          title="Xem Video MV"
-          className="p-1.5 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all flex-shrink-0"
-        >
-          <Video className="w-3.5 h-3.5" />
-        </button>
-      )}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {onAddToQueue && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddToQueue();
+            }}
+            title="Thêm vào hàng chờ"
+            className={`p-1.5 rounded-lg border transition-all ${
+              isQueued
+                ? 'bg-white text-black border-white'
+                : 'bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border-white/10'
+            }`}
+          >
+            {isQueued ? <Check className="w-3 h-3 text-green-400" /> : <Plus className="w-3 h-3" />}
+          </button>
+        )}
+        {onWatchVideo && track.mediaType === 'video' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onWatchVideo();
+            }}
+            title="Xem Video MV"
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all"
+          >
+            <Video className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
       {isCurrent && isPlaying && (
         <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />
       )}
@@ -255,11 +276,13 @@ interface SquareCardProps {
   track: YtmTrack;
   isCurrent: boolean;
   isPlaying: boolean;
+  isQueued?: boolean;
   onPlay: () => void;
+  onAddToQueue?: () => void;
   onWatchVideo?: () => void;
 }
 
-function SquareCard({ track, isCurrent, isPlaying, onPlay, onWatchVideo }: SquareCardProps) {
+function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueue, onWatchVideo }: SquareCardProps) {
   return (
     <div
       id={`card-${track.ytmId}`}
@@ -278,7 +301,19 @@ function SquareCard({ track, isCurrent, isPlaying, onPlay, onWatchVideo }: Squar
             <Music2 className="w-10 h-10 text-zinc-700" />
           </div>
         )}
-        <div className={`absolute inset-0 bg-black/55 flex items-center justify-center transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        <div className={`absolute inset-0 bg-black/55 flex items-center justify-center gap-2 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          {onAddToQueue && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToQueue();
+              }}
+              aria-label="Add to queue"
+              className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all shadow-lg hover:scale-110 active:scale-90"
+            >
+              {isQueued ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Plus className="w-3.5 h-3.5" />}
+            </button>
+          )}
           <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.6)]">
             {isCurrent && isPlaying ? (
               <Pause className="w-4 h-4 fill-current" />
@@ -341,14 +376,14 @@ function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: V
           </div>
         )}
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="px-3 py-1.5 rounded-full bg-white text-black font-mono font-bold text-xs flex items-center gap-1.5 shadow-xl">
-            <Video className="w-3.5 h-3.5" />
+          <div className="px-3.5 py-1.5 rounded-full bg-white text-black font-mono font-black text-xs flex items-center gap-2 shadow-2xl hover:scale-105 transition-transform">
+            <Video className="w-4 h-4 fill-current" />
             <span>XEM MV</span>
           </div>
         </div>
-        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white flex items-center gap-1">
+        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white flex items-center gap-1">
           <Flame className="w-2.5 h-2.5 text-white" />
-          MUSIC VIDEO
+          OFFICIAL MV
         </div>
       </div>
       <div className="p-3 flex items-center justify-between gap-2">
@@ -365,7 +400,7 @@ function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: V
           title="Phát âm thanh"
           className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all flex-shrink-0"
         >
-          {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+          {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Volume2 className="w-3.5 h-3.5" />}
         </button>
       </div>
     </div>
@@ -421,16 +456,91 @@ function MoodPlaylistCard({ playlist, gradient }: { playlist: YtmPlaylist; gradi
   );
 }
 
+// ── In-App Cinema Video Modal ─────────────────────────────────────────────────
+interface CinemaVideoModalProps {
+  track: YtmTrack | null;
+  onClose: () => void;
+  onAddToQueue?: (track: YtmTrack) => void;
+}
+
+function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProps) {
+  if (!track) return null;
+
+  // Extract YouTube ID
+  const videoId = track.ytmId.replace('yt:', '');
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+      <div className="relative w-full max-w-4xl bg-zinc-950 border border-white/20 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 bg-zinc-900/80">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 rounded-lg bg-white/10 border border-white/15">
+              <Video className="w-4 h-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-cyber font-black text-white uppercase truncate">
+                {track.title}
+              </h3>
+              <p className="text-[10px] font-mono text-zinc-400 truncate uppercase">
+                {track.artist}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {onAddToQueue && (
+              <button
+                onClick={() => onAddToQueue(track)}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1.5"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Hàng chờ</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-400 hover:text-black border border-white/15 transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* 16:9 Responsive Video Player */}
+        <div className="relative w-full aspect-video bg-black">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+            title={track.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="w-full h-full border-0"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Search Results Section ────────────────────────────────────────────────────
 interface SearchResultsProps {
   results: YtmSearchResponse;
   currentTrackId: string | null;
   isPlaying: boolean;
+  queuedIds: Set<string>;
   onPlayTrack: (track: YtmTrack) => void;
+  onAddToQueue: (track: YtmTrack) => void;
   onWatchVideo: (track: YtmTrack) => void;
 }
 
-function SearchResults({ results, currentTrackId, isPlaying, onPlayTrack, onWatchVideo }: SearchResultsProps) {
+function SearchResults({
+  results,
+  currentTrackId,
+  isPlaying,
+  queuedIds,
+  onPlayTrack,
+  onAddToQueue,
+  onWatchVideo,
+}: SearchResultsProps) {
   const hasResults =
     results.songs.length > 0 ||
     results.videos.length > 0 ||
@@ -459,7 +569,9 @@ function SearchResults({ results, currentTrackId, isPlaying, onPlayTrack, onWatc
                 track={track}
                 isCurrent={currentTrackId === track.ytmId}
                 isPlaying={isPlaying}
+                isQueued={queuedIds.has(track.ytmId)}
                 onPlay={() => onPlayTrack(track)}
+                onAddToQueue={() => onAddToQueue(track)}
               />
             ))}
           </div>
@@ -496,7 +608,9 @@ function SearchResults({ results, currentTrackId, isPlaying, onPlayTrack, onWatc
                 track={track}
                 isCurrent={currentTrackId === track.ytmId}
                 isPlaying={isPlaying}
+                isQueued={queuedIds.has(track.ytmId)}
                 onPlay={() => onPlayTrack(track)}
+                onAddToQueue={() => onAddToQueue(track)}
               />
             ))}
           </div>
@@ -529,7 +643,7 @@ export default function DiscoveryFeed({
   onSelectAlbum,
   className = '',
 }: StreamingHubProps) {
-  const { currentTrack, isPlaying, playTrack, switchToVideoZone } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, pause, addToQueue } = usePlayer();
   const { trackPlay, trackHeart, trackRecommendationClick } = useTelemetry();
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -539,6 +653,9 @@ export default function DiscoveryFeed({
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set());
   const [addedQueueIds, setAddedQueueIds] = useState<Set<string>>(new Set());
   const [currentYtmId, setCurrentYtmId] = useState<string | null>(null);
+
+  // Cinema Video Modal state
+  const [activeVideoModalTrack, setActiveVideoModalTrack] = useState<YtmTrack | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -628,6 +745,7 @@ export default function DiscoveryFeed({
           audio_url: `yt:${track.ytmId}`,
           youtube_id: track.ytmId,
           duration: track.duration,
+          cover_url: track.coverUrl,
         },
         {
           id: `stream_${track.ytmId}`,
@@ -643,27 +761,41 @@ export default function DiscoveryFeed({
     [currentYtmId, isPlaying, playTrack, trackPlay]
   );
 
+  // ── Add to Queue Handler ────────────────────────────────────────────────────
+  const handleAddToQueueItem = useCallback(
+    (track: YtmTrack | TrackItem) => {
+      const isYtm = 'ytmId' in track;
+      const trackId = isYtm ? track.ytmId : track.id;
+
+      addToQueue({
+        id: trackId,
+        title: track.title,
+        artist: isYtm ? track.artist : track.artist,
+        audio_url: isYtm ? `yt:${track.ytmId}` : (track as TrackItem).audio_url,
+        youtube_id: isYtm ? track.ytmId : undefined,
+        duration: track.duration,
+        cover_url: isYtm ? track.coverUrl : undefined,
+      });
+
+      setAddedQueueIds((prev) => new Set(prev).add(trackId));
+      setTimeout(() => {
+        setAddedQueueIds((prev) => {
+          const n = new Set(prev);
+          n.delete(trackId);
+          return n;
+        });
+      }, 2000);
+    },
+    [addToQueue]
+  );
+
   // ── Watch Video MV Handler ──────────────────────────────────────────────────
   const handleWatchVideo = useCallback(
     (track: YtmTrack) => {
-      switchToVideoZone(
-        {
-          id: track.ytmId,
-          title: track.title,
-          artist: track.artist,
-          audio_url: `yt:${track.ytmId}`,
-          youtube_id: track.ytmId,
-          duration: track.duration,
-        },
-        {
-          id: `mv_${track.ytmId}`,
-          title: track.title,
-          artist: track.artist,
-          cover_url: track.coverUrl,
-        }
-      );
+      pause();
+      setActiveVideoModalTrack(track);
     },
-    [switchToVideoZone]
+    [pause]
   );
 
   // ── Hero Play All ──────────────────────────────────────────────────────────
@@ -687,14 +819,6 @@ export default function DiscoveryFeed({
     },
     [trackHeart]
   );
-
-  const handleAddToQueue = useCallback((track: TrackItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setAddedQueueIds((prev) => new Set(prev).add(track.id));
-    setTimeout(() => {
-      setAddedQueueIds((prev) => { const n = new Set(prev); n.delete(track.id); return n; });
-    }, 2000);
-  }, []);
 
   // ── Search effect ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -741,6 +865,13 @@ export default function DiscoveryFeed({
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div className={`w-full space-y-10 select-none pb-36 ${className}`}>
+
+      {/* In-App Cinema Video Modal */}
+      <CinemaVideoModal
+        track={activeVideoModalTrack}
+        onClose={() => setActiveVideoModalTrack(null)}
+        onAddToQueue={(t) => handleAddToQueueItem(t)}
+      />
 
       {/* ════════════════════════════════════════════════════════════════════
           SEARCH BAR & FILTER SELECTOR
@@ -825,7 +956,9 @@ export default function DiscoveryFeed({
               results={searchResults}
               currentTrackId={currentYtmId ?? currentTrackId}
               isPlaying={isPlaying}
+              queuedIds={addedQueueIds}
               onPlayTrack={handlePlayStreamTrack}
+              onAddToQueue={handleAddToQueueItem}
               onWatchVideo={handleWatchVideo}
             />
           ) : null}
@@ -895,7 +1028,7 @@ export default function DiscoveryFeed({
                 icon={<Music2 className="w-4 h-4" />}
                 title="V-Hop & V-R&B"
                 badge="CURATED"
-                subtitle="MCK · Wren Evans · Low G · tlinh · Obito · 24k.Right"
+                subtitle="MCK · Wren Evans · Low G · tlinh · Obito · 24k.Right · HIEUTHUHAI"
                 onScrollLeft={() => scrollLane('lane-vhop', 'left')}
                 onScrollRight={() => scrollLane('lane-vhop', 'right')}
               />
@@ -909,7 +1042,9 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
+                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
+                      onAddToQueue={() => handleAddToQueueItem(track)}
                     />
                   ))}
                 </div>
@@ -968,7 +1103,9 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
+                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
+                      onAddToQueue={() => handleAddToQueueItem(track)}
                     />
                   ))}
                 </div>
@@ -999,7 +1136,9 @@ export default function DiscoveryFeed({
                         rank={i + 1}
                         isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                         isPlaying={isPlaying}
+                        isQueued={addedQueueIds.has(track.ytmId)}
                         onPlay={() => handlePlayStreamTrack(track)}
+                        onAddToQueue={() => handleAddToQueueItem(track)}
                       />
                     ))}
                   </div>
@@ -1011,7 +1150,9 @@ export default function DiscoveryFeed({
                         rank={Math.ceil(ytmTrending.length / 2) + i + 1}
                         isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                         isPlaying={isPlaying}
+                        isQueued={addedQueueIds.has(track.ytmId)}
                         onPlay={() => handlePlayStreamTrack(track)}
+                        onAddToQueue={() => handleAddToQueueItem(track)}
                       />
                     ))}
                   </div>
@@ -1041,7 +1182,9 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
+                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
+                      onAddToQueue={() => handleAddToQueueItem(track)}
                     />
                   ))}
                 </div>
@@ -1070,7 +1213,9 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
+                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
+                      onAddToQueue={() => handleAddToQueueItem(track)}
                     />
                   ))}
                 </div>
@@ -1093,7 +1238,7 @@ export default function DiscoveryFeed({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {ytNewReleases(ytmNewReleases).map((album) => (
+                  {(ytmNewReleases || []).map((album) => (
                     <AlbumCard key={album.ytmId} album={album} />
                   ))}
                 </div>
@@ -1152,7 +1297,14 @@ export default function DiscoveryFeed({
                           <div className="w-full h-full flex items-center justify-center"><Disc3 className="w-12 h-12 text-zinc-700" /></div>
                         )}
                         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5">
-                          <button onClick={(e) => handleAddToQueue(track, e)} aria-label="Add to queue" className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all shadow-lg hover:scale-110 active:scale-90">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddToQueueItem(track);
+                            }}
+                            aria-label="Add to queue"
+                            className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all shadow-lg hover:scale-110 active:scale-90"
+                          >
                             {isAdded ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Plus className="w-3.5 h-3.5" />}
                           </button>
                           <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.7)]">
@@ -1189,8 +1341,4 @@ export default function DiscoveryFeed({
       )}
     </div>
   );
-}
-
-function ytNewReleases(list: YtmAlbum[]): YtmAlbum[] {
-  return list || [];
 }

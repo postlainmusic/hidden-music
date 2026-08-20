@@ -10,6 +10,7 @@ export interface Track {
   artist?: string;
   audio_url: string;
   youtube_id?: string;
+  cover_url?: string;
   duration?: number;
   lyrics?: string;
   bpm?: number;
@@ -28,6 +29,7 @@ interface PlayerContextType {
   currentTrack: Track | null;
   currentAlbum: Album | null;
   playlist: Track[];
+  userQueue: Track[];
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
@@ -40,6 +42,9 @@ interface PlayerContextType {
   currentTimeRef: React.MutableRefObject<number>;
   analyserRef: React.MutableRefObject<AnalyserNode | null>;
   playTrack: (track: Track, album?: Album | null, newPlaylist?: Track[]) => void;
+  addToQueue: (track: Track) => void;
+  removeFromQueue: (trackId: string) => void;
+  clearQueue: () => void;
   togglePlay: () => void;
   pause: () => void;
   resume: () => void;
@@ -59,6 +64,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
   const [playlist, setPlaylist] = useState<Track[]>([]);
+  const [userQueue, setUserQueue] = useState<Track[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -101,7 +107,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 rel: 0,
                 modestbranding: 1,
                 playsinline: 1,
-                origin: window.location.origin,
               },
               events: {
                 onReady: () => {
@@ -109,7 +114,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 },
                 onStateChange: (event: any) => {
                   const state = event.data;
-                  // YT.PlayerState: PLAYING=1, PAUSED=2, BUFFERING=3, ENDED=0
                   if (state === 1) {
                     setIsPlaying(true);
                     setIsBuffering(false);
@@ -119,12 +123,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     setIsBuffering(true);
                   } else if (state === 0) {
                     setIsPlaying(false);
-                    // Handle track end
                     if (repeatMode === 'one' && ytPlayerRef.current) {
                       ytPlayerRef.current.seekTo(0);
                       ytPlayerRef.current.playVideo();
                     } else {
-                      nextTrack();
+                      handleAutoAdvance();
                     }
                   }
                 },
@@ -157,7 +160,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [repeatMode]);
 
-  // ── Khởi tạo Audio Engine HTML5 (Lossless Vault) ──────────────────────────────
+  // ── Khởi tạo Audio Engine HTML5 ──────────────────────────────────────────────
   const initAudioEngine = useCallback(() => {
     if (!audioRef.current) return;
 
@@ -202,8 +205,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const switchToVideoZone = useCallback((track?: Track | null, album?: Album | null) => {
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current.load();
     }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === 'function') {
       try { ytPlayerRef.current.stopVideo(); } catch {}
@@ -214,7 +215,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setActiveZone('video');
   }, []);
 
-  // Helper to extract YouTube video ID from track
   const getYouTubeId = (track: Track): string | null => {
     if (track.youtube_id && /^[a-zA-Z0-9_-]{11}$/.test(track.youtube_id)) return track.youtube_id;
     if (track.audio_url?.startsWith('yt:')) return track.audio_url.replace('yt:', '');
@@ -223,6 +223,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     return null;
   };
+
+  // ── Queue Operations ────────────────────────────────────────────────────────
+  const addToQueue = useCallback((track: Track) => {
+    setUserQueue((prev) => {
+      // Prevent duplicates in queue
+      if (prev.some((t) => t.id === track.id)) return prev;
+      return [...prev, track];
+    });
+  }, []);
+
+  const removeFromQueue = useCallback((trackId: string) => {
+    setUserQueue((prev) => prev.filter((t) => t.id !== trackId));
+  }, []);
+
+  const clearQueue = useCallback(() => {
+    setUserQueue([]);
+  }, []);
 
   const playTrack = useCallback(
     (track: Track, album: Album | null = null, newPlaylist: Track[] = []) => {
@@ -237,20 +254,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const ytId = getYouTubeId(track);
 
-      // Stop previous polling
       if (ytPollTimerRef.current) {
         clearInterval(ytPollTimerRef.current);
         ytPollTimerRef.current = null;
       }
 
       if (ytId) {
-        // ── Dual Engine: Route to YouTube Audio Bridge ──────────────────────────
+        // Route to YouTube Audio Bridge
         isYtTrackRef.current = true;
 
-        // Pause HTML5 audio
         if (audioRef.current) {
           audioRef.current.pause();
-          audioRef.current.src = '';
         }
 
         const startYtPlayback = () => {
@@ -268,7 +282,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (ytReadyRef.current && ytPlayerRef.current) {
           startYtPlayback();
         } else {
-          // Retry briefly if YT API is mounting
           const retryTimer = setInterval(() => {
             if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
               clearInterval(retryTimer);
@@ -278,12 +291,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setTimeout(() => clearInterval(retryTimer), 4000);
         }
 
-        // Set duration from track or poll
         if (track.duration && track.duration > 0) {
           setDuration(track.duration);
         }
 
-        // Poll time & duration for YouTube tracks
         ytPollTimerRef.current = setInterval(() => {
           if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
             try {
@@ -297,16 +308,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }, 300);
 
       } else {
-        // ── Dual Engine: Route to Lossless HTML5 Audio Engine (Vault / R2) ──────
+        // Route to HTML5 Audio (Lossless Vault / R2)
         isYtTrackRef.current = false;
 
-        // Stop YT player
         if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === 'function') {
           try { ytPlayerRef.current.stopVideo(); } catch {}
         }
 
-        if (audioRef.current) {
-          const streamUrl = normalizeMediaUrl(track.audio_url || '');
+        if (audioRef.current && track.audio_url) {
+          const streamUrl = normalizeMediaUrl(track.audio_url);
           audioRef.current.src = streamUrl;
           audioRef.current.load();
           initAudioEngine();
@@ -319,6 +329,59 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     },
     [initAudioEngine, volume]
   );
+
+  // ── Next Track with Queue Priority & Auto-Random Fallback ───────────────────
+  const nextTrack = useCallback(() => {
+    // 1. If user queue has tracks: play first track and dequeue
+    if (userQueue.length > 0) {
+      const nextFromQueue = userQueue[0];
+      setUserQueue((prev) => prev.slice(1));
+      playTrack(
+        nextFromQueue,
+        nextFromQueue.cover_url
+          ? { id: `album_${nextFromQueue.id}`, title: nextFromQueue.title, artist: nextFromQueue.artist, cover_url: nextFromQueue.cover_url }
+          : currentAlbum,
+        playlist
+      );
+      return;
+    }
+
+    // 2. If queue is empty: play from playlist (random or next)
+    if (playlist.length === 0) return;
+
+    if (!currentTrack) {
+      const randomIdx = Math.floor(Math.random() * playlist.length);
+      playTrack(playlist[randomIdx], currentAlbum, playlist);
+      return;
+    }
+
+    const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
+    let nextIndex = 0;
+
+    if (shuffleMode) {
+      // Pick random different track
+      nextIndex = Math.floor(Math.random() * playlist.length);
+    } else {
+      nextIndex = currentIndex + 1;
+      if (nextIndex >= playlist.length) {
+        nextIndex = 0; // Loop playlist or random
+      }
+    }
+
+    playTrack(playlist[nextIndex], currentAlbum, playlist);
+  }, [userQueue, playlist, currentTrack, currentAlbum, shuffleMode, playTrack]);
+
+  const handleAutoAdvance = useCallback(() => {
+    nextTrack();
+  }, [nextTrack]);
+
+  const prevTrack = useCallback(() => {
+    if (playlist.length === 0 || !currentTrack) return;
+    const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
+    let prevIndex = currentIndex - 1;
+    if (prevIndex < 0) prevIndex = playlist.length - 1;
+    playTrack(playlist[prevIndex], currentAlbum, playlist);
+  }, [playlist, currentTrack, currentAlbum, playTrack]);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack) return;
@@ -372,28 +435,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentTrack, initAudioEngine]);
 
-  const nextTrack = useCallback(() => {
-    if (playlist.length === 0 || !currentTrack) return;
-    const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
-    let nextIndex = currentIndex + 1;
-
-    if (shuffleMode) {
-      nextIndex = Math.floor(Math.random() * playlist.length);
-    } else if (nextIndex >= playlist.length) {
-      nextIndex = 0;
-    }
-
-    playTrack(playlist[nextIndex], currentAlbum, playlist);
-  }, [playlist, currentTrack, shuffleMode, currentAlbum, playTrack]);
-
-  const prevTrack = useCallback(() => {
-    if (playlist.length === 0 || !currentTrack) return;
-    const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
-    let prevIndex = currentIndex - 1;
-    if (prevIndex < 0) prevIndex = playlist.length - 1;
-    playTrack(playlist[prevIndex], currentAlbum, playlist);
-  }, [playlist, currentTrack, currentAlbum, playTrack]);
-
   const seekTo = useCallback((time: number) => {
     if (isYtTrackRef.current && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === 'function') {
       try {
@@ -429,7 +470,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, []);
 
-  // HTML5 Audio Event Listeners (for Lossless Vault tracks)
+  // HTML5 Audio Event Listeners (Lossless Vault)
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -461,7 +502,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const onError = () => {
-      if (!isYtTrackRef.current) {
+      if (!isYtTrackRef.current && audio.src && audio.src !== window.location.href) {
         console.warn('[HTML5 Audio Element Error]:', audio.error, audio.src);
         setIsBuffering(false);
         setIsPlaying(false);
@@ -504,6 +545,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         currentTrack,
         currentAlbum,
         playlist,
+        userQueue,
         isPlaying,
         isBuffering,
         currentTime,
@@ -516,6 +558,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         currentTimeRef,
         analyserRef,
         playTrack,
+        addToQueue,
+        removeFromQueue,
+        clearQueue,
         togglePlay,
         pause,
         resume,
@@ -530,9 +575,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }}
     >
       {children}
-      {/* HTML5 Audio Element for Lossless Vault Tracks */}
       <audio ref={audioRef} crossOrigin="anonymous" preload="auto" playsInline />
-      {/* Invisible YouTube IFrame Bridge for YTM Tracks */}
       <div
         id="hidden-yt-audio-bridge-container"
         style={{

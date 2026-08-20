@@ -50,12 +50,36 @@ const BROWSE_NEW_RELEASES = 'FEmusic_new_releases';
 const BROWSE_CHARTS = 'FEmusic_charts';
 const BROWSE_MOODS = 'FEmusic_moods_and_genres';
 
-// Curated query lists
-const VHOP_QUERIES = ['MCK', 'Wren Evans', 'Low G', 'tlinh', 'Obito rap', '24k.Right'];
-const VIDEO_QUERIES = ['Official Music Video 2024', 'MV Vpop mới nhất', 'MCK MV', 'Wren Evans MV'];
+// Curated query lists — strictly targeted to Vietnamese Hip-hop/R&B & Aesthetic artists
+const VHOP_QUERIES = [
+  'MCK',
+  'Wren Evans',
+  'Low G',
+  'tlinh',
+  'Obito rap',
+  '24k.Right',
+  'Andree Right Hand',
+  'HIEUTHUHAI',
+];
+const VIDEO_QUERIES = [
+  'MCK Official MV',
+  'Wren Evans Official MV',
+  'tlinh Official MV',
+  'Low G Official MV',
+  'Andree Right Hand Official MV',
+  'Soobin Hoàng Sơn Official MV',
+  'HIEUTHUHAI Official MV',
+];
 const GLOBAL_QUERIES = ['Travis Scott', 'The Weeknd', 'Metro Boomin', 'Playboi Carti'];
-const LOFI_QUERIES = ['lo-fi hip hop', 'late night r&b 2024', 'chillwave beats'];
-const SC_QUERIES = ['viet mix 2024', 'vinahouse chill', 'phonk remix viet', 'lofi viet'];
+const LOFI_QUERIES = ['vietnamese lofi chill', 'lofi hip hop radio beats', 'late night chill beats'];
+const SC_QUERIES = [
+  'MCK remix',
+  'Wren Evans remix',
+  'tlinh remix',
+  'vinahouse mck',
+  'vietnamese lofi chill',
+  '24k right remix',
+];
 
 const SONGS_PARAMS = 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D';
 const VIDEOS_PARAMS = 'EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D';

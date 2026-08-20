@@ -25,6 +25,7 @@
 - [Giao dịch 017: Fix Hydration Error #418 & High-Resilience Multi-Tier Audio Stream Resolver](#giao-dịch-017-fix-hydration-error-418--high-resilience-multi-tier-audio-stream-resolver)
 - [Giao dịch 018: Dual-Engine Global Audio Architecture — Lossless Vault & YouTube Bridge](#giao-dịch-018-dual-engine-global-audio-architecture--lossless-vault--youtube-bridge)
 - [Giao dịch 019: Multi-Platform Discovery & Search Engine (YouTube Music, Official MVs, SoundCloud, Vault Lossless)](#giao-dịch-019-multi-platform-discovery--search-engine-youtube-music-official-mvs-soundcloud-vault-lossless)
+- [Giao dịch 020: Priority Queue Architecture & In-App Cinema Video Modal Engine](#giao-dịch-020-priority-queue-architecture--in-app-cinema-video-modal-engine)
 
 ---
 
@@ -403,4 +404,21 @@
   3. **In-App Closed-Loop Player**:
      - Thẻ Music Video hỗ trợ chọn **"Xem MV"** (kích hoạt Video Zone) hoặc **"Phát Âm Thanh"** (phát trực tiếp trên Global Player Bar).
      - Thẻ SoundCloud gắn nhãn `VINAHOUSE / PHONK` hoặc `REMIX / EDIT`, phát tức thì.
+
+---
+
+### Giao dịch 020: Priority Queue Architecture & In-App Cinema Video Modal Engine
+* **Thời gian**: 20/08/2026 17:48 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Hệ thống Hàng Chờ Chuẩn (Interactive Priority Queue Engine)**:
+     - `addToQueue(track)`: Bổ sung bài hát vào hàng chờ `userQueue`.
+     - `removeFromQueue(trackId)`: Xóa bài hát khỏi hàng chờ.
+     - `clearQueue()`: Xóa sạch hàng chờ với 1 click.
+     - **Thuật toán Phát Thông Minh**: Ưu tiên phát tuần tự các bài trong `userQueue`; khi `userQueue` hết bài, tự động chuyển sang chế độ phát ngẫu nhiên / liên tục từ thư viện (`playlist`) để âm nhạc không bao giờ bị dừng.
+     - Giao diện Hàng chờ trong `DesktopPlayerBar.tsx` và `MobilePlayerBar.tsx` hiển thị danh sách bài đã chọn + nút xóa (`X`), và danh sách phát tự động bên dưới.
+  2. **In-App Cinema Video Modal (`DiscoveryFeed.tsx`)**:
+     - Bấm "XEM MV" mở ngay Modal Cinema 16:9 full HD nhúng trực tiếp trên trang mà không bị lỗi MediaError/empty src, tự động tạm dừng audio nền.
+  3. **Lọc Sạch Đề Xuất (Taste Curated Quality)**:
+     - Loại bỏ toàn bộ các truy vấn chung chung gây lọt video rác; thay bằng danh sách nghệ sĩ V-Hop & Underground tuyển chọn kỹ lưỡng (MCK, Wren Evans, tlinh, Low G, Andree, Soobin, HIEUTHUHAI, 24k.Right).
 
