@@ -574,59 +574,32 @@ export default function DiscoveryFeed({
     [playTrack, trackPlay, trackRecommendationClick]
   );
 
-  // ── YTM in-app play handler (resolve → playTrack) ─────────────────────────
+  // ── YTM in-app play handler (Instant Dual-Engine playback) ───────────────
   const handlePlayYtmTrack = useCallback(
-    async (track: YtmTrack) => {
-      // If already current and playing, do nothing
+    (track: YtmTrack) => {
       if (currentYtmId === track.ytmId && isPlaying) return;
 
-      setResolvingIds((prev) => new Set(prev).add(track.ytmId));
-      setResolveError(null);
+      setCurrentYtmId(track.ytmId);
 
-      try {
-        const res = await fetch(`/api/ytm/resolve?id=${encodeURIComponent(track.ytmId)}`);
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          setResolveError(errData?.message || `Không thể tải stream cho "${track.title}". Vui lòng thử lại.`);
-          return;
-        }
+      playTrack(
+        {
+          id: track.ytmId,
+          title: track.title,
+          artist: track.artist,
+          audio_url: `yt:${track.ytmId}`,
+          youtube_id: track.ytmId,
+          duration: track.duration,
+        },
+        {
+          id: `ytm_${track.ytmId}`,
+          title: track.title,
+          artist: track.artist,
+          cover_url: track.coverUrl,
+        },
+        []
+      );
 
-        const data: YtmResolvedStream = await res.json();
-        if (!data?.audioUrl) {
-          setResolveError(`Không tìm thấy luồng âm thanh cho "${track.title}".`);
-          return;
-        }
-
-        setCurrentYtmId(track.ytmId);
-
-        // Feed resolved stream directly into PlayerContext
-        playTrack(
-          {
-            id: track.ytmId,
-            title: data.title || track.title,
-            artist: data.artist || track.artist,
-            audio_url: data.audioUrl,
-            duration: data.duration || track.duration,
-          },
-          {
-            id: `ytm_${track.ytmId}`,
-            title: data.title || track.title,
-            artist: data.artist || track.artist,
-            cover_url: data.coverUrl || track.coverUrl,
-          },
-          []
-        );
-
-        trackPlay(track.ytmId, undefined, 'audio', 'ytm_streaming_hub');
-      } catch {
-        setResolveError(`Không thể phát "${track.title}". Kiểm tra kết nối mạng.`);
-      } finally {
-        setResolvingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(track.ytmId);
-          return next;
-        });
-      }
+      trackPlay(track.ytmId, undefined, 'audio', 'ytm_streaming_hub');
     },
     [currentYtmId, isPlaying, playTrack, trackPlay]
   );
