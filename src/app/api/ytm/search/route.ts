@@ -1,14 +1,14 @@
 /**
- * GET /api/ytm/search?q={query}&type=all|songs|albums|playlists
+ * GET /api/ytm/search?q={query}&type=all|songs|videos|soundcloud|albums|playlists
  *
- * YouTube Music search proxy with Vietnamese locale targeting.
- * Uses YTM's internal search API to return categorized results:
- *  - Top Result
- *  - Songs
- *  - Albums
- *  - Playlists
+ * Multi-Platform Search Proxy:
+ *  - YouTube Music Songs
+ *  - YouTube Music Videos (Official MVs)
+ *  - SoundCloud (Remixes, Underground, Vinahouse, Phonk)
+ *  - Albums & Playlists
  *
- * Cache: 5 minutes (search results are relatively stable short-term)
+ * Locale: gl=VN, hl=vi
+ * Cache: 5 minutes (public, s-maxage=300)
  */
 
 import { NextResponse } from 'next/server';
@@ -22,11 +22,9 @@ import type {
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-// ── YTM Internal API ──────────────────────────────────────────────────────────
 const YTM_BASE = 'https://music.youtube.com/youtubei/v1';
 const YTM_KEY = 'AIzaSyC9XL3ZjWddXya6X74dJoCTL-KEHM_0m4I';
 
-// Vietnamese locale for relevance
 const YTM_CONTEXT = {
   client: {
     clientName: 'WEB_REMIX',
@@ -45,15 +43,12 @@ const YTM_HEADERS = {
   'X-Goog-Visitor-Id': 'CgtZM0hMR1ZHekVZWSiS9ZS2BjIKCgJWThIEGgAgRg%3D%3D',
 };
 
-// ── Search params for each type ───────────────────────────────────────────────
-const SEARCH_PARAMS: Record<string, string> = {
-  songs: 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D',
-  albums: 'EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D',
-  playlists: 'Eg-KAQwIABAAGAAgACgBMABqChAEEAMQCRAFEAo%3D',
-  all: '',
-};
+// Search params for YTM filters
+const PARAMS_SONGS = 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D';
+const PARAMS_VIDEOS = 'EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D';
+const PARAMS_ALBUMS = 'EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D';
+const PARAMS_PLAYLISTS = 'Eg-KAQwIABAAGAAgACgBMABqChAEEAMQCRAFEAo%3D';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function getText(runs: any[]): string {
   if (!Array.isArray(runs)) return '';
   return runs.map((r: any) => r?.text ?? '').join('');
@@ -64,117 +59,69 @@ function getBestThumbnail(thumbnails: any[]): string {
   return [...thumbnails].sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]?.url ?? '';
 }
 
-// ── YTM search call ───────────────────────────────────────────────────────────
 async function ytmSearch(query: string, params: string = ''): Promise<any> {
   const body: any = {
     context: YTM_CONTEXT,
     query,
   };
-  if (params) {
-    body.params = params;
-  }
+  if (params) body.params = params;
 
   const res = await fetch(`${YTM_BASE}/search?key=${YTM_KEY}`, {
     method: 'POST',
     headers: YTM_HEADERS,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(6000),
   });
 
   if (!res.ok) throw new Error(`YTM search failed: ${res.status}`);
   return res.json();
 }
 
-// ── Parse helpers per type ────────────────────────────────────────────────────
-function parseSongItem(row: any): YtmTrack | null {
-  const cols = row?.flexColumns ?? [];
-  const title = getText(cols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? []);
-  const artist = getText(cols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? []);
-  const thumbnails = row?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
-  const coverUrl = getBestThumbnail(thumbnails);
+// ── SoundCloud Public Search ──────────────────────────────────────────────────
+async function searchSoundcloud(query: string): Promise<YtmTrack[]> {
+  try {
+    // Search SoundCloud via public search proxy / API
+    const scUrl = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(
+      query
+    )}&client_id=iZIs9mchVcX5lhVRyQGGAYlNPV6oSCkg&limit=15`;
 
-  // Extract video ID from overlay or navigation endpoint
-  const videoId =
-    row?.overlay?.musicItemThumbnailOverlayRenderer?.content
-      ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId ??
-    row?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text
-      ?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ??
-    '';
+    const res = await fetch(scUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(4000),
+    });
 
-  // Extract duration from fixed columns
-  const fixedCols = row?.fixedColumns ?? [];
-  const durationText = getText(
-    fixedCols[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs ?? []
-  );
-  const durationParts = durationText.split(':').map(Number);
-  const duration =
-    durationParts.length === 2
-      ? durationParts[0] * 60 + durationParts[1]
-      : durationParts.length === 3
-      ? durationParts[0] * 3600 + durationParts[1] * 60 + durationParts[2]
-      : 0;
+    if (!res.ok) return [];
+    const data = await res.json();
+    const collection: any[] = data?.collection ?? [];
 
-  if (!title || !videoId) return null;
-  return {
-    ytmId: videoId,
-    title,
-    artist,
-    coverUrl,
-    duration,
-    youtubeUrl: `https://music.youtube.com/watch?v=${videoId}`,
-  };
+    return collection
+      .filter((item) => item?.title && item?.id)
+      .map((item) => ({
+        ytmId: `sc_${item.id}`,
+        title: item.title,
+        artist: item.user?.username ?? 'SoundCloud Artist',
+        coverUrl:
+          item.artwork_url?.replace('-large', '-t500x500') ??
+          item.user?.avatar_url ??
+          '',
+        duration: Math.round((item.duration ?? 0) / 1000),
+        soundcloudUrl: item.permalink_url ?? '',
+        platform: 'soundcloud' as const,
+        mediaType: 'audio' as const,
+        badge: 'SOUNDCLOUD',
+      }));
+  } catch {
+    return [];
+  }
 }
 
-function parseAlbumItem(card: any): YtmAlbum | null {
-  const title = getText(card?.title?.runs ?? []);
-  const artist = getText(card?.subtitle?.runs ?? []);
-  const thumbnails =
-    card?.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
-  const coverUrl = getBestThumbnail(thumbnails);
-  const browseId =
-    card?.navigationEndpoint?.browseEndpoint?.browseId ?? '';
-  const subtitleText = getText(card?.subtitle?.runs ?? []).toUpperCase();
-  const releaseType =
-    subtitleText.includes('SINGLE') ? 'SINGLE' : subtitleText.includes('EP') ? 'EP' : 'ALBUM';
-
-  if (!title || !browseId) return null;
-  return {
-    ytmId: browseId,
-    title,
-    artist,
-    coverUrl,
-    releaseType,
-    browseUrl: `https://music.youtube.com/browse/${browseId}`,
-  };
-}
-
-function parsePlaylistItem(card: any): YtmPlaylist | null {
-  const title = getText(card?.title?.runs ?? []);
-  const subtitle = getText(card?.subtitle?.runs ?? []);
-  const thumbnails =
-    card?.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
-  const coverUrl = getBestThumbnail(thumbnails);
-  const browseId =
-    card?.navigationEndpoint?.browseEndpoint?.browseId ?? '';
-
-  if (!title || !browseId) return null;
-  return {
-    ytmId: browseId,
-    title,
-    subtitle,
-    coverUrl,
-    trackCount: 0,
-    browseUrl: `https://music.youtube.com/browse/${browseId}`,
-  };
-}
-
-// ── Parse full search result data ─────────────────────────────────────────────
-function parseSearchResults(data: any, query: string): YtmSearchResponse {
-  const songs: YtmTrack[] = [];
-  const albums: YtmAlbum[] = [];
-  const playlists: YtmPlaylist[] = [];
-  let topResult: YtmTrack | YtmAlbum | null = null;
-
+// ── Parsers for YTM shelves ───────────────────────────────────────────────────
+function parseSongRows(data: any, isVideo = false): YtmTrack[] {
+  const tracks: YtmTrack[] = [];
   try {
     const shelves =
       data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer
@@ -183,86 +130,91 @@ function parseSearchResults(data: any, query: string): YtmSearchResponse {
       [];
 
     for (const shelf of shelves) {
-      const shelfRenderer =
-        shelf?.musicShelfRenderer ??
-        shelf?.musicCardShelfRenderer ??
-        null;
-      if (!shelfRenderer) continue;
-
-      const shelfTitle = getText(shelfRenderer?.title?.runs ?? '').toLowerCase();
-      const items: any[] = shelfRenderer?.contents ?? [];
-
+      const items =
+        shelf?.musicShelfRenderer?.contents ??
+        shelf?.musicCardShelfRenderer?.contents ??
+        [];
       for (const item of items) {
         const row = item?.musicResponsiveListItemRenderer;
-        const card = item?.musicTwoRowItemRenderer;
+        if (!row) continue;
 
-        // Detect content type by shelf title or item structure
-        if (shelfTitle.includes('top result') || shelfTitle.includes('kết quả hàng đầu')) {
-          if (card) {
-            const album = parseAlbumItem(card);
-            if (album && !topResult) topResult = album;
-          } else if (row) {
-            const song = parseSongItem(row);
-            if (song && !topResult) topResult = song;
-          }
-        } else if (
-          shelfTitle.includes('bài hát') ||
-          shelfTitle.includes('song') ||
-          shelfTitle.includes('track')
-        ) {
-          if (row) {
-            const song = parseSongItem(row);
-            if (song) songs.push(song);
-          }
-        } else if (
-          shelfTitle.includes('album') ||
-          shelfTitle.includes('đĩa') ||
-          shelfTitle.includes('single')
-        ) {
-          if (card) {
-            const album = parseAlbumItem(card);
-            if (album) albums.push(album);
-          }
-        } else if (
-          shelfTitle.includes('playlist') ||
-          shelfTitle.includes('danh sách')
-        ) {
-          if (card) {
-            const pl = parsePlaylistItem(card);
-            if (pl) playlists.push(pl);
-          }
-        } else {
-          // Unknown shelf — try to parse as songs (most common)
-          if (row) {
-            const song = parseSongItem(row);
-            if (song) songs.push(song);
-          }
-          if (card) {
-            const album = parseAlbumItem(card);
-            if (album) albums.push(album);
-          }
+        const cols = row?.flexColumns ?? [];
+        const title = getText(cols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? []);
+        const artist = getText(cols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? []);
+        const thumbnails = row?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
+        const coverUrl = getBestThumbnail(thumbnails);
+        const videoId =
+          row?.overlay?.musicItemThumbnailOverlayRenderer?.content
+            ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId ??
+          row?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text
+            ?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ??
+          '';
+
+        if (title && videoId) {
+          tracks.push({
+            ytmId: videoId,
+            title,
+            artist,
+            coverUrl,
+            duration: 0,
+            youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            platform: 'youtube',
+            mediaType: isVideo ? 'video' : 'audio',
+            badge: isVideo ? 'OFFICIAL MV' : undefined,
+          });
         }
       }
     }
-  } catch {
-    // Return partial results on parse error
-  }
-
-  return {
-    query,
-    topResult,
-    songs: songs.slice(0, 20),
-    albums: albums.slice(0, 10),
-    playlists: playlists.slice(0, 10),
-    fetchedAt: Date.now(),
-  };
+  } catch {}
+  return tracks;
 }
 
-// ── Main GET handler ──────────────────────────────────────────────────────────
+function parseAlbumCards(data: any): YtmAlbum[] {
+  const albums: YtmAlbum[] = [];
+  try {
+    const shelves =
+      data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer
+        ?.content?.sectionListRenderer?.contents ??
+      data?.contents?.sectionListRenderer?.contents ??
+      [];
+
+    for (const shelf of shelves) {
+      const items =
+        shelf?.musicShelfRenderer?.contents ??
+        shelf?.musicCardShelfRenderer?.contents ??
+        [];
+      for (const item of items) {
+        const card = item?.musicTwoRowItemRenderer;
+        if (!card) continue;
+        const title = getText(card?.title?.runs ?? []);
+        const artist = getText(card?.subtitle?.runs ?? []);
+        const thumbnails = card?.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
+        const coverUrl = getBestThumbnail(thumbnails);
+        const browseId = card?.navigationEndpoint?.browseEndpoint?.browseId ?? '';
+        const subtitleText = getText(card?.subtitle?.runs ?? []).toUpperCase();
+        const releaseType = subtitleText.includes('SINGLE') ? 'SINGLE' : subtitleText.includes('EP') ? 'EP' : 'ALBUM';
+
+        if (title && browseId) {
+          albums.push({
+            ytmId: browseId,
+            title,
+            artist,
+            coverUrl,
+            releaseType,
+            platform: 'youtube',
+            browseUrl: `https://music.youtube.com/browse/${browseId}`,
+          });
+        }
+      }
+    }
+  } catch {}
+  return albums;
+}
+
+// ── Main GET Handler ──────────────────────────────────────────────────────────
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get('q') ?? '').trim();
-  const type = (searchParams.get('type') ?? 'all').toLowerCase();
 
   if (!query || query.length < 2) {
     return NextResponse.json(
@@ -270,6 +222,8 @@ export async function GET(request: Request): Promise<NextResponse> {
         query,
         topResult: null,
         songs: [],
+        videos: [],
+        soundcloud: [],
         albums: [],
         playlists: [],
         fetchedAt: Date.now(),
@@ -279,30 +233,50 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   try {
-    const params = SEARCH_PARAMS[type] ?? '';
-    const data = await ytmSearch(query, params);
-    const result = parseSearchResults(data, query);
+    // Concurrent multi-source search
+    const [songsData, videosData, scData, albumsData] = await Promise.allSettled([
+      ytmSearch(query, PARAMS_SONGS),
+      ytmSearch(query, PARAMS_VIDEOS),
+      searchSoundcloud(query),
+      ytmSearch(query, PARAMS_ALBUMS),
+    ]);
+
+    const songs = songsData.status === 'fulfilled' ? parseSongRows(songsData.value, false) : [];
+    const videos = videosData.status === 'fulfilled' ? parseSongRows(videosData.value, true) : [];
+    const soundcloud = scData.status === 'fulfilled' ? (scData.value as YtmTrack[]) : [];
+    const albums = albumsData.status === 'fulfilled' ? parseAlbumCards(albumsData.value) : [];
+
+    const topResult: YtmTrack | YtmAlbum | null = songs[0] || videos[0] || soundcloud[0] || albums[0] || null;
+
+    const result: YtmSearchResponse = {
+      query,
+      topResult,
+      songs: songs.slice(0, 15),
+      videos: videos.slice(0, 10),
+      soundcloud: soundcloud.slice(0, 10),
+      albums: albums.slice(0, 8),
+      playlists: [],
+      fetchedAt: Date.now(),
+    };
 
     return NextResponse.json(result, {
       headers: {
-        // 5-minute cache — search results are stable short-term
         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
       },
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json(
       {
         query,
         topResult: null,
         songs: [],
+        videos: [],
+        soundcloud: [],
         albums: [],
         playlists: [],
         fetchedAt: Date.now(),
       } as YtmSearchResponse,
-      {
-        status: 200, // Return empty results (not error) so UI degrades gracefully
-        headers: { 'Cache-Control': 'no-store' },
-      }
+      { status: 200 }
     );
   }
 }

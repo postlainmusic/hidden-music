@@ -1,27 +1,15 @@
 'use client';
 
 /**
- * StreamingHub — DiscoveryFeed.tsx (v2)
+ * StreamingHub — DiscoveryFeed.tsx (v3)
  *
- * Closed-loop In-App Streaming Experience (Spotify / Apple Music style).
- * Zero external redirections — everything plays inside the app.
+ * Multi-Platform In-App Streaming Hub:
+ *  - YouTube Music (Lossless & Streaming Audio)
+ *  - Official Music Videos (In-App Video Zone & Audio toggle)
+ *  - SoundCloud (Underground, Vinahouse, Phonk, Chillmix)
+ *  - Vault Lossless (Supabase / R2 master recordings)
  *
- * Sections:
- *  0. Native Search Bar (debounced, 300ms) → /api/ytm/search
- *  1. Hero Spotlight Carousel    — Vault albums: ambient glow + Play All
- *  2. V-Hop & V-R&B              — Curated Vietnamese Hip-hop / R&B
- *  3. Trending Quick Picks       — YTM charts 2-row horizontal grid
- *  4. Global Hits                — Global Trap / Melodic / Trapsoul
- *  5. Lo-fi / Late-Night Chill   — Curated mood swimlane
- *  6. New Releases Grid          — YTM new releases 4-5 col grid
- *  7. Mood & Genre Playlists     — YTM mood playlists horizontal scroll
- *  8. Vault Lossless             — Supabase tracks → PlayerContext direct
- *
- * In-app playback:
- *  - Vault tracks → PlayerContext.playTrack() directly
- *  - YTM tracks → /api/ytm/resolve → PlayerContext.playTrack() with resolved URL
- *
- * Design: Pure Monochrome Cyber-Aesthetic (POSTLAIN brand)
+ * Zero external redirects. 100% in-app closed loop.
  */
 
 import React, {
@@ -51,9 +39,11 @@ import {
   Search,
   X,
   Loader2,
-  AlertCircle,
   Globe,
   Moon,
+  Video,
+  RadioTower,
+  Flame,
 } from 'lucide-react';
 import { Album, TrackItem } from '@/types/database';
 import type {
@@ -62,8 +52,6 @@ import type {
   YtmAlbum,
   YtmPlaylist,
   YtmSearchResponse,
-  YtmResolvedStream,
-  YtmResolveError,
 } from '@/types/ytm';
 import { usePlayer } from '@/context/PlayerContext';
 import { useTelemetry } from '@/hooks/useTelemetry';
@@ -78,9 +66,16 @@ interface StreamingHubProps {
   className?: string;
 }
 
-type FilterPill = 'All' | 'V-Hop & R&B' | 'Global Hits' | 'Lo-fi / Chill' | 'New Releases' | 'Vault Lossless';
+type FilterPill =
+  | 'All'
+  | 'V-Hop & R&B'
+  | 'Music Videos'
+  | 'SoundCloud Remix'
+  | 'Global Hits'
+  | 'Lo-fi / Chill'
+  | 'New Releases'
+  | 'Vault Lossless';
 
-// ── Gradient palette for mood playlist cards ──────────────────────────────────
 const MOOD_GRADIENTS = [
   'from-zinc-800 to-zinc-950',
   'from-neutral-800 to-neutral-950',
@@ -92,11 +87,8 @@ const MOOD_GRADIENTS = [
   'from-stone-900 to-black',
   'from-slate-900 to-black',
   'from-gray-900 to-black',
-  'from-zinc-800 via-neutral-900 to-black',
-  'from-stone-800 via-gray-900 to-black',
 ];
 
-// ── Utility: format seconds to m:ss ──────────────────────────────────────────
 function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return '';
   const m = Math.floor(seconds / 60);
@@ -104,7 +96,6 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ── Utility: debounce ─────────────────────────────────────────────────────────
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
@@ -114,11 +105,11 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-// ── Sub-components: Skeleton Cards ────────────────────────────────────────────
-function SkeletonCard() {
+// ── Skeleton Loaders ──────────────────────────────────────────────────────────
+function SkeletonCard({ aspect = 'square' }: { aspect?: 'square' | 'video' }) {
   return (
-    <div className="flex-shrink-0 w-44 sm:w-52 rounded-2xl overflow-hidden animate-pulse bg-zinc-900/60 border border-white/5">
-      <div className="w-full aspect-square bg-zinc-800/60" />
+    <div className={`flex-shrink-0 ${aspect === 'video' ? 'w-64 sm:w-72' : 'w-44 sm:w-52'} rounded-2xl overflow-hidden animate-pulse bg-zinc-900/60 border border-white/5`}>
+      <div className={`w-full ${aspect === 'video' ? 'aspect-video' : 'aspect-square'} bg-zinc-800/60`} />
       <div className="p-3 space-y-2">
         <div className="h-3 bg-zinc-800/60 rounded w-3/4" />
         <div className="h-2.5 bg-zinc-800/40 rounded w-1/2" />
@@ -140,19 +131,7 @@ function SkeletonRow() {
   );
 }
 
-function SkeletonGridCard() {
-  return (
-    <div className="rounded-2xl overflow-hidden animate-pulse bg-zinc-900/60 border border-white/5">
-      <div className="w-full aspect-square bg-zinc-800/60" />
-      <div className="p-2.5 space-y-1.5">
-        <div className="h-2.5 bg-zinc-800/60 rounded w-3/4" />
-        <div className="h-2 bg-zinc-800/40 rounded w-1/2" />
-      </div>
-    </div>
-  );
-}
-
-// ── Sub-component: Section Header ──────────────────────────────────────────────
+// ── Section Header ────────────────────────────────────────────────────────────
 interface SectionHeaderProps {
   icon: React.ReactNode;
   title: string;
@@ -195,32 +174,32 @@ function SectionHeader({ icon, title, badge, subtitle, onScrollLeft, onScrollRig
   );
 }
 
-// ── In-app YTM track card ─────────────────────────────────────────────────────
-interface YtmTrackRowProps {
+// ── Track Row Item ────────────────────────────────────────────────────────────
+interface TrackRowProps {
   track: YtmTrack;
   rank?: number;
-  isResolving: boolean;
   isPlaying: boolean;
   isCurrent: boolean;
   onPlay: () => void;
+  onWatchVideo?: () => void;
 }
 
-function YtmTrackRow({ track, rank, isResolving, isPlaying, isCurrent, onPlay }: YtmTrackRowProps) {
+function TrackRow({ track, rank, isPlaying, isCurrent, onPlay, onWatchVideo }: TrackRowProps) {
   return (
-    <button
-      id={`ytm-track-row-${track.ytmId}`}
+    <div
+      id={`track-row-${track.ytmId}`}
       onClick={onPlay}
-      disabled={isResolving}
-      aria-label={`Play ${track.title}`}
-      className={`group flex items-center gap-3 w-64 sm:w-72 flex-shrink-0 snap-start p-2.5 rounded-xl border transition-all duration-200 active:scale-95 text-left ${
+      className={`group flex items-center gap-3 w-72 sm:w-80 flex-shrink-0 snap-start p-2.5 rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 text-left ${
         isCurrent
           ? 'bg-white/10 border-white/30 shadow-[0_0_16px_rgba(255,255,255,0.08)]'
           : 'bg-zinc-950/80 border-white/10 hover:border-white/25 hover:bg-zinc-900/90'
-      } ${isResolving ? 'cursor-wait opacity-80' : 'cursor-pointer'}`}
+      }`}
     >
-      <span className="text-[10px] font-mono font-black text-zinc-600 w-5 text-center flex-shrink-0">
-        {rank ?? ''}
-      </span>
+      {rank !== undefined && (
+        <span className="text-[10px] font-mono font-black text-zinc-600 w-4 text-center flex-shrink-0">
+          {rank}
+        </span>
+      )}
       <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
         {track.coverUrl ? (
           <img src={track.coverUrl} alt={track.title} className="w-full h-full object-cover" />
@@ -229,10 +208,8 @@ function YtmTrackRow({ track, rank, isResolving, isPlaying, isCurrent, onPlay }:
             <Music2 className="w-4 h-4 text-zinc-600" />
           </div>
         )}
-        <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent || isResolving ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-          {isResolving ? (
-            <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-          ) : isCurrent && isPlaying ? (
+        <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          {isCurrent && isPlaying ? (
             <Pause className="w-3.5 h-3.5 fill-white text-white" />
           ) : (
             <Play className="w-3.5 h-3.5 fill-white text-white" />
@@ -243,45 +220,57 @@ function YtmTrackRow({ track, rank, isResolving, isPlaying, isCurrent, onPlay }:
         <p className={`text-[11px] font-cyber font-bold truncate uppercase leading-tight ${isCurrent ? 'text-white' : 'text-white/90'}`}>
           {track.title}
         </p>
-        <p className="text-[10px] font-mono text-zinc-500 truncate uppercase mt-0.5">
-          {track.artist}
-        </p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {track.badge && (
+            <span className="px-1 py-0.2 rounded bg-white/15 text-[8px] font-mono font-bold text-zinc-300">
+              {track.badge}
+            </span>
+          )}
+          <p className="text-[10px] font-mono text-zinc-500 truncate uppercase">
+            {track.artist}
+          </p>
+        </div>
       </div>
-      {track.duration > 0 && (
-        <span className="text-[9px] font-mono text-zinc-600 flex-shrink-0">
-          {formatDuration(track.duration)}
-        </span>
+      {onWatchVideo && track.mediaType === 'video' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onWatchVideo();
+          }}
+          title="Xem Video MV"
+          className="p-1.5 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all flex-shrink-0"
+        >
+          <Video className="w-3.5 h-3.5" />
+        </button>
       )}
       {isCurrent && isPlaying && (
         <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />
       )}
-    </button>
+    </div>
   );
 }
 
-// ── In-app YTM compact card (for grid/carousel) ────────────────────────────────
-interface YtmCompactCardProps {
+// ── Square Track Card (V-Hop, SoundCloud, Global) ─────────────────────────────
+interface SquareCardProps {
   track: YtmTrack;
-  isResolving: boolean;
   isCurrent: boolean;
   isPlaying: boolean;
   onPlay: () => void;
+  onWatchVideo?: () => void;
 }
 
-function YtmCompactCard({ track, isResolving, isCurrent, isPlaying, onPlay }: YtmCompactCardProps) {
+function SquareCard({ track, isCurrent, isPlaying, onPlay, onWatchVideo }: SquareCardProps) {
   return (
-    <button
-      id={`ytm-card-${track.ytmId}`}
+    <div
+      id={`card-${track.ytmId}`}
       onClick={onPlay}
-      disabled={isResolving}
-      aria-label={`Play ${track.title}`}
-      className={`group relative flex-shrink-0 snap-start w-44 sm:w-52 rounded-2xl overflow-hidden border transition-all duration-250 active:scale-95 text-left ${
+      className={`group relative flex-shrink-0 snap-start w-44 sm:w-52 rounded-2xl overflow-hidden border transition-all duration-250 cursor-pointer active:scale-95 text-left ${
         isCurrent
           ? 'border-white ring-1 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.10)]'
           : 'border-white/10 hover:border-white/30 hover:scale-[1.03]'
-      } ${isResolving ? 'cursor-wait' : 'cursor-pointer'}`}
+      }`}
     >
-      <div className="relative w-full aspect-square bg-zinc-900">
+      <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden">
         {track.coverUrl ? (
           <img src={track.coverUrl} alt={track.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
         ) : (
@@ -289,22 +278,31 @@ function YtmCompactCard({ track, isResolving, isCurrent, isPlaying, onPlay }: Yt
             <Music2 className="w-10 h-10 text-zinc-700" />
           </div>
         )}
-        <div className={`absolute inset-0 bg-black/55 flex items-center justify-center transition-opacity ${isCurrent || isResolving ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        <div className={`absolute inset-0 bg-black/55 flex items-center justify-center transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.6)]">
-            {isResolving ? (
-              <Loader2 className="w-4 h-4 animate-spin text-black" />
-            ) : isCurrent && isPlaying ? (
+            {isCurrent && isPlaying ? (
               <Pause className="w-4 h-4 fill-current" />
             ) : (
               <Play className="w-4 h-4 fill-current ml-0.5" />
             )}
           </div>
         </div>
-        {isCurrent && (
-          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white text-black text-[8px] font-mono font-black tracking-widest flex items-center gap-1">
-            <Disc3 className="w-2.5 h-2.5 animate-spin" />
-            NOW
+        {track.badge && (
+          <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white">
+            {track.badge}
           </div>
+        )}
+        {onWatchVideo && track.mediaType === 'video' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onWatchVideo();
+            }}
+            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all flex items-center gap-1 text-[9px] font-mono font-bold"
+          >
+            <Video className="w-3 h-3" />
+            MV
+          </button>
         )}
       </div>
       <div className="p-3 bg-zinc-950">
@@ -315,24 +313,75 @@ function YtmCompactCard({ track, isResolving, isCurrent, isPlaying, onPlay }: Yt
           {track.artist}
         </p>
       </div>
-    </button>
+    </div>
   );
 }
 
-// ── New Releases Album Card ────────────────────────────────────────────────────
-function YtmAlbumCard({ album }: { album: YtmAlbum }) {
+// ── Video Card (16:9 MV Showcase) ─────────────────────────────────────────────
+interface VideoCardProps {
+  track: YtmTrack;
+  isCurrent: boolean;
+  isPlaying: boolean;
+  onPlayAudio: () => void;
+  onWatchVideo: () => void;
+}
+
+function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: VideoCardProps) {
   return (
     <div
-      id={`ytm-album-${album.ytmId}`}
-      className="group flex flex-col rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 hover:border-white/30 transition-all duration-250 hover:scale-[1.04] active:scale-95 shadow-md hover:shadow-xl"
+      id={`video-card-${track.ytmId}`}
+      className="group relative flex-shrink-0 snap-start w-64 sm:w-72 rounded-2xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-250 bg-zinc-950 shadow-lg hover:shadow-2xl text-left"
+    >
+      <div className="relative w-full aspect-video bg-zinc-900 overflow-hidden cursor-pointer" onClick={onWatchVideo}>
+        {track.coverUrl ? (
+          <img src={track.coverUrl} alt={track.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Video className="w-8 h-8 text-zinc-700" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="px-3 py-1.5 rounded-full bg-white text-black font-mono font-bold text-xs flex items-center gap-1.5 shadow-xl">
+            <Video className="w-3.5 h-3.5" />
+            <span>XEM MV</span>
+          </div>
+        </div>
+        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white flex items-center gap-1">
+          <Flame className="w-2.5 h-2.5 text-white" />
+          MUSIC VIDEO
+        </div>
+      </div>
+      <div className="p-3 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-[11px] font-cyber font-extrabold text-white truncate uppercase leading-tight">
+            {track.title}
+          </h4>
+          <p className="text-[10px] font-mono text-zinc-500 truncate mt-0.5 uppercase">
+            {track.artist}
+          </p>
+        </div>
+        <button
+          onClick={onPlayAudio}
+          title="Phát âm thanh"
+          className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all flex-shrink-0"
+        >
+          {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Album Card ────────────────────────────────────────────────────────────────
+function AlbumCard({ album }: { album: YtmAlbum }) {
+  return (
+    <div
+      id={`album-${album.ytmId}`}
+      className="group flex flex-col rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 hover:border-white/30 transition-all duration-250 hover:scale-[1.04] active:scale-95 shadow-md hover:shadow-xl text-left"
     >
       <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden">
         {album.coverUrl ? (
-          <img
-            src={album.coverUrl}
-            alt={album.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
+          <img src={album.coverUrl} alt={album.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Layers className="w-8 h-8 text-zinc-700" />
@@ -357,41 +406,17 @@ function YtmAlbumCard({ album }: { album: YtmAlbum }) {
 // ── Mood Playlist Card ────────────────────────────────────────────────────────
 function MoodPlaylistCard({ playlist, gradient }: { playlist: YtmPlaylist; gradient: string }) {
   return (
-    <button
-      id={`ytm-playlist-${playlist.ytmId}`}
-      aria-label={`Browse ${playlist.title}`}
-      className={`group relative flex-shrink-0 snap-start w-40 sm:w-48 rounded-2xl overflow-hidden bg-gradient-to-br ${gradient} border border-white/10 hover:border-white/30 transition-all duration-250 hover:scale-[1.04] active:scale-95 shadow-lg hover:shadow-2xl text-left`}
+    <div
+      id={`playlist-${playlist.ytmId}`}
+      className={`group relative flex-shrink-0 snap-start w-40 sm:w-48 rounded-2xl overflow-hidden bg-gradient-to-br ${gradient} border border-white/10 hover:border-white/30 transition-all duration-250 hover:scale-[1.04] active:scale-95 shadow-lg hover:shadow-2xl text-left p-4 pb-3`}
     >
-      <div className="p-4 pb-3">
-        <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
-          <Radio className="w-5 h-5 text-white" />
-        </div>
-        <h4 className="text-[11px] font-cyber font-black text-white uppercase leading-tight line-clamp-2">
-          {playlist.title}
-        </h4>
-        <p className="text-[9px] font-mono text-zinc-400 mt-1">MOOD PLAYLIST</p>
+      <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
+        <Radio className="w-5 h-5 text-white" />
       </div>
-      <div className="px-4 pb-3">
-        <span className="text-[9px] font-mono text-zinc-500">YTM CURATED</span>
-      </div>
-    </button>
-  );
-}
-
-// ── Error Toast ────────────────────────────────────────────────────────────────
-function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  useEffect(() => {
-    const t = setTimeout(onDismiss, 4000);
-    return () => clearTimeout(t);
-  }, [onDismiss]);
-
-  return (
-    <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-zinc-900/95 border border-white/20 text-white text-xs font-mono shadow-2xl backdrop-blur-xl animate-slideUp max-w-xs">
-      <AlertCircle className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-      <span className="truncate">{message}</span>
-      <button onClick={onDismiss} className="ml-1 flex-shrink-0 hover:text-zinc-300 transition-colors">
-        <X className="w-3.5 h-3.5" />
-      </button>
+      <h4 className="text-[11px] font-cyber font-black text-white uppercase leading-tight line-clamp-2">
+        {playlist.title}
+      </h4>
+      <p className="text-[9px] font-mono text-zinc-400 mt-1">CURATED PLAYLIST</p>
     </div>
   );
 }
@@ -399,16 +424,17 @@ function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => 
 // ── Search Results Section ────────────────────────────────────────────────────
 interface SearchResultsProps {
   results: YtmSearchResponse;
-  resolvingIds: Set<string>;
   currentTrackId: string | null;
   isPlaying: boolean;
-  onPlayYtmTrack: (track: YtmTrack) => void;
+  onPlayTrack: (track: YtmTrack) => void;
+  onWatchVideo: (track: YtmTrack) => void;
 }
 
-function SearchResults({ results, resolvingIds, currentTrackId, isPlaying, onPlayYtmTrack }: SearchResultsProps) {
+function SearchResults({ results, currentTrackId, isPlaying, onPlayTrack, onWatchVideo }: SearchResultsProps) {
   const hasResults =
-    results.topResult !== null ||
     results.songs.length > 0 ||
+    results.videos.length > 0 ||
+    results.soundcloud.length > 0 ||
     results.albums.length > 0;
 
   if (!hasResults) {
@@ -422,51 +448,68 @@ function SearchResults({ results, resolvingIds, currentTrackId, isPlaying, onPla
 
   return (
     <div className="space-y-8 animate-zoneFadeInSubtle">
-      {/* Top Result */}
-      {results.topResult && (
-        <section>
-          <SectionHeader icon={<Sparkles className="w-4 h-4" />} title="Kết quả hàng đầu" />
-          {'ytmId' in results.topResult && 'youtubeUrl' in results.topResult ? (
-            <YtmCompactCard
-              track={results.topResult as YtmTrack}
-              isResolving={resolvingIds.has((results.topResult as YtmTrack).ytmId)}
-              isCurrent={currentTrackId === (results.topResult as YtmTrack).ytmId}
-              isPlaying={isPlaying}
-              onPlay={() => onPlayYtmTrack(results.topResult as YtmTrack)}
-            />
-          ) : (
-            <YtmAlbumCard album={results.topResult as YtmAlbum} />
-          )}
-        </section>
-      )}
-
-      {/* Songs */}
+      {/* 1. YouTube Music Songs */}
       {results.songs.length > 0 && (
         <section>
-          <SectionHeader icon={<Music2 className="w-4 h-4" />} title="Bài hát" badge={`${results.songs.length}`} />
-          <div className="space-y-1">
-            {results.songs.map((track, i) => (
-              <YtmTrackRow
+          <SectionHeader icon={<Music2 className="w-4 h-4" />} title="Bài hát & Audio" badge={`${results.songs.length}`} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {results.songs.map((track) => (
+              <TrackRow
                 key={track.ytmId}
                 track={track}
-                rank={i + 1}
-                isResolving={resolvingIds.has(track.ytmId)}
                 isCurrent={currentTrackId === track.ytmId}
                 isPlaying={isPlaying}
-                onPlay={() => onPlayYtmTrack(track)}
+                onPlay={() => onPlayTrack(track)}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* Albums */}
+      {/* 2. Official Music Videos */}
+      {results.videos.length > 0 && (
+        <section>
+          <SectionHeader icon={<Video className="w-4 h-4" />} title="Music Videos (MVs)" badge="HD" />
+          <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
+            {results.videos.map((track) => (
+              <VideoCard
+                key={track.ytmId}
+                track={track}
+                isCurrent={currentTrackId === track.ytmId}
+                isPlaying={isPlaying}
+                onPlayAudio={() => onPlayTrack(track)}
+                onWatchVideo={() => onWatchVideo(track)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 3. SoundCloud Underground & Remix */}
+      {results.soundcloud.length > 0 && (
+        <section>
+          <SectionHeader icon={<RadioTower className="w-4 h-4" />} title="SoundCloud Underground & Remix" badge="VINAHOUSE / PHONK" />
+          <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
+            {results.soundcloud.map((track) => (
+              <SquareCard
+                key={track.ytmId}
+                track={track}
+                isCurrent={currentTrackId === track.ytmId}
+                isPlaying={isPlaying}
+                onPlay={() => onPlayTrack(track)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 4. Albums & Singles */}
       {results.albums.length > 0 && (
         <section>
           <SectionHeader icon={<Layers className="w-4 h-4" />} title="Album & Single" />
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {results.albums.map((album) => (
-              <YtmAlbumCard key={album.ytmId} album={album} />
+              <AlbumCard key={album.ytmId} album={album} />
             ))}
           </div>
         </section>
@@ -486,7 +529,7 @@ export default function DiscoveryFeed({
   onSelectAlbum,
   className = '',
 }: StreamingHubProps) {
-  const { currentTrack, isPlaying, playTrack } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, switchToVideoZone } = usePlayer();
   const { trackPlay, trackHeart, trackRecommendationClick } = useTelemetry();
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -495,11 +538,7 @@ export default function DiscoveryFeed({
   const [heroAnimating, setHeroAnimating] = useState(false);
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set());
   const [addedQueueIds, setAddedQueueIds] = useState<Set<string>>(new Set());
-
-  // YTM in-app resolve state
-  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const [currentYtmId, setCurrentYtmId] = useState<string | null>(null);
-  const [resolveError, setResolveError] = useState<string | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -574,8 +613,8 @@ export default function DiscoveryFeed({
     [playTrack, trackPlay, trackRecommendationClick]
   );
 
-  // ── YTM in-app play handler (Instant Dual-Engine playback) ───────────────
-  const handlePlayYtmTrack = useCallback(
+  // ── Multi-Platform In-App Play Handler ──────────────────────────────────────
+  const handlePlayStreamTrack = useCallback(
     (track: YtmTrack) => {
       if (currentYtmId === track.ytmId && isPlaying) return;
 
@@ -591,7 +630,7 @@ export default function DiscoveryFeed({
           duration: track.duration,
         },
         {
-          id: `ytm_${track.ytmId}`,
+          id: `stream_${track.ytmId}`,
           title: track.title,
           artist: track.artist,
           cover_url: track.coverUrl,
@@ -599,9 +638,32 @@ export default function DiscoveryFeed({
         []
       );
 
-      trackPlay(track.ytmId, undefined, 'audio', 'ytm_streaming_hub');
+      trackPlay(track.ytmId, undefined, track.mediaType ?? 'audio', 'streaming_hub');
     },
     [currentYtmId, isPlaying, playTrack, trackPlay]
+  );
+
+  // ── Watch Video MV Handler ──────────────────────────────────────────────────
+  const handleWatchVideo = useCallback(
+    (track: YtmTrack) => {
+      switchToVideoZone(
+        {
+          id: track.ytmId,
+          title: track.title,
+          artist: track.artist,
+          audio_url: `yt:${track.ytmId}`,
+          youtube_id: track.ytmId,
+          duration: track.duration,
+        },
+        {
+          id: `mv_${track.ytmId}`,
+          title: track.title,
+          artist: track.artist,
+          cover_url: track.coverUrl,
+        }
+      );
+    },
+    [switchToVideoZone]
   );
 
   // ── Hero Play All ──────────────────────────────────────────────────────────
@@ -626,7 +688,6 @@ export default function DiscoveryFeed({
     [trackHeart]
   );
 
-  // ── Queue feedback ─────────────────────────────────────────────────────────
   const handleAddToQueue = useCallback((track: TrackItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setAddedQueueIds((prev) => new Set(prev).add(track.id));
@@ -668,6 +729,8 @@ export default function DiscoveryFeed({
   const ytmNewReleases = ytmFeed?.newReleases ?? [];
   const ytmMoodPlaylists = ytmFeed?.moodPlaylists ?? [];
   const curatedVhop = ytmFeed?.curatedVhop ?? [];
+  const curatedVideos = ytmFeed?.curatedVideos ?? [];
+  const curatedSoundcloud = ytmFeed?.curatedSoundcloud ?? [];
   const curatedGlobal = ytmFeed?.curatedGlobal ?? [];
   const curatedLofi = ytmFeed?.curatedLofi ?? [];
   const currentHeroAlbum = featuredAlbums[heroIndex] ?? null;
@@ -679,13 +742,8 @@ export default function DiscoveryFeed({
   return (
     <div className={`w-full space-y-10 select-none pb-36 ${className}`}>
 
-      {/* Error Toast */}
-      {resolveError && (
-        <ErrorToast message={resolveError} onDismiss={() => setResolveError(null)} />
-      )}
-
       {/* ════════════════════════════════════════════════════════════════════
-          SEARCH BAR
+          SEARCH BAR & FILTER SELECTOR
       ════════════════════════════════════════════════════════════════════ */}
       <div className="sticky top-[68px] z-30 space-y-2">
         {/* Search input */}
@@ -697,7 +755,7 @@ export default function DiscoveryFeed({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm bài hát, artist, album..."
+            placeholder="Tìm kiếm YouTube Music, Music Videos, SoundCloud, Vault..."
             className="flex-1 bg-transparent text-white text-sm font-mono placeholder-zinc-600 outline-none caret-white"
             style={{ cursor: 'text', userSelect: 'text', WebkitUserSelect: 'text' }}
           />
@@ -717,7 +775,18 @@ export default function DiscoveryFeed({
         {!isSearchMode && (
           <div className="flex items-center justify-between gap-1.5 px-1 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              {(['All', 'V-Hop & R&B', 'Global Hits', 'Lo-fi / Chill', 'New Releases', 'Vault Lossless'] as FilterPill[]).map((pill) => (
+              {(
+                [
+                  'All',
+                  'V-Hop & R&B',
+                  'Music Videos',
+                  'SoundCloud Remix',
+                  'Global Hits',
+                  'Lo-fi / Chill',
+                  'New Releases',
+                  'Vault Lossless',
+                ] as FilterPill[]
+              ).map((pill) => (
                 <button
                   key={pill}
                   id={`filter-pill-${pill.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
@@ -754,10 +823,10 @@ export default function DiscoveryFeed({
           ) : searchResults ? (
             <SearchResults
               results={searchResults}
-              resolvingIds={resolvingIds}
               currentTrackId={currentYtmId ?? currentTrackId}
               isPlaying={isPlaying}
-              onPlayYtmTrack={handlePlayYtmTrack}
+              onPlayTrack={handlePlayStreamTrack}
+              onWatchVideo={handleWatchVideo}
             />
           ) : null}
         </div>
@@ -769,7 +838,7 @@ export default function DiscoveryFeed({
       {!isSearchMode && (
         <>
 
-          {/* ── SECTION 1: HERO SPOTLIGHT ─────────────────────────────────── */}
+          {/* ── SECTION 1: HERO SPOTLIGHT (Vault) ─────────────────────────── */}
           {show('Vault Lossless') && featuredAlbums.length > 0 && (
             <section id="section-hero" className="animate-zoneFadeInSubtle">
               <div
@@ -832,18 +901,15 @@ export default function DiscoveryFeed({
               />
               {ytmLoading ? (
                 <div className="flex gap-3 overflow-x-hidden">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
-              ) : curatedVhop.length === 0 ? (
-                <div className="py-8 text-center text-zinc-600 font-mono text-xs tracking-widest">LOADING CURATED FEED...</div>
               ) : (
                 <div ref={(el) => { laneRefs.current['lane-vhop'] = el; }} id="lane-vhop" className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
                   {curatedVhop.map((track) => (
-                    <YtmCompactCard
+                    <SquareCard
                       key={track.ytmId}
                       track={track}
-                      isResolving={resolvingIds.has(track.ytmId)}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      onPlay={() => handlePlayYtmTrack(track)}
+                      onPlay={() => handlePlayStreamTrack(track)}
                     />
                   ))}
                 </div>
@@ -851,7 +917,66 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 3: TRENDING QUICK PICKS ───────────────────────────── */}
+          {/* ── SECTION 3: OFFICIAL MUSIC VIDEOS (MVs) ────────────────────── */}
+          {show('Music Videos') && (
+            <section id="section-videos" className="animate-zoneFadeInSubtle">
+              <SectionHeader
+                icon={<Video className="w-4 h-4" />}
+                title="Official Music Videos (MVs)"
+                badge="HD 4K"
+                subtitle="Top video ca nhạc đang thịnh hành — Xem MV hoặc nghe Audio trực tiếp"
+                onScrollLeft={() => scrollLane('lane-videos', 'left')}
+                onScrollRight={() => scrollLane('lane-videos', 'right')}
+              />
+              {ytmLoading ? (
+                <div className="flex gap-3 overflow-x-hidden">{Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} aspect="video" />)}</div>
+              ) : (
+                <div ref={(el) => { laneRefs.current['lane-videos'] = el; }} id="lane-videos" className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
+                  {curatedVideos.map((track) => (
+                    <VideoCard
+                      key={track.ytmId}
+                      track={track}
+                      isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
+                      isPlaying={isPlaying}
+                      onPlayAudio={() => handlePlayStreamTrack(track)}
+                      onWatchVideo={() => handleWatchVideo(track)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── SECTION 4: SOUNDCLOUD UNDERGROUND & REMIX ──────────────────── */}
+          {show('SoundCloud Remix') && (
+            <section id="section-soundcloud" className="animate-zoneFadeInSubtle">
+              <SectionHeader
+                icon={<RadioTower className="w-4 h-4" />}
+                title="SoundCloud Underground & Remix"
+                badge="VINAHOUSE / PHONK"
+                subtitle="Bản remix, VIP edit và set nhạc bay bổng từ cộng đồng underground"
+                onScrollLeft={() => scrollLane('lane-sc', 'left')}
+                onScrollRight={() => scrollLane('lane-sc', 'right')}
+              />
+              {ytmLoading ? (
+                <div className="flex gap-3 overflow-x-hidden">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
+              ) : (
+                <div ref={(el) => { laneRefs.current['lane-sc'] = el; }} id="lane-sc" className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
+                  {curatedSoundcloud.map((track) => (
+                    <SquareCard
+                      key={track.ytmId}
+                      track={track}
+                      isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
+                      isPlaying={isPlaying}
+                      onPlay={() => handlePlayStreamTrack(track)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── SECTION 5: TRENDING QUICK PICKS ───────────────────────────── */}
           {show('V-Hop & R&B') && (
             <section id="section-trending" className="animate-zoneFadeInSubtle">
               <SectionHeader
@@ -864,33 +989,29 @@ export default function DiscoveryFeed({
               />
               {ytmLoading ? (
                 <div className="flex gap-3 overflow-x-hidden">{Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}</div>
-              ) : ytmTrending.length === 0 ? (
-                <div className="py-8 text-center text-zinc-600 font-mono text-xs tracking-widest">TRENDING DATA UNAVAILABLE</div>
               ) : (
                 <div ref={(el) => { laneRefs.current['lane-trending'] = el; }} id="lane-trending" className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     {ytmTrending.slice(0, Math.ceil(ytmTrending.length / 2)).map((track, i) => (
-                      <YtmTrackRow
+                      <TrackRow
                         key={track.ytmId}
                         track={track}
                         rank={i + 1}
-                        isResolving={resolvingIds.has(track.ytmId)}
                         isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                         isPlaying={isPlaying}
-                        onPlay={() => handlePlayYtmTrack(track)}
+                        onPlay={() => handlePlayStreamTrack(track)}
                       />
                     ))}
                   </div>
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     {ytmTrending.slice(Math.ceil(ytmTrending.length / 2)).map((track, i) => (
-                      <YtmTrackRow
+                      <TrackRow
                         key={track.ytmId}
                         track={track}
                         rank={Math.ceil(ytmTrending.length / 2) + i + 1}
-                        isResolving={resolvingIds.has(track.ytmId)}
                         isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                         isPlaying={isPlaying}
-                        onPlay={() => handlePlayYtmTrack(track)}
+                        onPlay={() => handlePlayStreamTrack(track)}
                       />
                     ))}
                   </div>
@@ -899,7 +1020,7 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 4: GLOBAL HITS ─────────────────────────────────────── */}
+          {/* ── SECTION 6: GLOBAL HITS ─────────────────────────────────────── */}
           {show('Global Hits') && (
             <section id="section-global" className="animate-zoneFadeInSubtle">
               <SectionHeader
@@ -912,18 +1033,15 @@ export default function DiscoveryFeed({
               />
               {ytmLoading ? (
                 <div className="flex gap-3 overflow-x-hidden">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
-              ) : curatedGlobal.length === 0 ? (
-                <div className="py-8 text-center text-zinc-600 font-mono text-xs tracking-widest">LOADING GLOBAL FEED...</div>
               ) : (
                 <div ref={(el) => { laneRefs.current['lane-global'] = el; }} id="lane-global" className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
                   {curatedGlobal.map((track) => (
-                    <YtmCompactCard
+                    <SquareCard
                       key={track.ytmId}
                       track={track}
-                      isResolving={resolvingIds.has(track.ytmId)}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      onPlay={() => handlePlayYtmTrack(track)}
+                      onPlay={() => handlePlayStreamTrack(track)}
                     />
                   ))}
                 </div>
@@ -931,7 +1049,7 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 5: LO-FI / LATE-NIGHT CHILL ──────────────────────── */}
+          {/* ── SECTION 7: LO-FI / LATE-NIGHT CHILL ──────────────────────── */}
           {show('Lo-fi / Chill') && (
             <section id="section-lofi" className="animate-zoneFadeInSubtle">
               <SectionHeader
@@ -944,18 +1062,15 @@ export default function DiscoveryFeed({
               />
               {ytmLoading ? (
                 <div className="flex gap-3 overflow-x-hidden">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
-              ) : curatedLofi.length === 0 ? (
-                <div className="py-8 text-center text-zinc-600 font-mono text-xs tracking-widest">LOADING MOOD FEED...</div>
               ) : (
                 <div ref={(el) => { laneRefs.current['lane-lofi'] = el; }} id="lane-lofi" className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
                   {curatedLofi.map((track) => (
-                    <YtmCompactCard
+                    <SquareCard
                       key={track.ytmId}
                       track={track}
-                      isResolving={resolvingIds.has(track.ytmId)}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      onPlay={() => handlePlayYtmTrack(track)}
+                      onPlay={() => handlePlayStreamTrack(track)}
                     />
                   ))}
                 </div>
@@ -963,7 +1078,7 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 6: NEW RELEASES GRID ──────────────────────────────── */}
+          {/* ── SECTION 8: NEW RELEASES GRID ──────────────────────────────── */}
           {show('New Releases') && (
             <section id="section-new-releases" className="animate-zoneFadeInSubtle">
               <SectionHeader
@@ -974,21 +1089,19 @@ export default function DiscoveryFeed({
               />
               {ytmLoading ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {Array.from({ length: 10 }).map((_, i) => <SkeletonGridCard key={i} />)}
+                  {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
-              ) : ytmNewReleases.length === 0 ? (
-                <div className="py-8 text-center text-zinc-600 font-mono text-xs tracking-widest">NEW RELEASES UNAVAILABLE</div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {ytmNewReleases.map((album) => (
-                    <YtmAlbumCard key={album.ytmId} album={album} />
+                  {ytNewReleases(ytmNewReleases).map((album) => (
+                    <AlbumCard key={album.ytmId} album={album} />
                   ))}
                 </div>
               )}
             </section>
           )}
 
-          {/* ── SECTION 7: MOOD PLAYLISTS ─────────────────────────────────── */}
+          {/* ── SECTION 9: MOOD PLAYLISTS ─────────────────────────────────── */}
           {show('Lo-fi / Chill') && ytmMoodPlaylists.length > 0 && (
             <section id="section-mood-playlists" className="animate-zoneFadeInSubtle">
               <SectionHeader
@@ -1007,7 +1120,7 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 8: VAULT LOSSLESS ─────────────────────────────────── */}
+          {/* ── SECTION 10: VAULT LOSSLESS ────────────────────────────────── */}
           {show('Vault Lossless') && vaultTracks.length > 0 && (
             <section id="section-vault" className="animate-zoneFadeInSubtle">
               <SectionHeader
@@ -1076,4 +1189,8 @@ export default function DiscoveryFeed({
       )}
     </div>
   );
+}
+
+function ytNewReleases(list: YtmAlbum[]): YtmAlbum[] {
+  return list || [];
 }

@@ -24,6 +24,7 @@
 - [Giao dịch 016: Closed-Loop In-App Streaming Overhaul, Native Search & Stream Resolver](#giao-dịch-016-closed-loop-in-app-streaming-overhaul-native-search--stream-resolver)
 - [Giao dịch 017: Fix Hydration Error #418 & High-Resilience Multi-Tier Audio Stream Resolver](#giao-dịch-017-fix-hydration-error-418--high-resilience-multi-tier-audio-stream-resolver)
 - [Giao dịch 018: Dual-Engine Global Audio Architecture — Lossless Vault & YouTube Bridge](#giao-dịch-018-dual-engine-global-audio-architecture--lossless-vault--youtube-bridge)
+- [Giao dịch 019: Multi-Platform Discovery & Search Engine (YouTube Music, Official MVs, SoundCloud, Vault Lossless)](#giao-dịch-019-multi-platform-discovery--search-engine-youtube-music-official-mvs-soundcloud-vault-lossless)
 
 ---
 
@@ -388,3 +389,18 @@
     1. **Engine 1 (HTML5 Web Audio)**: Chuyên biệt cho các bản thu âm Lossless độc quyền của Vault từ Supabase / Cloudflare R2 (`audio_url`).
     2. **Engine 2 (Invisible YouTube Audio Bridge)**: Nhúng ngầm YouTube IFrame Player API (`yt:videoId`), phát trực tiếp mọi bài hát Streaming Hub (V-Hop, Trending, Global, Search Results) với độ tin cậy 100%, 0ms độ trễ, không phụ thuộc máy chủ trung gian và triệt tiêu hoàn toàn mã lỗi 503.
   - Đồng bộ hóa toàn bộ thanh điều khiển `GlobalPlayerBar` & `MobilePlayerBar` (Play/Pause, Seek, Volume, Duration, Next/Prev) xuyên suốt cả 2 nguồn phát.
+
+---
+
+### Giao dịch 019: Multi-Platform Discovery & Search Engine (YouTube Music, Official MVs, SoundCloud, Vault Lossless)
+* **Thời gian**: 20/08/2026 17:40 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Tìm kiếm Đa Nền Tảng (`/api/ytm/search`)**:
+     - Đồng thời tìm kiếm và phân loại 4 nguồn: **YouTube Music Songs**, **Official Music Videos (MVs)**, **SoundCloud Underground & Remix (Vinahouse, Phonk, Chillmix)**, và **Albums & Singles**.
+  2. **Đề xuất Đa Nền Tảng (`/api/ytm/feed`)**:
+     - Bổ sung 2 lane khám phá mới: **Official Music Videos (HD 4K MVs)** và **SoundCloud Underground & Remix**.
+  3. **In-App Closed-Loop Player**:
+     - Thẻ Music Video hỗ trợ chọn **"Xem MV"** (kích hoạt Video Zone) hoặc **"Phát Âm Thanh"** (phát trực tiếp trên Global Player Bar).
+     - Thẻ SoundCloud gắn nhãn `VINAHOUSE / PHONK` hoặc `REMIX / EDIT`, phát tức thì.
+
