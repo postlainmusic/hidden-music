@@ -1,6 +1,7 @@
 // ============================================================
 // YTM (YouTube Music) Data Types — Hidden Music Vault
-// Used by /api/ytm/feed and StreamingHub component
+// Used by /api/ytm/feed, /api/ytm/search, /api/ytm/resolve
+// and the StreamingHub component
 // ============================================================
 
 export type YtmReleaseType = 'SINGLE' | 'ALBUM' | 'EP';
@@ -40,11 +41,47 @@ export interface YtmFeedResponse {
   newReleases: YtmAlbum[];
   trending: YtmTrack[];
   moodPlaylists: YtmPlaylist[];
-  fetchedAt: number;    // Epoch ms — used for cache freshness display
+  curatedVhop: YtmTrack[];       // Vietnamese Hip-hop / R&B
+  curatedGlobal: YtmTrack[];     // Global Trap / Melodic / Trapsoul
+  curatedLofi: YtmTrack[];       // Lo-fi / Late-Night / Chillwave
+  fetchedAt: number;             // Epoch ms — cache freshness
   source: 'live' | 'cached' | 'fallback';
 }
 
-// Unified item type for rendering in the hub grid
+// ── Search types ──────────────────────────────────────────────────────────────
+
+export interface YtmSearchResponse {
+  query: string;
+  topResult: YtmTrack | YtmAlbum | null;
+  songs: YtmTrack[];
+  albums: YtmAlbum[];
+  playlists: YtmPlaylist[];
+  fetchedAt: number;
+}
+
+// ── Stream resolver types ─────────────────────────────────────────────────────
+
+export interface YtmResolvedStream {
+  videoId: string;
+  title: string;
+  artist: string;
+  coverUrl: string;
+  duration: number;     // seconds
+  audioUrl: string;     // Direct playable m4a/webm URL (time-limited ~6h)
+  mimeType: string;     // e.g. "audio/mp4" or "audio/webm"
+  bitrate: number;      // bits per second
+  resolvedVia: string;  // which Invidious instance resolved this
+}
+
+export interface YtmResolveError {
+  error: 'resolve_failed' | 'not_found' | 'invalid_id';
+  message: string;
+}
+
+export type YtmResolveResponse = YtmResolvedStream | YtmResolveError;
+
+// ── Unified item type for rendering ──────────────────────────────────────────
+
 export type StreamingHubItem =
   | ({ kind: 'ytm-album' } & YtmAlbum)
   | ({ kind: 'ytm-track' } & YtmTrack)

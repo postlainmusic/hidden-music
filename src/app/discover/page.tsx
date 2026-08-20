@@ -106,7 +106,7 @@ export default function DiscoverPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 relative z-10">
             <div>
               {/* Eyebrow badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/8 border border-white/15 text-[10px] font-mono tracking-widest text-zinc-300 mb-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[10px] font-mono tracking-widest text-zinc-300 mb-3">
                 <Zap className="w-3 h-3 text-white" />
                 <span>POWERED BY YOUTUBE MUSIC + VAULT</span>
               </div>

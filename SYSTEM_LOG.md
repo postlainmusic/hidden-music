@@ -21,6 +21,7 @@
 - [Giao dịch 013: Modular Separation of DesktopPlayerBar & MobilePlayerBar](#giao-dịch-013-modular-separation-of-desktopplayerbar--mobileplayerbar)
 - [Giao dịch 014: Mobile Gesture Engine, Native Streaming UI & Total APK Purge](#giao-dịch-014-mobile-gesture-engine-native-streaming-ui--total-apk-purge)
 - [Giao dịch 015: Streaming Hub — Replace Discover Feed with YTM-powered Hub](#giao-dịch-015-streaming-hub--replace-discover-feed-with-ytm-powered-hub)
+- [Giao dịch 016: Closed-Loop In-App Streaming Overhaul, Native Search & Stream Resolver](#giao-dịch-016-closed-loop-in-app-streaming-overhaul-native-search--stream-resolver)
 
 ---
 
@@ -326,3 +327,30 @@
 * ✅ 100% Pure Web App (không có native bridge)
 * ✅ Tất cả icon Lucide đã khai báo import đầy đủ
 * ✅ `export const runtime = 'edge'` và `export const dynamic = 'force-dynamic'` trên tất cả routes
+
+---
+
+### Giao dịch 016: Closed-Loop In-App Streaming Overhaul, Native Search & Stream Resolver
+* **Thời gian**: 20/08/2026 17:15 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Cam kết mục tiêu**: Biến `/discover` thành hệ thống Closed-Loop Streaming chuẩn Spotify/Apple Music hoàn toàn khép kín — không còn bất kỳ liên kết ngoài nào (`window.open` / `ExternalLink`), phát trực tiếp mọi bài hát trong ứng dụng.
+
+**Tệp mới tạo:**
+* `src/app/api/ytm/resolve/route.ts` — Invidious Stream Resolver: chuyển đổi YouTube videoId thành direct audio URL (m4a/webm) trên Edge runtime, hỗ trợ chuỗi fallback 5 Invidious instances.
+* `src/app/api/ytm/search/route.ts` — Native Search proxy với `gl=VN, hl=vi`, phân loại tự động Kết quả hàng đầu / Bài hát / Album / Danh sách phát.
+
+**Tệp đã sửa đổi:**
+* `src/types/ytm.ts` — Mở rộng định nghĩa cho `YtmResolvedStream`, `YtmSearchResponse`, `YtmResolveError` và các danh mục curated mới (`curatedVhop`, `curatedGlobal`, `curatedLofi`).
+* `src/app/api/ytm/feed/route.ts` — Locale chuyển thành `gl=VN, hl=vi`; bổ sung 3 luồng curated chất lượng cao (V-Hop underground: MCK, Wren Evans, Low G, tlinh, Obito; Global Trap; Lo-fi/Late-night Chill).
+* `src/components/discovery/DiscoveryFeed.tsx` — Viết lại toàn diện:
+  1. Sticky Search Input với Debounce 300ms + Search Results View linh hoạt.
+  2. In-App Direct Playback: bấm bài hát YTM sẽ gọi `/api/ytm/resolve` và tự động feed luồng âm thanh vào `PlayerContext.playTrack(...)`.
+  3. Loại bỏ 100% `ExternalLink` và `window.open`.
+  4. 8 phân mục curated + lossless hoàn chỉnh với skeleton loading và error toast.
+* `src/app/discover/page.tsx` — Đồng bộ hoá design tokens, opacity chuẩn hóa `bg-white/10`.
+
+**Tuân thủ Invariants:**
+* ✅ Pure Monochrome Cyber-Aesthetic
+* ✅ Zero External Redirections
+* ✅ 100% Pure Web Application (HTML5 audio stream + Edge runtime)
+* ✅ Không thiếu icon Lucide
