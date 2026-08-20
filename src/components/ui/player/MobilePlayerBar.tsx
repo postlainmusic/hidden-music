@@ -16,7 +16,6 @@ import {
   Loader2,
   Trash2,
   X,
-  Music2,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
@@ -95,6 +94,7 @@ export default function MobilePlayerBar() {
 
   // Gestures
   const touchStartXRef = useRef<number>(0);
+  touchStartXRef.current = 0;
   const touchStartYRef = useRef<number>(0);
   const touchDeltaXRef = useRef<number>(0);
   const [swipeOffsetX, setSwipeOffsetX] = useState<number>(0);
@@ -118,38 +118,30 @@ export default function MobilePlayerBar() {
   const targetSnareStrobeRef = useRef<number>(0);
 
   // 60FPS Multi-Band Audio Analyzer State
-  // 1. KICK / SUB-BASS (bins 2-6: 43-129Hz)
   const fastBassRef = useRef<number>(0);
   const slowBassRef = useRef<number>(0);
   const lastKickHitTimeRef = useRef<number>(0);
 
-  // 2. SNARE DUAL-BAND GATE
-  // MID: (bins 70-185: ~1.5kHz-4kHz) & HIGH WIRE: (bins 190-420: ~4kHz-9kHz)
   const fastMidRef = useRef<number>(0);
   const slowMidRef = useRef<number>(0);
   const fastHighRef = useRef<number>(0);
   const slowHighRef = useRef<number>(0);
   const lastSnareHitTimeRef = useRef<number>(0);
 
-  // 3. BASSLINE / 808 RIPPLE (bins 3-12: ~64Hz-258Hz)
   const smoothBasslineRef = useRef<number>(0);
-
-  // 4. VOCAL / LEAD (bins 14-162: ~300Hz-3.5kHz)
   const fastVocalRef = useRef<number>(0);
   const slowVocalRef = useRef<number>(0);
   const smoothVocalRef = useRef<number>(0);
 
-  // 5. TREBLE / HI-HATS / CYMBALS (bins 232-743: ~5kHz-16kHz)
   const fastTrebleRef = useRef<number>(0);
   const slowTrebleRef = useRef<number>(0);
   const trebleStrobeRef = useRef<number>(0);
   const targetTrebleStrobeRef = useRef<number>(0);
   const lastTrebleHitTimeRef = useRef<number>(0);
 
-  // 6. TOTAL AMBIENT ENERGY (RMS)
   const smoothEnergyRef = useRef<number>(0);
 
-  // 60FPS Live Stage Engine — Multi-Band Audio-Reactive Symphony
+  // 60FPS Live Stage Engine
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
@@ -186,7 +178,7 @@ export default function MobilePlayerBar() {
       if (analyserRef?.current) {
         analyserRef.current.getByteFrequencyData(dataArray);
 
-        // ── 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz) ─────────────────────
+        // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
         let bassSum = 0;
         for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
         const currentBass = bassSum / 5;
@@ -196,13 +188,13 @@ export default function MobilePlayerBar() {
         slowBassRef.current = sB;
         const bassFlux = Math.max(0, fB - sB);
 
-        // ── 2. BASSLINE / 808 ENERGY (Bins 3-12: 64Hz-258Hz) ──────────────
+        // 2. BASSLINE / 808 ENERGY (Bins 3-12: 64Hz-258Hz)
         let basslineSum = 0;
         for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
         const currentBassline = basslineSum / 10;
         smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
 
-        // ── 3. SNARE DUAL-BAND CONFIRMATION ───────────────────────────────
+        // 3. SNARE DUAL-BAND CONFIRMATION
         let midSum = 0;
         for (let i = 70; i <= 185; i++) midSum += dataArray[i];
         const currentMid = midSum / 116;
@@ -221,7 +213,7 @@ export default function MobilePlayerBar() {
         slowHighRef.current = sH;
         const highFlux = Math.max(0, fH - sH);
 
-        // ── 4. VOCAL / LEAD BAND (Bins 14-162: ~300Hz-3.5kHz) ────────────
+        // 4. VOCAL / LEAD BAND (Bins 14-162: ~300Hz-3.5kHz)
         let vocalSum = 0;
         for (let i = 14; i <= 162; i++) vocalSum += dataArray[i];
         const currentVocal = vocalSum / 148;
@@ -231,7 +223,7 @@ export default function MobilePlayerBar() {
         slowVocalRef.current = sV;
         smoothVocalRef.current += ((currentVocal / 255) - smoothVocalRef.current) * 0.20;
 
-        // ── 5. TREBLE / HI-HATS / CYMBALS (Bins 232-743: ~5kHz-16kHz) ─────
+        // 5. TREBLE / HI-HATS / CYMBALS (Bins 232-743: ~5kHz-16kHz)
         let trebleSum = 0;
         for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
         const currentTreble = trebleSum / 512;
@@ -241,14 +233,13 @@ export default function MobilePlayerBar() {
         slowTrebleRef.current = sT;
         const trebleFlux = Math.max(0, fT - sT);
 
-        // ── 6. TOTAL AMBIENT ENERGY (RMS) ─────────────────────────────────
+        // 6. TOTAL AMBIENT ENERGY (RMS)
         let totalSum = 0;
         for (let i = 0; i < 1024; i++) totalSum += dataArray[i];
         const currentEnergy = totalSum / 1024;
         smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
 
-        // ── TRIGGERS ──────────────────────────────────────────────────────
-        // Kick Trigger: Giới hạn force nảy tinh tế để không làm vỡ bố cục
+        // TRIGGERS
         const is808Sustaining = currentBass > 150 && bassFlux < 9.0;
         if (bassFlux > 12.0 && !is808Sustaining && now - lastKickHitTimeRef.current > 120) {
           lastKickHitTimeRef.current = now;
@@ -256,23 +247,19 @@ export default function MobilePlayerBar() {
           targetKickScaleRef.current += force;
         }
 
-        // Snare Trigger
         const isSnare = midFlux > 4.0 && highFlux > 1.8;
         if (isSnare && now - lastSnareHitTimeRef.current > 125) {
           lastSnareHitTimeRef.current = now;
           targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
         }
 
-        // Hi-hat / Treble Crisp Trigger
         if (trebleFlux > 1.4 && now - lastTrebleHitTimeRef.current > 70) {
           lastTrebleHitTimeRef.current = now;
           targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
         }
       }
 
-      // =========================================================================
       // PHYSICS ENGINE: HOOKE'S LAW
-      // =========================================================================
       const tension = 0.32;
       const dampening = 0.60;
       const displacement = kickScaleRef.current - 1.0;
@@ -280,24 +267,17 @@ export default function MobilePlayerBar() {
       targetKickScaleRef.current *= dampening;
       kickScaleRef.current += targetKickScaleRef.current;
       
-      // Giới hạn biên độ an toàn
       if (kickScaleRef.current < 0.99) kickScaleRef.current = 0.99;
       if (kickScaleRef.current > 1.04) kickScaleRef.current = 1.04;
 
-      // Snare Decay
       snareStrobeRef.current += (targetSnareStrobeRef.current - snareStrobeRef.current) * 0.55;
       targetSnareStrobeRef.current *= 0.72;
 
-      // Treble / Hi-hat Crisp Decay
       trebleStrobeRef.current += (targetTrebleStrobeRef.current - trebleStrobeRef.current) * 0.65;
       targetTrebleStrobeRef.current *= 0.58;
 
       const k = kickScaleRef.current;
       const s = snareStrobeRef.current;
-      const tr = trebleStrobeRef.current;
-      const bl = smoothBasslineRef.current;
-      const vocalFlux = Math.max(0, fastVocalRef.current - slowVocalRef.current);
-      const voc = Math.min(1.0, smoothVocalRef.current * 1.6 + (vocalFlux > 2.0 ? vocalFlux / 20 : 0));
       const nrg = smoothEnergyRef.current;
 
       // Crimson Impact Color
@@ -655,7 +635,7 @@ export default function MobilePlayerBar() {
             </div>
           </div>
 
-          {/* Main Stage Viewport (Không gian mở không bị chém viền) */}
+          {/* Main Stage Viewport */}
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-visible">
             {/* PLAYER VIEW */}
             {activeView === 'player' && (
@@ -708,14 +688,16 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* LYRICS VIEW */}
+            {/* LYRICS VIEW — TỐI ƯU CHỐNG NHẢY DÒNG & FADE MỜ VIỀN */}
             {activeView === 'lyrics' && (
               <div
                 ref={lyricsScrollRef}
-                className="w-full h-full overflow-y-auto no-scrollbar text-center py-10 space-y-4 font-sans px-4 animate-fadeIn"
+                className="w-full h-full overflow-y-auto no-scrollbar text-center py-16 space-y-4 font-sans px-4 animate-fadeIn relative"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
+                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)',
                 }}
               >
                 {parsedLyrics.length === 0 ? (
@@ -723,23 +705,25 @@ export default function MobilePlayerBar() {
                     Chưa có lời bài hát cho tác phẩm này
                   </div>
                 ) : (
-                  parsedLyrics.map((line, idx) => {
-                    const isActive = idx === activeLyricIdx;
-                    return (
-                      <p
-                        key={idx}
-                        data-active-mobile-lyric={isActive ? 'true' : 'false'}
-                        onClick={() => seekTo(line.time)}
-                        className={`transition-all duration-200 cursor-pointer select-none leading-relaxed ${
-                          isActive
-                            ? 'text-white text-xl font-black drop-shadow-[0_0_25px_rgba(255,255,255,0.9)] scale-105 opacity-100'
-                            : 'text-zinc-500 text-sm font-medium opacity-40 hover:opacity-75'
-                        }`}
-                      >
-                        {line.text}
-                      </p>
-                    );
-                  })
+                  <div className="w-full max-w-sm sm:max-w-md mx-auto py-6 space-y-4">
+                    {parsedLyrics.map((line, idx) => {
+                      const isActive = idx === activeLyricIdx;
+                      return (
+                        <p
+                          key={idx}
+                          data-active-mobile-lyric={isActive ? 'true' : 'false'}
+                          onClick={() => seekTo(line.time)}
+                          className={`transition-all duration-300 cursor-pointer select-none leading-relaxed tracking-wide ${
+                            isActive
+                              ? 'text-white text-[16px] sm:text-[17px] font-bold opacity-100 drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]'
+                              : 'text-zinc-500 text-[14.5px] sm:text-[15px] font-medium opacity-30 hover:opacity-60'
+                          }`}
+                        >
+                          {line.text}
+                        </p>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
