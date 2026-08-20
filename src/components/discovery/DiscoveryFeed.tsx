@@ -585,30 +585,34 @@ export default function DiscoveryFeed({
 
       try {
         const res = await fetch(`/api/ytm/resolve?id=${encodeURIComponent(track.ytmId)}`);
-        const data: YtmResolvedStream | YtmResolveError = await res.json();
-
-        if ('error' in data) {
-          setResolveError(`Không thể phát "${track.title}". Vui lòng thử lại.`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          setResolveError(errData?.message || `Không thể tải stream cho "${track.title}". Vui lòng thử lại.`);
           return;
         }
 
-        const resolved = data as YtmResolvedStream;
+        const data: YtmResolvedStream = await res.json();
+        if (!data?.audioUrl) {
+          setResolveError(`Không tìm thấy luồng âm thanh cho "${track.title}".`);
+          return;
+        }
+
         setCurrentYtmId(track.ytmId);
 
         // Feed resolved stream directly into PlayerContext
         playTrack(
           {
             id: track.ytmId,
-            title: resolved.title || track.title,
-            artist: resolved.artist || track.artist,
-            audio_url: resolved.audioUrl,
-            duration: resolved.duration || track.duration,
+            title: data.title || track.title,
+            artist: data.artist || track.artist,
+            audio_url: data.audioUrl,
+            duration: data.duration || track.duration,
           },
           {
             id: `ytm_${track.ytmId}`,
-            title: resolved.title || track.title,
-            artist: resolved.artist || track.artist,
-            cover_url: resolved.coverUrl || track.coverUrl,
+            title: data.title || track.title,
+            artist: data.artist || track.artist,
+            cover_url: data.coverUrl || track.coverUrl,
           },
           []
         );

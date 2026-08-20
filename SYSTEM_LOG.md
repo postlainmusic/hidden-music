@@ -22,6 +22,7 @@
 - [Giao dịch 014: Mobile Gesture Engine, Native Streaming UI & Total APK Purge](#giao-dịch-014-mobile-gesture-engine-native-streaming-ui--total-apk-purge)
 - [Giao dịch 015: Streaming Hub — Replace Discover Feed with YTM-powered Hub](#giao-dịch-015-streaming-hub--replace-discover-feed-with-ytm-powered-hub)
 - [Giao dịch 016: Closed-Loop In-App Streaming Overhaul, Native Search & Stream Resolver](#giao-dịch-016-closed-loop-in-app-streaming-overhaul-native-search--stream-resolver)
+- [Giao dịch 017: Fix Hydration Error #418 & High-Resilience Multi-Tier Audio Stream Resolver](#giao-dịch-017-fix-hydration-error-418--high-resilience-multi-tier-audio-stream-resolver)
 
 ---
 
@@ -354,3 +355,24 @@
 * ✅ Zero External Redirections
 * ✅ 100% Pure Web Application (HTML5 audio stream + Edge runtime)
 * ✅ Không thiếu icon Lucide
+
+---
+
+### Giao dịch 017: Fix Hydration Error #418 & High-Resilience Multi-Tier Audio Stream Resolver
+* **Thời gian**: 20/08/2026 17:28 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Nguyên nhân gốc rễ (Root Cause)**:
+  1. **Lỗi Hydration #418 / #423**: `src/app/discover/page.tsx` gọi `hasActiveSession()` đồng bộ ngay trong thân hàm render SSR, trả về `false` trên server (`VaultGate`) và `true` trên client sau khi load `localStorage`, làm lệch cây DOM ban đầu.
+  2. **Lỗi 503 Resolve**: Cụm Invidious công cộng ban đầu bị rate limit hoặc chặn IP datacenter từ Cloudflare Edge.
+
+* **Giải pháp khắc phục (Resolution)**:
+  1. **Khắc phục Hydration**: Thêm state `mounted` cho `src/app/discover/page.tsx`, đồng nhất HTML khởi tạo ban đầu giữa SSR và Client Mount trước khi xác thực session (chuẩn theo `VaultApp.tsx`).
+  2. **Cụm Resolver Đa Tầng (Multi-Tier Resilience)**:
+     - **Tier 1**: Cụm Piped API chuyên dụng cho audio streaming (`kavin.rocks`, `private.coffee`, `garudalinux.org`, `pa.il.ax`, `cf.piped.video`).
+     - **Tier 2**: YouTube InnerTube Android Client API trực tiếp (`com.google.android.youtube`).
+     - **Tier 3**: Cụm Invidious fallback mở rộng.
+  3. Cải tiến cơ chế xử lý lỗi và toast thông báo trong `DiscoveryFeed.tsx`.
+
+* **Xác thực**:
+  - Không còn lỗi Hydration #418 / #423.
+  - Phân giải stream nhanh chóng và mượt mà qua các node Piped & InnerTube.

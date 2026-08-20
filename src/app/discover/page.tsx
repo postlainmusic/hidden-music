@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Radio } from 'lucide-react';
+import { Zap, Radio, Disc3 } from 'lucide-react';
 import Navbar from '@/components/ui/Navbar';
 import DiscoveryFeed from '@/components/discovery/DiscoveryFeed';
 import VideoPaywallModal from '@/components/ui/VideoPaywallModal';
@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Album } from '@/types/database';
 import type { YtmFeedResponse } from '@/types/ytm';
 import { usePlayer } from '@/context/PlayerContext';
-import { getStoredUserSession, hasActiveSession } from '@/lib/authSession';
+import { getStoredUserSession } from '@/lib/authSession';
 import VaultGate from '@/components/ui/VaultGate';
 
 export const runtime = 'edge';
@@ -18,6 +18,7 @@ export const dynamic = 'force-dynamic';
 
 export default function DiscoverPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [ytmFeed, setYtmFeed] = useState<YtmFeedResponse | null>(null);
   const [albumsLoading, setAlbumsLoading] = useState(true);
@@ -30,7 +31,9 @@ export default function DiscoverPage() {
   const closePaywall = (player as any).closePaywall ?? (() => {});
 
   useEffect(() => {
-    setUserSession(getStoredUserSession());
+    setMounted(true);
+    const session = getStoredUserSession();
+    setUserSession(session);
 
     // ── Parallel data fetch: Supabase albums + YTM feed ─────────────────────
     const loadAlbums = async () => {
@@ -73,7 +76,22 @@ export default function DiscoverPage() {
     Promise.all([loadAlbums(), loadYtmFeed()]);
   }, []);
 
-  if (!hasActiveSession()) {
+  // 0. Initial SSR / Mount placeholder to prevent Hydration mismatch
+  if (!mounted) {
+    return (
+      <main className="min-h-screen w-full bg-black flex items-center justify-center font-mono">
+        <div className="tv-grain-overlay" />
+        <div className="crt-scanlines" />
+        <div className="flex items-center gap-3 text-slate-400">
+          <Disc3 className="w-6 h-6 animate-spin text-white" />
+          <span className="text-xs uppercase tracking-widest font-cyber">INITIALIZING STREAMING HUB...</span>
+        </div>
+      </main>
+    );
+  }
+
+  // 1. Mandatory Session check before accessing Streaming Hub
+  if (!userSession) {
     return <VaultGate />;
   }
 
