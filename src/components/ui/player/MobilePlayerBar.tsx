@@ -29,7 +29,6 @@ const formatTime = (secs: number) => {
 };
 
 export default function MobilePlayerBar() {
-  // 1. Hydration Guard (Chống crash SSR của Next.js)
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -37,7 +36,7 @@ export default function MobilePlayerBar() {
 
   const playerContext = usePlayer();
 
-  // 2. Safe Fallback Guard (Bảo vệ tuyệt đối chống undefined context)
+  // Bọc giá trị an toàn: không bao giờ để userQueue hay playlist bị undefined
   const {
     currentTrack = null,
     currentAlbum = null,
@@ -64,11 +63,12 @@ export default function MobilePlayerBar() {
     toggleRepeat = () => {},
   } = playerContext || {};
 
-  // Safe Telemetry
   let sendTelemetry = (_payload: any) => {};
   try {
     const tele = useTelemetry();
-    if (tele?.sendTelemetry) sendTelemetry = tele.sendTelemetry;
+    if (tele && typeof tele.sendTelemetry === 'function') {
+      sendTelemetry = tele.sendTelemetry;
+    }
   } catch {}
 
   const safeQueue = Array.isArray(userQueue) ? userQueue : [];
@@ -85,7 +85,7 @@ export default function MobilePlayerBar() {
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
-  // Direct GPU DOM Nodes (Chỉ dùng transform & opacity, không dùng repaint CPU)
+  // Direct DOM Elements for 60FPS Hardware-Accelerated Stage Performance
   const miniBarRef = useRef<HTMLDivElement | null>(null);
   const miniGlowBackdropRef = useRef<HTMLDivElement | null>(null);
   const miniCoverRef = useRef<HTMLDivElement | null>(null);
@@ -94,9 +94,8 @@ export default function MobilePlayerBar() {
   const miniTextRef = useRef<HTMLSpanElement | null>(null);
 
   const expandCoverRef = useRef<HTMLDivElement | null>(null);
-  const expandCoverGlowRef = useRef<HTMLDivElement | null>(null);
   const expandPlayBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandAmbientBgRef = useRef<HTMLDivElement | null>(null);
+  const expandRootRef = useRef<HTMLDivElement | null>(null);
   const expandLaserBorderRef = useRef<HTMLDivElement | null>(null);
   const expandTitleRef = useRef<HTMLHeadingElement | null>(null);
   const expandArtistRef = useRef<HTMLParagraphElement | null>(null);
@@ -123,18 +122,18 @@ export default function MobilePlayerBar() {
   const sheetTouchDeltaYRef = useRef<number>(0);
   const [sheetOffsetY, setSheetOffsetY] = useState<number>(0);
 
-  // Seeker refs & Throttled Text
+  // Seeker refs
   const expandedCurrentTimeTextRef = useRef<HTMLSpanElement | null>(null);
   const expandedSeekerInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingSeekerRef = useRef<boolean>(false);
-  const lastLoggedSecRef = useRef<number>(-1);
 
-  // 3. DSP & Hooke's Law Physics Engine (Thuật toán theo kiến trúc Namida)
+  // Physics Spring State
   const kickScaleRef = useRef<number>(1);
   const targetKickScaleRef = useRef<number>(1);
   const snareStrobeRef = useRef<number>(0);
   const targetSnareStrobeRef = useRef<number>(0);
 
+  // 60FPS Multi-Band Audio Analyzer State
   const fastBassRef = useRef<number>(0);
   const slowBassRef = useRef<number>(0);
   const lastKickHitTimeRef = useRef<number>(0);
@@ -146,8 +145,19 @@ export default function MobilePlayerBar() {
   const lastSnareHitTimeRef = useRef<number>(0);
 
   const smoothBasslineRef = useRef<number>(0);
+  const fastVocalRef = useRef<number>(0);
+  const slowVocalRef = useRef<number>(0);
+  const smoothVocalRef = useRef<number>(0);
+
+  const fastTrebleRef = useRef<number>(0);
+  const slowTrebleRef = useRef<number>(0);
+  const trebleStrobeRef = useRef<number>(0);
+  const targetTrebleStrobeRef = useRef<number>(0);
+  const lastTrebleHitTimeRef = useRef<number>(0);
+
   const smoothEnergyRef = useRef<number>(0);
 
+  // 60FPS Live Stage Engine
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
@@ -158,24 +168,25 @@ export default function MobilePlayerBar() {
       fastBassRef.current = 0; slowBassRef.current = 0;
       fastMidRef.current = 0; slowMidRef.current = 0;
       fastHighRef.current = 0; slowHighRef.current = 0;
+      fastVocalRef.current = 0; slowVocalRef.current = 0; smoothVocalRef.current = 0;
+      fastTrebleRef.current = 0; slowTrebleRef.current = 0;
+      trebleStrobeRef.current = 0; targetTrebleStrobeRef.current = 0;
       smoothBasslineRef.current = 0; smoothEnergyRef.current = 0;
       return;
     }
 
-    const dataArray = new Uint8Array(512);
+    const dataArray = new Uint8Array(1024);
 
-    const liveStageEngine = () => {
+    const liveStageShow = () => {
       const now = performance.now();
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
 
-      // Cập nhật Seeker Text không gây reflow toàn trang
+      // Cập nhật Seeker Text mượt mà 60 FPS
       if (!isDraggingSeekerRef.current) {
-        const floorSec = Math.floor(liveSec);
         if (expandedSeekerInputRef.current) {
           expandedSeekerInputRef.current.value = String(liveSec);
         }
-        if (expandedCurrentTimeTextRef.current && floorSec !== lastLoggedSecRef.current) {
-          lastLoggedSecRef.current = floorSec;
+        if (expandedCurrentTimeTextRef.current) {
           expandedCurrentTimeTextRef.current.textContent = formatTime(liveSec);
         }
       }
@@ -184,25 +195,26 @@ export default function MobilePlayerBar() {
         try {
           analyserRef.current.getByteFrequencyData(dataArray);
 
-          // 1. SUB-BASS / KICK (Bins 2-6: ~43Hz - 130Hz)
+          // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
           let bassSum = 0;
           for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
-          const currentBass = bassSum * 0.2;
+          const currentBass = bassSum / 5;
           const fB = fastBassRef.current * 0.15 + currentBass * 0.85;
           const sB = slowBassRef.current * 0.88 + currentBass * 0.12;
           fastBassRef.current = fB;
           slowBassRef.current = sB;
           const bassFlux = Math.max(0, fB - sB);
 
-          // 2. BASSLINE / 808 (Bins 3-12)
+          // 2. BASSLINE / 808 ENERGY (Bins 3-12: 64Hz-258Hz)
           let basslineSum = 0;
           for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
-          smoothBasslineRef.current += ((basslineSum * 0.000392) - smoothBasslineRef.current) * 0.22;
+          const currentBassline = basslineSum / 10;
+          smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
 
           // 3. SNARE DUAL-BAND CONFIRMATION
           let midSum = 0;
-          for (let i = 35; i <= 92; i++) midSum += dataArray[i];
-          const currentMid = midSum / 58;
+          for (let i = 70; i <= 185; i++) midSum += dataArray[i];
+          const currentMid = midSum / 116;
           const fM = fastMidRef.current * 0.15 + currentMid * 0.85;
           const sM = slowMidRef.current * 0.88 + currentMid * 0.12;
           fastMidRef.current = fM;
@@ -210,24 +222,45 @@ export default function MobilePlayerBar() {
           const midFlux = Math.max(0, fM - sM);
 
           let highSum = 0;
-          for (let i = 95; i <= 210; i++) highSum += dataArray[i];
-          const currentHigh = highSum / 116;
+          for (let i = 190; i <= 420; i++) highSum += dataArray[i];
+          const currentHigh = highSum / 231;
           const fH = fastHighRef.current * 0.15 + currentHigh * 0.85;
           const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
           fastHighRef.current = fH;
           slowHighRef.current = sH;
           const highFlux = Math.max(0, fH - sH);
 
-          // 4. TOTAL AMBIENT ENERGY (Sampled)
-          let totalSum = 0;
-          for (let i = 0; i < 256; i += 4) totalSum += dataArray[i];
-          smoothEnergyRef.current += ((totalSum / 16320) - smoothEnergyRef.current) * 0.15;
+          // 4. VOCAL / LEAD BAND (Bins 14-162: ~300Hz-3.5kHz)
+          let vocalSum = 0;
+          for (let i = 14; i <= 162; i++) vocalSum += dataArray[i];
+          const currentVocal = vocalSum / 148;
+          const fV = fastVocalRef.current * 0.20 + currentVocal * 0.80;
+          const sV = slowVocalRef.current * 0.90 + currentVocal * 0.10;
+          fastVocalRef.current = fV;
+          slowVocalRef.current = sV;
+          smoothVocalRef.current += ((currentVocal / 255) - smoothVocalRef.current) * 0.20;
 
-          // TRIGGERS (Namida Dynamic Peak Gate)
+          // 5. TREBLE / HI-HATS / CYMBALS (Bins 232-743: ~5kHz-16kHz)
+          let trebleSum = 0;
+          for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
+          const currentTreble = trebleSum / 512;
+          const fT = fastTrebleRef.current * 0.15 + currentTreble * 0.85;
+          const sT = slowTrebleRef.current * 0.88 + currentTreble * 0.12;
+          fastTrebleRef.current = fT;
+          slowTrebleRef.current = sT;
+          const trebleFlux = Math.max(0, fT - sT);
+
+          // 6. TOTAL AMBIENT ENERGY (RMS)
+          let totalSum = 0;
+          for (let i = 0; i < 1024; i++) totalSum += dataArray[i];
+          const currentEnergy = totalSum / 1024;
+          smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
+
+          // TRIGGERS
           const is808Sustaining = currentBass > 150 && bassFlux < 9.0;
           if (bassFlux > 12.0 && !is808Sustaining && now - lastKickHitTimeRef.current > 120) {
             lastKickHitTimeRef.current = now;
-            const force = Math.min(0.038, 0.015 + bassFlux / 600);
+            const force = Math.min(0.04, 0.015 + bassFlux / 500);
             targetKickScaleRef.current += force;
           }
 
@@ -236,10 +269,15 @@ export default function MobilePlayerBar() {
             lastSnareHitTimeRef.current = now;
             targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
           }
+
+          if (trebleFlux > 1.4 && now - lastTrebleHitTimeRef.current > 70) {
+            lastTrebleHitTimeRef.current = now;
+            targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
+          }
         } catch {}
       }
 
-      // HOOKE'S LAW PHYSICS INTERPOLATION
+      // PHYSICS ENGINE: HOOKE'S LAW
       const tension = 0.32;
       const dampening = 0.60;
       const displacement = kickScaleRef.current - 1.0;
@@ -248,67 +286,95 @@ export default function MobilePlayerBar() {
       kickScaleRef.current += targetKickScaleRef.current;
       
       if (kickScaleRef.current < 0.99) kickScaleRef.current = 0.99;
-      if (kickScaleRef.current > 1.038) kickScaleRef.current = 1.038;
+      if (kickScaleRef.current > 1.04) kickScaleRef.current = 1.04;
 
       snareStrobeRef.current += (targetSnareStrobeRef.current - snareStrobeRef.current) * 0.55;
       targetSnareStrobeRef.current *= 0.72;
 
+      trebleStrobeRef.current += (targetTrebleStrobeRef.current - trebleStrobeRef.current) * 0.65;
+      targetTrebleStrobeRef.current *= 0.58;
+
       const k = kickScaleRef.current;
       const s = snareStrobeRef.current;
       const nrg = smoothEnergyRef.current;
-      const kickDelta = Math.max(0, k - 1.0);
 
-      // DIRECT GPU COMPOSITING (ZERO REFLOW)
+      const kickDelta = Math.max(0, k - 1.0);
+      const kickWeight = Math.min(1.0, kickDelta / 0.04); 
+      const g = Math.floor(255 - kickWeight * 205);
+      const b = Math.floor(255 - kickWeight * 205);
+      const kickColor = `255, ${g}, ${b}`;
+
+      // =========================================================================
+      // MINI PLAYER DIRECT DOM MANIPULATION
+      // =========================================================================
       if (miniBarRef.current) {
-        miniBarRef.current.style.transform = `translate3d(${swipeOffsetX}px, 0, 0) scale3d(${1 + kickDelta * 0.25}, ${1 + kickDelta * 0.25}, 1)`;
+        miniBarRef.current.style.transform = `translateX(${swipeOffsetX}px) scale(${1 + kickDelta * 0.25})`;
+        miniBarRef.current.style.borderColor = `rgba(${kickColor}, ${0.12 + kickDelta * 2.5})`;
       }
 
       if (miniGlowBackdropRef.current) {
-        miniGlowBackdropRef.current.style.opacity = `${0.18 + s * 0.3 + kickDelta * 4.0}`;
-        miniGlowBackdropRef.current.style.transform = `scale3d(${1 + kickDelta * 1.2}, ${1 + kickDelta * 1.2}, 1)`;
+        miniGlowBackdropRef.current.style.opacity = `${0.2 + s * 0.3 + kickDelta * 4.0}`;
+        miniGlowBackdropRef.current.style.transform = `scale(${1 + kickDelta * 1.2})`;
+        miniGlowBackdropRef.current.style.backgroundColor = `rgba(${kickColor}, 0.25)`;
       }
 
       if (miniCoverRef.current) {
-        miniCoverRef.current.style.transform = `scale3d(${k}, ${k}, 1)`;
+        miniCoverRef.current.style.transform = `scale(${k})`;
+        miniCoverRef.current.style.borderColor = `rgba(${kickColor}, ${0.2 + kickDelta * 3.0})`;
+        miniCoverRef.current.style.boxShadow = `
+          0 0 ${kickDelta * 150}px rgba(${kickColor}, ${kickDelta * 4.0}),
+          0 0 ${s * 15}px rgba(255, 255, 255, ${s * 0.3})
+        `;
       }
 
       if (miniPlayBtnRef.current) {
-        miniPlayBtnRef.current.style.transform = `scale3d(${1 + kickDelta * 1.0}, ${1 + kickDelta * 1.0}, 1)`;
+        miniPlayBtnRef.current.style.transform = `scale(${1 + kickDelta * 1.0})`;
       }
 
+      // =========================================================================
+      // EXPANDED PLAYER DIRECT DOM MANIPULATION
+      // =========================================================================
       if (expandCoverRef.current) {
-        expandCoverRef.current.style.transform = `scale3d(${k}, ${k}, 1)`;
-      }
-
-      if (expandCoverGlowRef.current) {
-        expandCoverGlowRef.current.style.opacity = `${0.18 + kickDelta * 5.5 + s * 0.35}`;
-        expandCoverGlowRef.current.style.transform = `scale3d(${1 + kickDelta * 2.0}, ${1 + kickDelta * 2.0}, 1)`;
+        expandCoverRef.current.style.transform = `scale(${k})`;
+        expandCoverRef.current.style.borderColor = `rgba(${kickColor}, ${0.2 + kickDelta * 3.5 + s * 0.4})`;
+        expandCoverRef.current.style.boxShadow = `
+          0 20px 50px rgba(0, 0, 0, 0.95),
+          0 0 ${15 + kickDelta * 300}px rgba(${kickColor}, ${0.15 + kickDelta * 4.5}),
+          0 0 ${s * 45}px rgba(255, 255, 255, ${s * 0.4}),
+          inset 0 0 ${15 + s * 30}px rgba(255, 255, 255, ${s * 0.3})
+        `;
       }
 
       if (expandPlayBtnRef.current) {
-        expandPlayBtnRef.current.style.transform = `scale3d(${1 + kickDelta * 1.2}, ${1 + kickDelta * 1.2}, 1)`;
+        expandPlayBtnRef.current.style.transform = `scale(${1 + kickDelta * 1.2})`;
+        expandPlayBtnRef.current.style.boxShadow = `0 0 ${20 + kickDelta * 300 + s * 30}px rgba(255, 255, 255, ${0.4 + kickDelta * 4.0 + s * 0.3})`;
       }
 
-      if (expandAmbientBgRef.current) {
-        expandAmbientBgRef.current.style.opacity = `${0.22 + kickDelta * 3.0 + s * 0.2 + nrg * 0.15}`;
-        expandAmbientBgRef.current.style.transform = `scale3d(${1 + kickDelta * 0.35}, ${1 + kickDelta * 0.35}, 1)`;
+      if (expandRootRef.current) {
+        const cx = 50 + Math.sin(now / 900) * 3;
+        const cy = 45 + Math.cos(now / 1100) * 2;
+        expandRootRef.current.style.backgroundImage = `radial-gradient(
+          circle at ${cx.toFixed(1)}% ${cy.toFixed(1)}%, 
+          rgba(${kickColor}, ${0.08 + kickDelta * 2.5 + s * 0.15 + nrg * 0.10}) 0%, 
+          rgba(${kickColor}, ${0.02 + kickDelta * 1.2 + nrg * 0.05}) ${35 + kickDelta * 60 + nrg * 10}%, 
+          #050507 ${70 + kickDelta * 40}%
+        )`;
       }
 
       if (expandLaserBorderRef.current) {
         expandLaserBorderRef.current.style.opacity = `${0.1 + s * 0.75 + kickDelta * 2.5 + nrg * 0.15}`;
       }
 
-      rafIdRef.current = requestAnimationFrame(liveStageEngine);
+      rafIdRef.current = requestAnimationFrame(liveStageShow);
     };
 
-    rafIdRef.current = requestAnimationFrame(liveStageEngine);
+    rafIdRef.current = requestAnimationFrame(liveStageShow);
 
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, swipeOffsetX, effectiveDuration, shuffleMode, repeatMode, activeView]);
 
-  // 4. Lyrics Parser (Cùng font-size, không bao giờ nhảy dòng)
   const parsedLyrics = useMemo(() => {
     if (!currentTrack?.lyrics) return [];
     try {
@@ -437,11 +503,14 @@ export default function MobilePlayerBar() {
     [isLiked, currentTrack, sendTelemetry]
   );
 
+  // Tránh lỗi Hydration SSR
   if (!isMounted || !currentTrack) return null;
 
   return (
     <>
-      {/* 1. MINI-PLAYER */}
+      {/* ========================================================================= */}
+      {/* 1. MINI-PLAYER STAGE PERFORMANCE                                          */}
+      {/* ========================================================================= */}
       <div
         className="fixed bottom-4 left-3 right-3 z-40 pointer-events-auto select-none"
         onTouchStart={handleMiniTouchStart}
@@ -455,7 +524,7 @@ export default function MobilePlayerBar() {
       >
         <div
           ref={miniGlowBackdropRef}
-          className="absolute inset-0 -inset-x-2 -inset-y-1 bg-white/20 rounded-3xl blur-xl pointer-events-none transition-opacity duration-75 will-change-transform"
+          className="absolute inset-0 -inset-x-2 -inset-y-1 bg-gradient-to-r from-white/10 via-white/25 to-white/10 rounded-3xl blur-xl pointer-events-none transition-opacity duration-75 will-change-transform"
         />
 
         <div
@@ -557,7 +626,9 @@ export default function MobilePlayerBar() {
         </div>
       </div>
 
-      {/* 2. EXPANDED FULLSCREEN */}
+      {/* ========================================================================= */}
+      {/* 2. EXPANDED FULLSCREEN STAGE PERFORMANCE                                  */}
+      {/* ========================================================================= */}
       {isExpanded && (
         <div
           ref={expandRootRef}
@@ -565,17 +636,9 @@ export default function MobilePlayerBar() {
           onTouchMove={handleSheetTouchMove}
           onTouchEnd={handleSheetTouchEnd}
           style={{ transform: `translateY(${sheetOffsetY}px)` }}
-          className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-6 pb-10 select-none animate-fadeIn transition-transform duration-75 overflow-hidden"
+          className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-6 pb-10 select-none animate-fadeIn transition-transform duration-75"
         >
-          {/* Pre-baked GPU Ambient Backdrop */}
-          <div
-            ref={expandAmbientBgRef}
-            className="absolute inset-0 pointer-events-none opacity-20 will-change-transform transition-opacity duration-75"
-            style={{
-              backgroundImage: 'radial-gradient(circle at 50% 45%, rgba(255, 60, 60, 0.45) 0%, rgba(255, 60, 60, 0.12) 45%, transparent 75%)',
-            }}
-          />
-
+          {/* Top Laser Border */}
           <div
             ref={expandLaserBorderRef}
             className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-20 transition-opacity pointer-events-none"
@@ -599,29 +662,23 @@ export default function MobilePlayerBar() {
           </div>
 
           {/* Main Stage Viewport */}
-          <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-visible z-10">
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-visible">
             {/* PLAYER VIEW */}
             {activeView === 'player' && (
               <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible">
-                <div className="relative flex items-center justify-center mb-6 flex-shrink-0">
-                  <div
-                    ref={expandCoverGlowRef}
-                    className="absolute inset-0 w-[72vw] max-w-[260px] aspect-square rounded-3xl bg-red-600/40 blur-2xl pointer-events-none will-change-transform"
-                  />
-                  <div
-                    ref={expandCoverRef}
-                    className="relative w-[72vw] max-w-[260px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center border border-white/20 will-change-transform shadow-2xl z-10"
-                  >
-                    {currentAlbum?.cover_url ? (
-                      <img
-                        src={currentAlbum.cover_url}
-                        alt={currentAlbum.title || 'Cover'}
-                        className="w-full h-full object-cover select-none pointer-events-none"
-                      />
-                    ) : (
-                      <Disc3 className="w-20 h-20 text-zinc-700 animate-spin" />
-                    )}
-                  </div>
+                <div
+                  ref={expandCoverRef}
+                  className="relative w-[72vw] max-w-[260px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center mb-6 border border-white/20 will-change-transform z-10 flex-shrink-0"
+                >
+                  {currentAlbum?.cover_url ? (
+                    <img
+                      src={currentAlbum.cover_url}
+                      alt={currentAlbum.title || 'Cover'}
+                      className="w-full h-full object-cover select-none pointer-events-none"
+                    />
+                  ) : (
+                    <Disc3 className="w-20 h-20 text-zinc-700 animate-spin" />
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between w-full max-w-[260px] relative z-10 px-1">
@@ -664,6 +721,8 @@ export default function MobilePlayerBar() {
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
+                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
                 }}
               >
                 {parsedLyrics.length === 0 ? (
@@ -679,7 +738,7 @@ export default function MobilePlayerBar() {
                           key={idx}
                           data-active-mobile-lyric={isActive ? 'true' : 'false'}
                           onClick={() => seekTo(line.time)}
-                          className={`text-[17px] leading-relaxed font-bold tracking-tight text-left select-none cursor-pointer transition-colors duration-200 ${
+                          className={`text-[17px] leading-relaxed font-bold tracking-tight text-left select-none cursor-pointer transition-colors duration-300 ${
                             isActive
                               ? 'text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.4)]'
                               : 'text-white/25 hover:text-white/50'
@@ -694,7 +753,7 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* QUEUE VIEW — SAFE GUARDS */}
+            {/* QUEUE VIEW (ĐÃ BỌC SAFE-ARRAY KHÔNG BAO GIỜ CRASH) */}
             {activeView === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-2 animate-fadeIn"
@@ -703,6 +762,7 @@ export default function MobilePlayerBar() {
                   msOverflowStyle: 'none',
                 }}
               >
+                {/* 1. USER QUEUE */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1 mb-1">
                     <div className="flex items-center gap-2">
@@ -765,6 +825,7 @@ export default function MobilePlayerBar() {
                   )}
                 </div>
 
+                {/* 2. UPCOMING / PLAYLIST */}
                 {safePlaylist.length > 0 && (
                   <div className="space-y-1 pt-2 border-t border-white/5">
                     <div className="flex items-center justify-between px-1 mb-1">
@@ -810,6 +871,7 @@ export default function MobilePlayerBar() {
 
           {/* Bottom Area */}
           <div className="w-full flex flex-col gap-4 flex-shrink-0 pt-2 relative z-20">
+            {/* Seekbar */}
             <div className="flex flex-col gap-1.5 w-full px-2">
               <div className="relative w-full flex items-center">
                 <input
