@@ -29,33 +29,39 @@ const formatTime = (secs: number) => {
 };
 
 export default function MobilePlayerBar() {
+  const playerContext = usePlayer();
+
+  // Bọc fallback an toàn tuyệt đối chống crash màn hình đen
   const {
-    currentTrack,
-    currentAlbum,
-    playlist,
-    userQueue,
-    removeFromQueue,
-    clearQueue,
-    isPlaying,
-    isBuffering,
-    currentTime,
-    duration,
-    shuffleMode,
-    repeatMode,
-    activeZone,
+    currentTrack = null,
+    currentAlbum = null,
+    playlist = [],
+    userQueue = [],
+    removeFromQueue = () => {},
+    clearQueue = () => {},
+    isPlaying = false,
+    isBuffering = false,
+    currentTime = 0,
+    duration = 0,
+    shuffleMode = false,
+    repeatMode = 'off',
+    activeZone = 'idle',
     audioRef,
     currentTimeRef,
     analyserRef,
-    playTrack,
-    togglePlay,
-    nextTrack,
-    prevTrack,
-    seekTo,
-    toggleShuffle,
-    toggleRepeat,
-  } = usePlayer();
+    playTrack = () => {},
+    togglePlay = () => {},
+    nextTrack = () => {},
+    prevTrack = () => {},
+    seekTo = () => {},
+    toggleShuffle = () => {},
+    toggleRepeat = () => {},
+  } = playerContext || {};
 
   const { sendTelemetry } = useTelemetry();
+
+  const safeQueue = Array.isArray(userQueue) ? userQueue : [];
+  const safePlaylist = Array.isArray(playlist) ? playlist : [];
 
   const effectiveDuration = (currentTrack?.duration && currentTrack.duration > 0)
     ? currentTrack.duration
@@ -160,13 +166,13 @@ export default function MobilePlayerBar() {
       return;
     }
 
-    const dataArray = new Uint8Array(512); // Tối ưu 512 bins để giảm 50% tính toán CPU
+    const dataArray = new Uint8Array(512);
 
     const liveStageShow = () => {
       const now = performance.now();
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
 
-      // Cập nhật Seeker Text có kiểm soát (không ép layout repaint vô cớ)
+      // Cập nhật Seeker Text mượt mà
       if (!isDraggingSeekerRef.current) {
         const floorSec = Math.floor(liveSec);
         if (expandedSeekerInputRef.current) {
@@ -262,9 +268,7 @@ export default function MobilePlayerBar() {
       const nrg = smoothEnergyRef.current;
       const kickDelta = Math.max(0, k - 1.0);
 
-      // =========================================================================
-      // MINI PLAYER (GPU ACCELERATED VIA TRANSFORM & OPACITY)
-      // =========================================================================
+      // MINI PLAYER (GPU COMPOSITING)
       if (miniBarRef.current) {
         miniBarRef.current.style.transform = `translate3d(${swipeOffsetX}px, 0, 0) scale3d(${1 + kickDelta * 0.25}, ${1 + kickDelta * 0.25}, 1)`;
       }
@@ -282,9 +286,7 @@ export default function MobilePlayerBar() {
         miniPlayBtnRef.current.style.transform = `scale3d(${1 + kickDelta * 1.0}, ${1 + kickDelta * 1.0}, 1)`;
       }
 
-      // =========================================================================
-      // EXPANDED PLAYER (GPU ACCELERATED COMPOSITING)
-      // =========================================================================
+      // EXPANDED PLAYER (GPU COMPOSITING)
       if (expandCoverRef.current) {
         expandCoverRef.current.style.transform = `scale3d(${k}, ${k}, 1)`;
       }
@@ -604,7 +606,6 @@ export default function MobilePlayerBar() {
             {/* PLAYER VIEW */}
             {activeView === 'player' && (
               <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible">
-                {/* Dedicated GPU Glow Layer for Album Art */}
                 <div className="relative flex items-center justify-center mb-6 flex-shrink-0">
                   <div
                     ref={expandCoverGlowRef}
@@ -696,7 +697,7 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* QUEUE VIEW */}
+            {/* QUEUE VIEW (ĐÃ BỌC SAFE GUARDS TOÀN DIỆN) */}
             {activeView === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-2 animate-fadeIn"
@@ -711,10 +712,10 @@ export default function MobilePlayerBar() {
                     <div className="flex items-center gap-2">
                       <ListMusic className="w-3.5 h-3.5 text-zinc-400" />
                       <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
-                        HÀNG CHỜ PHÁT ({userQueue.length})
+                        HÀNG CHỜ PHÁT ({safeQueue.length})
                       </span>
                     </div>
-                    {userQueue.length > 0 && (
+                    {safeQueue.length > 0 && (
                       <button
                         onClick={clearQueue}
                         className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase"
@@ -725,7 +726,7 @@ export default function MobilePlayerBar() {
                     )}
                   </div>
 
-                  {userQueue.length === 0 ? (
+                  {safeQueue.length === 0 ? (
                     <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                       <p className="text-[11px] text-zinc-400">Hàng chờ trống</p>
                       <p className="text-[9px] text-zinc-600 mt-0.5">
@@ -733,15 +734,15 @@ export default function MobilePlayerBar() {
                       </p>
                     </div>
                   ) : (
-                    userQueue.map((track, idx) => (
+                    safeQueue.map((track, idx) => (
                       <div
-                        key={`mob_queue_${track.id}_${idx}`}
+                        key={`mob_queue_${track?.id || idx}_${idx}`}
                         className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 active:bg-white/15 transition-all"
                       >
                         <div
                           onClick={() => {
-                            removeFromQueue(track.id);
-                            playTrack(track, currentAlbum, playlist);
+                            if (track?.id) removeFromQueue(track.id);
+                            playTrack(track, currentAlbum, safePlaylist);
                           }}
                           className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
                         >
@@ -749,14 +750,14 @@ export default function MobilePlayerBar() {
                             {idx + 1}
                           </span>
                           <div className="min-w-0">
-                            <p className="text-xs truncate font-bold text-white">{track.title}</p>
-                            <p className="text-[9px] text-zinc-500 truncate uppercase">{track.artist || 'Unknown Artist'}</p>
+                            <p className="text-xs truncate font-bold text-white">{track?.title || 'Unknown Track'}</p>
+                            <p className="text-[9px] text-zinc-500 truncate uppercase">{track?.artist || 'Unknown Artist'}</p>
                           </div>
                         </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeFromQueue(track.id);
+                            if (track?.id) removeFromQueue(track.id);
                           }}
                           title="Xóa khỏi hàng chờ"
                           className="p-1 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all ml-2 flex-shrink-0"
@@ -769,11 +770,11 @@ export default function MobilePlayerBar() {
                 </div>
 
                 {/* UPCOMING / PLAYLIST */}
-                {playlist.length > 0 && (
+                {safePlaylist.length > 0 && (
                   <div className="space-y-1 pt-2 border-t border-white/5">
                     <div className="flex items-center justify-between px-1 mb-1">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
-                        ĐANG PHÁT TỪ ALBUM / THƯ VIỆN ({playlist.length})
+                        ĐANG PHÁT TỪ ALBUM / THƯ VIỆN ({safePlaylist.length})
                       </span>
                       {shuffleMode && (
                         <span className="text-[8px] font-mono text-zinc-400 bg-white/10 px-1.5 py-0.5 rounded">
@@ -781,12 +782,12 @@ export default function MobilePlayerBar() {
                         </span>
                       )}
                     </div>
-                    {playlist.map((track, idx) => {
-                      const isCur = track.id === currentTrack?.id;
+                    {safePlaylist.map((track, idx) => {
+                      const isCur = track?.id === currentTrack?.id;
                       return (
                         <div
-                          key={track.id || idx}
-                          onClick={() => playTrack(track, currentAlbum, playlist)}
+                          key={track?.id || idx}
+                          onClick={() => playTrack(track, currentAlbum, safePlaylist)}
                           className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
                             isCur
                               ? 'bg-white/15 border-white text-white font-bold shadow-md'
@@ -798,8 +799,8 @@ export default function MobilePlayerBar() {
                               {idx + 1}
                             </span>
                             <div className="min-w-0">
-                              <p className="text-xs truncate font-bold">{track.title}</p>
-                              <p className="text-[9px] text-zinc-500 truncate">{track.artist || currentAlbum?.artist}</p>
+                              <p className="text-xs truncate font-bold">{track?.title || 'Unknown Track'}</p>
+                              <p className="text-[9px] text-zinc-500 truncate">{track?.artist || currentAlbum?.artist || 'Unknown'}</p>
                             </div>
                           </div>
                           {isCur && <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />}
