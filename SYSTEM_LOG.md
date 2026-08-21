@@ -760,6 +760,18 @@
   3. **Đạt 17/17 Unit & Integration Tests PASS**:
      - Toàn bộ test suite hoàn thành 100% không có lỗi.
 
+---
+
+### Giao dịch 030: Persistent Drum Acoustic Profiles for Album HVL Tracks
+* **Thời gian**: 21/08/2026 16:22 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Khởi tạo Tài liệu Hồ sơ Âm học (`.agents/memory/track-drum-profiles.md`)**:
+     - Lưu trữ chi tiết cấu trúc Kick, Snare, Hi-hat, 808s, dải tần số chủ đạo (Hz) và BPM của 3 track: *01. Elegie* (~75/150 BPM, Sub-bass 35-60Hz), *02. IDK - MCK* (~134 BPM, Punchy 808 Trap/Drill 60-100Hz), *03. Ai Mới Là Kẻ Xấu Xa* (~88 BPM, Acoustic Soulful Kick 80-120Hz).
+  2. **Tích hợp Module DSP Preset (`src/lib/dsp/trackDrumProfiles.ts`)**:
+     - Cung cấp hàm `getTrackDrumProfile(titleOrId)` tự động nhận diện bài hát và trả về cấu hình dải tần số, hệ số đàn hồi lò xo Hooke (`springTension`, `springDampening`) và độ nhạy `fluxSensitivity`.
+
+
 
 
 

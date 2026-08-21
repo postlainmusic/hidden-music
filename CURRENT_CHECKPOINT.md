@@ -1,31 +1,25 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 21/08/2026 16:20 (GMT+7)  
+> **Thời gian cập nhật**: 21/08/2026 16:22 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đóng băng vĩnh viễn Invariant 6 (CORS Audio-Silencing Invariant) vào AGENTS.md và bộ nhớ tự học lessons-learned.md. Thiết lập bộ kiểm thử tự động `tests/unit/no-cors-hijack.test.mjs` nhằm ngăn chặn vĩnh viễn việc gọi `createMediaElementSource` trên hệ thống phát nhạc. Tích hợp trọn vẹn Meyda Feature Extraction Engine, 17/17 tests PASS, Type check 0 lỗi, Build thành công 100%.
+> **Trạng thái hệ thống**: Đã lưu trữ và phục hồi toàn bộ hồ sơ âm học Drum Kits (Elegie, IDK, Ai Mới Là Kẻ Xấu Xa) vào `.agents/memory/track-drum-profiles.md` và `src/lib/dsp/trackDrumProfiles.ts`. Đóng băng Invariant 6, 17/17 tests PASS, Type check 0 lỗi, Build thành công.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Đóng Băng Nguyên Tắc Bất Biến 6 Trong `AGENTS.md` & `lessons-learned.md`**:
-   - `Invariant 6: Tuyệt Đối Cấm Can Thiệp createMediaElementSource Vào Thẻ Audio Chính`: Thẻ Audio luôn kết nối trực tiếp với phần cứng loa. Mọi phân tích visualizer/beat tracking chạy qua `MeydaEngine` độc lập.
-   - Thêm unit test tự động `tests/unit/no-cors-hijack.test.mjs` quét toàn bộ codebase trong CI pipeline.
+1. **Khôi Phục & Lưu Trữ Hồ Sơ Âm Học Drum (`.agents/memory/track-drum-profiles.md` & `src/lib/dsp/trackDrumProfiles.ts`)**:
+   - `01. Elegie`: Melo-trap intro, 75/150 BPM, Sub-bass 808 trầm sâu (35-60Hz) kéo dài, Rimshot snap vang rộng, Hi-hats 1/16 & 1/32 lướt nhẹ.
+   - `02. IDK (MCK)`: Trap/R&B Drill, 134 BPM, Kick nén đập mạnh (60-100Hz) đè lên 808 slide, Snare giòn đanh (1.2-2.5kHz), Hi-hats triplet nẩy dứt khoát.
+   - `03. Ai Mới Là Kẻ Xấu Xa`: Soulful Hip-Hop, 88 BPM, Acoustic Kick ấm (80-120Hz), Layered Clap + Reverb tail, Hi-hats 1/8 đều đặn kèm vinyl crackle.
 
-2. **Tích Hợp Thuật Toán Meyda Engine Chuẩn Xác Vào Beat Pipeline (`src/lib/dsp/meydaEngine.ts`)**:
-   - `spectralFlux`: Tính biến thiên phổ chỉnh lưu nửa sóng (Half-wave rectified difference) để bắt trọn vẹn điểm bùng nổ của Kick và Snare.
-   - `rms`: Root Mean Square tính công suất âm lượng thực tế điều khiển Ambient Backdrop Glow.
-   - `spectralCentroid`: Trọng tâm quang phổ ($\mu_1$) phân biệt âm sắc trầm (Sub-bass) và sáng (Vocals/Hi-hats).
-   - `spectralRolloff` & `zcr`: Xác định ngưỡng 85% năng lượng và độ nhiễu tín hiệu.
-
-3. **Toàn Vẹn CI/CD & Deploy**:
-   - 17/17 unit và integration tests pass 100%.
-   - Type check `tsc --noEmit` 0 lỗi.
-   - Production bundle build thành công với Edge runtime.
+2. **Đóng Băng Invariant 6 & Regression Test**:
+   - Khóa vĩnh viễn việc gọi `createMediaElementSource` trên Audio Element.
+   - 17/17 unit & integration tests PASS 100%.
 
 ---
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Duy trì tính toàn vẹn của âm thanh không bao giờ bị ngắt tiếng.
+1. Tự động áp dụng `getTrackDrumProfile` khi chuyển bài để tối ưu độ nẩy visualizer theo từng track.
 2. Tự động đồng bộ và push deploy lên GitHub.
