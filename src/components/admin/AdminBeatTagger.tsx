@@ -17,10 +17,14 @@ import {
   FileDown,
   Layers,
   Eye,
+  BrainCircuit,
   Volume2,
   Sparkles,
-  Music2,
-  Flame
+  Scissors,
+  Wand2,
+  Activity,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { TrackItem, Album } from '@/types/database';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
@@ -68,235 +72,194 @@ const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string
   },
 };
 
-// DỮ LIỆU TĨNH 153 NHỊP CHUẨN XÁC 100% CỦA 02. IDK - MCK (134 BPM)
-const IDK_MASTER_BEAT_MAP: BeatTagMarker[] = [
-  // --- VERSE 1 (Bắt đầu chính xác tại Drop 808 đầu tiên: 22.746s) ---
-  { id: 'v1_0', timeSec: 22.746, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_1', timeSec: 23.383, type: 'snare', intensity: 0.8 },
-  { id: 'v1_2', timeSec: 24.454, type: 'kick', intensity: 0.85 },
-  { id: 'v1_3', timeSec: 25.081, type: 'kick', intensity: 0.85 },
-  { id: 'v1_4', timeSec: 25.471, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_5', timeSec: 26.180, type: 'snare', intensity: 0.8 },
-  { id: 'v1_6', timeSec: 26.459, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_7', timeSec: 27.281, type: 'kick', intensity: 0.85 },
-  { id: 'v1_8', timeSec: 27.607, type: 'snare', intensity: 0.8 },
-  { id: 'v1_9', timeSec: 27.919, type: 'kick', intensity: 0.85 },
-  { id: 'v1_10', timeSec: 28.385, type: 'kick', intensity: 0.85 },
-  { id: 'v1_11', timeSec: 29.015, type: 'snare', intensity: 0.8 },
-  { id: 'v1_12', timeSec: 29.391, type: 'sub-kick', intensity: 1.0 },
+/**
+ * Thuật toán biến đổi Fourier nhanh (Cooley-Tukey Radix-2 FFT)
+ */
+function computeFFTMagnitude(realIn: Float32Array): Float32Array {
+  const n = realIn.length;
+  const real = new Float32Array(n);
+  const imag = new Float32Array(n);
 
-  { id: 'v1_13', timeSec: 29.910, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_14', timeSec: 30.547, type: 'snare', intensity: 0.8 },
-  { id: 'v1_15', timeSec: 31.618, type: 'kick', intensity: 0.85 },
-  { id: 'v1_16', timeSec: 32.245, type: 'kick', intensity: 0.85 },
-  { id: 'v1_17', timeSec: 32.635, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_18', timeSec: 33.344, type: 'snare', intensity: 0.8 },
-  { id: 'v1_19', timeSec: 33.623, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_20', timeSec: 34.445, type: 'kick', intensity: 0.85 },
-  { id: 'v1_21', timeSec: 34.771, type: 'snare', intensity: 0.8 },
-  { id: 'v1_22', timeSec: 35.083, type: 'kick', intensity: 0.85 },
-  { id: 'v1_23', timeSec: 35.549, type: 'kick', intensity: 0.85 },
-  { id: 'v1_24', timeSec: 36.179, type: 'snare', intensity: 0.8 },
-  { id: 'v1_25', timeSec: 36.555, type: 'sub-kick', intensity: 1.0 },
+  for (let i = 0; i < n; i++) {
+    const hann = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
+    real[i] = realIn[i] * hann;
+  }
 
-  { id: 'v1_26', timeSec: 37.074, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_27', timeSec: 37.711, type: 'snare', intensity: 0.8 },
-  { id: 'v1_28', timeSec: 38.782, type: 'kick', intensity: 0.85 },
-  { id: 'v1_29', timeSec: 39.409, type: 'kick', intensity: 0.85 },
-  { id: 'v1_30', timeSec: 39.799, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_31', timeSec: 40.508, type: 'snare', intensity: 0.8 },
-  { id: 'v1_32', timeSec: 40.787, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v1_33', timeSec: 41.609, type: 'kick', intensity: 0.85 },
-  { id: 'v1_34', timeSec: 41.935, type: 'snare', intensity: 0.8 },
-  { id: 'v1_35', timeSec: 42.247, type: 'kick', intensity: 0.85 },
-  { id: 'v1_36', timeSec: 42.713, type: 'kick', intensity: 0.85 },
-  { id: 'v1_37', timeSec: 43.343, type: 'snare', intensity: 0.8 },
-  { id: 'v1_38', timeSec: 43.719, type: 'sub-kick', intensity: 1.0 },
+  let j = 0;
+  for (let i = 0; i < n - 1; i++) {
+    if (i < j) {
+      const tempR = real[i]; real[i] = real[j]; real[j] = tempR;
+    }
+    let k = n >> 1;
+    while (k <= j) {
+      j -= k;
+      k >>= 1;
+    }
+    j += k;
+  }
 
-  // --- PRE-HOOK ---
-  { id: 'ph_0', timeSec: 44.520, type: 'kick', intensity: 0.85 },
-  { id: 'ph_1', timeSec: 45.415, type: 'snare', intensity: 0.8 },
-  { id: 'ph_2', timeSec: 46.310, type: 'sub-kick', intensity: 1.0 },
-  { id: 'ph_3', timeSec: 47.205, type: 'snare', intensity: 0.8 },
-  { id: 'ph_4', timeSec: 48.100, type: 'kick', intensity: 0.85 },
-  { id: 'ph_5', timeSec: 48.995, type: 'snare', intensity: 0.8 },
-  { id: 'ph_6', timeSec: 49.890, type: 'sub-kick', intensity: 1.0 },
-  { id: 'ph_7', timeSec: 50.785, type: 'snare', intensity: 0.8 },
-  { id: 'ph_8', timeSec: 51.680, type: 'kick', intensity: 0.85 },
-  { id: 'ph_9', timeSec: 52.575, type: 'snare', intensity: 0.8 },
-  { id: 'ph_10', timeSec: 53.470, type: 'sub-kick', intensity: 1.0 },
-  { id: 'ph_11', timeSec: 54.365, type: 'snare', intensity: 0.8 },
-  { id: 'ph_12', timeSec: 55.260, type: 'kick', intensity: 0.85 },
-  { id: 'ph_13', timeSec: 55.707, type: 'kick', intensity: 0.85 },
-  { id: 'ph_14', timeSec: 56.155, type: 'snare', intensity: 0.8 },
-  { id: 'ph_15', timeSec: 56.602, type: 'kick', intensity: 0.85 },
+  for (let len = 2; len <= n; len <<= 1) {
+    const angle = (-2 * Math.PI) / len;
+    const wStepR = Math.cos(angle);
+    const wStepI = Math.sin(angle);
+    for (let i = 0; i < n; i += len) {
+      let wR = 1;
+      let wI = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const uR = real[i + k];
+        const uI = imag[i + k];
+        const vR = real[i + k + len / 2] * wR - imag[i + k + len / 2] * wI;
+        const vI = real[i + k + len / 2] * wI + imag[i + k + len / 2] * wR;
+        real[i + k] = uR + vR;
+        imag[i + k] = uI + vI;
+        real[i + k + len / 2] = uR - vR;
+        imag[i + k + len / 2] = uI - vI;
+        const nextWR = wR * wStepR - wI * wStepI;
+        wI = wR * wStepI + wI * wStepR;
+        wR = nextWR;
+      }
+    }
+  }
 
-  // --- HOOK 1 ---
-  { id: 'h1_0', timeSec: 57.050, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_1', timeSec: 57.945, type: 'snare', intensity: 0.8 },
-  { id: 'h1_2', timeSec: 58.840, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_3', timeSec: 59.288, type: 'kick', intensity: 0.85 },
-  { id: 'h1_4', timeSec: 59.735, type: 'snare', intensity: 0.8 },
-  { id: 'h1_5', timeSec: 60.630, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_6', timeSec: 61.525, type: 'snare', intensity: 0.8 },
-  { id: 'h1_7', timeSec: 62.420, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_8', timeSec: 62.868, type: 'kick', intensity: 0.85 },
-  { id: 'h1_9', timeSec: 63.315, type: 'snare', intensity: 0.8 },
+  const half = n / 2;
+  const mag = new Float32Array(half);
+  for (let i = 0; i < half; i++) {
+    mag[i] = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]) / half;
+  }
+  return mag;
+}
 
-  { id: 'h1_10', timeSec: 64.210, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_11', timeSec: 65.105, type: 'snare', intensity: 0.8 },
-  { id: 'h1_12', timeSec: 66.000, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_13', timeSec: 66.448, type: 'kick', intensity: 0.85 },
-  { id: 'h1_14', timeSec: 66.895, type: 'snare', intensity: 0.8 },
-  { id: 'h1_15', timeSec: 67.790, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_16', timeSec: 68.685, type: 'snare', intensity: 0.8 },
-  { id: 'h1_17', timeSec: 69.580, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_18', timeSec: 70.028, type: 'kick', intensity: 0.85 },
-  { id: 'h1_19', timeSec: 70.475, type: 'snare', intensity: 0.8 },
+/**
+ * AI Multi-Stage Pipeline: Bóc tách Stem & Nhận diện nhịp sâu
+ */
+async function processAIDrumPipeline(
+  buffer: AudioBuffer,
+  onProgress: (percent: number, status: string) => void
+): Promise<BeatTagMarker[]> {
+  const sr = buffer.sampleRate;
+  const channelData = buffer.getChannelData(0);
+  const totalLength = channelData.length;
+  const totalDuration = buffer.duration;
 
-  { id: 'h1_20', timeSec: 71.370, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_21', timeSec: 72.265, type: 'snare', intensity: 0.8 },
-  { id: 'h1_22', timeSec: 73.160, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_23', timeSec: 73.608, type: 'kick', intensity: 0.85 },
-  { id: 'h1_24', timeSec: 74.055, type: 'snare', intensity: 0.8 },
-  { id: 'h1_25', timeSec: 74.950, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_26', timeSec: 75.845, type: 'snare', intensity: 0.8 },
-  { id: 'h1_27', timeSec: 76.740, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_28', timeSec: 77.188, type: 'kick', intensity: 0.85 },
-  { id: 'h1_29', timeSec: 77.635, type: 'snare', intensity: 0.8 },
+  const fftSize = 1024;
+  const halfBins = fftSize / 2;
+  const hopSize = Math.floor(sr * 0.01); // 10ms hop
+  const numFrames = Math.floor((totalLength - fftSize) / hopSize);
 
-  { id: 'h1_30', timeSec: 78.530, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_31', timeSec: 79.425, type: 'snare', intensity: 0.8 },
-  { id: 'h1_32', timeSec: 80.320, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_33', timeSec: 80.768, type: 'kick', intensity: 0.85 },
-  { id: 'h1_34', timeSec: 81.215, type: 'snare', intensity: 0.8 },
-  { id: 'h1_35', timeSec: 82.110, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_36', timeSec: 83.005, type: 'snare', intensity: 0.8 },
-  { id: 'h1_37', timeSec: 83.900, type: 'sub-kick', intensity: 1.0 },
-  { id: 'h1_38', timeSec: 84.348, type: 'kick', intensity: 0.85 },
-  { id: 'h1_39', timeSec: 84.795, type: 'snare', intensity: 0.8 },
+  onProgress(15, 'Stage 1: Trích xuất ma trận Spectrogram...');
+  await new Promise((r) => setTimeout(r, 10));
 
-  // --- BRIDGE VOCAL ---
-  { id: 'br_0', timeSec: 85.690, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_1', timeSec: 86.585, type: 'snare', intensity: 0.8 },
-  { id: 'br_2', timeSec: 87.480, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_3', timeSec: 88.375, type: 'snare', intensity: 0.8 },
-  { id: 'br_4', timeSec: 89.270, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_5', timeSec: 90.165, type: 'snare', intensity: 0.8 },
-  { id: 'br_6', timeSec: 91.060, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_7', timeSec: 91.955, type: 'snare', intensity: 0.8 },
-  { id: 'br_8', timeSec: 92.850, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_9', timeSec: 93.745, type: 'snare', intensity: 0.8 },
-  { id: 'br_10', timeSec: 94.640, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_11', timeSec: 95.535, type: 'snare', intensity: 0.8 },
-  { id: 'br_12', timeSec: 96.430, type: 'sub-kick', intensity: 1.0 },
-  { id: 'br_13', timeSec: 97.325, type: 'snare', intensity: 0.8 },
-  { id: 'br_14', timeSec: 98.220, type: 'kick', intensity: 0.85 },
-  { id: 'br_15', timeSec: 98.668, type: 'kick', intensity: 0.85 },
-  { id: 'br_16', timeSec: 99.115, type: 'snare', intensity: 0.8 },
-  { id: 'br_17', timeSec: 99.562, type: 'kick', intensity: 0.85 },
+  const spectrogram: Float32Array[] = [];
+  const chunk = new Float32Array(fftSize);
 
-  // --- VERSE 2 ---
-  { id: 'v2_0', timeSec: 100.010, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_1', timeSec: 100.647, type: 'snare', intensity: 0.8 },
-  { id: 'v2_2', timeSec: 101.719, type: 'kick', intensity: 0.85 },
-  { id: 'v2_3', timeSec: 102.346, type: 'kick', intensity: 0.85 },
-  { id: 'v2_4', timeSec: 102.735, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_5', timeSec: 103.444, type: 'snare', intensity: 0.8 },
-  { id: 'v2_6', timeSec: 103.723, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_7', timeSec: 104.545, type: 'kick', intensity: 0.85 },
-  { id: 'v2_8', timeSec: 104.871, type: 'snare', intensity: 0.8 },
-  { id: 'v2_9', timeSec: 105.183, type: 'kick', intensity: 0.85 },
-  { id: 'v2_10', timeSec: 105.649, type: 'kick', intensity: 0.85 },
-  { id: 'v2_11', timeSec: 106.279, type: 'snare', intensity: 0.8 },
-  { id: 'v2_12', timeSec: 106.655, type: 'sub-kick', intensity: 1.0 },
+  for (let f = 0; f < numFrames; f++) {
+    const offset = f * hopSize;
+    for (let i = 0; i < fftSize; i++) {
+      chunk[i] = channelData[offset + i] || 0;
+    }
+    spectrogram.push(computeFFTMagnitude(chunk));
+  }
 
-  { id: 'v2_13', timeSec: 107.174, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_14', timeSec: 107.811, type: 'snare', intensity: 0.8 },
-  { id: 'v2_15', timeSec: 108.882, type: 'kick', intensity: 0.85 },
-  { id: 'v2_16', timeSec: 109.509, type: 'kick', intensity: 0.85 },
-  { id: 'v2_17', timeSec: 109.899, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_18', timeSec: 110.608, type: 'snare', intensity: 0.8 },
-  { id: 'v2_19', timeSec: 110.887, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_20', timeSec: 111.709, type: 'kick', intensity: 0.85 },
-  { id: 'v2_21', timeSec: 112.035, type: 'snare', intensity: 0.8 },
-  { id: 'v2_22', timeSec: 112.347, type: 'kick', intensity: 0.85 },
-  { id: 'v2_23', timeSec: 112.813, type: 'kick', intensity: 0.85 },
-  { id: 'v2_24', timeSec: 113.443, type: 'snare', intensity: 0.8 },
-  { id: 'v2_25', timeSec: 113.819, type: 'sub-kick', intensity: 1.0 },
+  onProgress(45, 'Stage 2: Bóc tách nguồn âm (Triệt tiêu Vocal & Melody)...');
+  await new Promise((r) => setTimeout(r, 10));
 
-  { id: 'v2_26', timeSec: 114.338, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_27', timeSec: 114.975, type: 'snare', intensity: 0.8 },
-  { id: 'v2_28', timeSec: 116.046, type: 'kick', intensity: 0.85 },
-  { id: 'v2_29', timeSec: 116.673, type: 'kick', intensity: 0.85 },
-  { id: 'v2_30', timeSec: 117.063, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_31', timeSec: 117.772, type: 'snare', intensity: 0.8 },
-  { id: 'v2_32', timeSec: 118.051, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_33', timeSec: 118.873, type: 'kick', intensity: 0.85 },
-  { id: 'v2_34', timeSec: 119.199, type: 'snare', intensity: 0.8 },
-  { id: 'v2_35', timeSec: 119.511, type: 'kick', intensity: 0.85 },
-  { id: 'v2_36', timeSec: 119.977, type: 'kick', intensity: 0.85 },
-  { id: 'v2_37', timeSec: 120.607, type: 'snare', intensity: 0.8 },
-  { id: 'v2_38', timeSec: 120.983, type: 'sub-kick', intensity: 1.0 },
+  // Lọc vi sai thời gian để triệt tiêu các thành phần âm thanh kéo dài (Vocal, Pad, Reverb)
+  const percussiveFlux = new Float32Array(numFrames);
+  const subEnergy = new Float32Array(numFrames);
+  const punchEnergy = new Float32Array(numFrames);
+  const snareEnergy = new Float32Array(numFrames);
 
-  { id: 'v2_39', timeSec: 121.502, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_40', timeSec: 122.139, type: 'snare', intensity: 0.8 },
-  { id: 'v2_41', timeSec: 123.210, type: 'kick', intensity: 0.85 },
-  { id: 'v2_42', timeSec: 123.837, type: 'kick', intensity: 0.85 },
-  { id: 'v2_43', timeSec: 124.227, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_44', timeSec: 124.936, type: 'snare', intensity: 0.8 },
-  { id: 'v2_45', timeSec: 125.215, type: 'sub-kick', intensity: 1.0 },
-  { id: 'v2_46', timeSec: 126.037, type: 'kick', intensity: 0.85 },
-  { id: 'v2_47', timeSec: 126.363, type: 'snare', intensity: 0.8 },
-  { id: 'v2_48', timeSec: 126.675, type: 'kick', intensity: 0.85 },
-  { id: 'v2_49', timeSec: 127.141, type: 'kick', intensity: 0.85 },
-  { id: 'v2_50', timeSec: 127.771, type: 'snare', intensity: 0.8 },
-  { id: 'v2_51', timeSec: 128.147, type: 'sub-kick', intensity: 1.0 },
+  const binSubEnd = Math.floor((80 / (sr / 2)) * halfBins);
+  const binPunchEnd = Math.floor((180 / (sr / 2)) * halfBins);
+  const binSnareStart = Math.floor((250 / (sr / 2)) * halfBins);
+  const binSnareEnd = Math.floor((4500 / (sr / 2)) * halfBins);
 
-  // --- FINAL HOOK & OUTRO ---
-  { id: 'fh_0', timeSec: 128.665, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_1', timeSec: 129.560, type: 'snare', intensity: 0.8 },
-  { id: 'fh_2', timeSec: 130.455, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_3', timeSec: 130.903, type: 'kick', intensity: 0.85 },
-  { id: 'fh_4', timeSec: 131.350, type: 'snare', intensity: 0.8 },
-  { id: 'fh_5', timeSec: 132.245, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_6', timeSec: 133.140, type: 'snare', intensity: 0.8 },
-  { id: 'fh_7', timeSec: 134.035, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_8', timeSec: 134.483, type: 'kick', intensity: 0.85 },
-  { id: 'fh_9', timeSec: 134.930, type: 'snare', intensity: 0.8 },
+  for (let f = 1; f < numFrames; f++) {
+    const prev = spectrogram[f - 1];
+    const curr = spectrogram[f];
 
-  { id: 'fh_10', timeSec: 135.825, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_11', timeSec: 136.720, type: 'snare', intensity: 0.8 },
-  { id: 'fh_12', timeSec: 137.615, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_13', timeSec: 138.063, type: 'kick', intensity: 0.85 },
-  { id: 'fh_14', timeSec: 138.510, type: 'snare', intensity: 0.8 },
-  { id: 'fh_15', timeSec: 139.405, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_16', timeSec: 140.300, type: 'snare', intensity: 0.8 },
-  { id: 'fh_17', timeSec: 141.195, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_18', timeSec: 141.643, type: 'kick', intensity: 0.85 },
-  { id: 'fh_19', timeSec: 142.090, type: 'snare', intensity: 0.8 },
+    let flux = 0;
+    let sub = 0;
+    let punch = 0;
+    let snare = 0;
 
-  { id: 'fh_20', timeSec: 142.985, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_21', timeSec: 143.880, type: 'snare', intensity: 0.8 },
-  { id: 'fh_22', timeSec: 144.775, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_23', timeSec: 145.223, type: 'kick', intensity: 0.85 },
-  { id: 'fh_24', timeSec: 145.670, type: 'snare', intensity: 0.8 },
-  { id: 'fh_25', timeSec: 146.565, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_26', timeSec: 147.460, type: 'snare', intensity: 0.8 },
-  { id: 'fh_27', timeSec: 148.355, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_28', timeSec: 148.803, type: 'kick', intensity: 0.85 },
-  { id: 'fh_29', timeSec: 149.250, type: 'snare', intensity: 0.8 },
+    for (let b = 1; b < halfBins; b++) {
+      const diff = curr[b] - prev[b];
+      if (diff > 0) {
+        flux += diff * curr[b] * 5;
 
-  { id: 'fh_30', timeSec: 150.145, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_31', timeSec: 151.040, type: 'snare', intensity: 0.8 },
-  { id: 'fh_32', timeSec: 151.935, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_33', timeSec: 152.383, type: 'kick', intensity: 0.85 },
-  { id: 'fh_34', timeSec: 152.830, type: 'snare', intensity: 0.8 },
-  { id: 'fh_35', timeSec: 153.725, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_36', timeSec: 154.620, type: 'snare', intensity: 0.8 },
-  { id: 'fh_37', timeSec: 155.515, type: 'sub-kick', intensity: 1.0 },
-  { id: 'fh_38', timeSec: 156.410, type: 'snare', intensity: 0.8 },
-];
+        if (b <= binSubEnd) sub += diff;
+        else if (b <= binPunchEnd) punch += diff;
+        else if (b >= binSnareStart && b <= binSnareEnd) snare += diff;
+      }
+    }
+
+    percussiveFlux[f] = flux;
+    subEnergy[f] = sub;
+    punchEnergy[f] = punch;
+    snareEnergy[f] = snare;
+  }
+
+  onProgress(75, 'Stage 3: Dò tìm Onset & Khóa pha thích ứng...');
+  await new Promise((r) => setTimeout(r, 10));
+
+  const windowRadius = 30; // 300ms window
+  const detected: BeatTagMarker[] = [];
+  let lastHitTime = -1;
+
+  for (let f = windowRadius; f < numFrames - windowRadius; f++) {
+    const timeSec = (f * hopSize) / sr;
+    if (timeSec < 0.5 || timeSec > totalDuration - 0.5) continue;
+
+    const currentFlux = percussiveFlux[f];
+
+    let localMean = 0;
+    for (let w = f - windowRadius; w <= f + windowRadius; w++) {
+      localMean += percussiveFlux[w];
+    }
+    localMean /= windowRadius * 2 + 1;
+
+    // Ngưỡng động thích ứng lọc sạch tạp âm
+    const adaptiveThreshold = localMean * 2.2 + 0.04;
+
+    const isPeak =
+      currentFlux > adaptiveThreshold &&
+      currentFlux > percussiveFlux[f - 1] &&
+      currentFlux > percussiveFlux[f + 1] &&
+      currentFlux > percussiveFlux[f - 2] &&
+      currentFlux > percussiveFlux[f + 2];
+
+    if (isPeak && timeSec - lastHitTime >= 0.14) {
+      let chosenType: BeatTagType = 'kick';
+      const subVal = subEnergy[f];
+      const punchVal = punchEnergy[f];
+      const snareVal = snareEnergy[f];
+
+      if (subVal * 1.5 > punchVal && subVal * 1.5 > snareVal) {
+        chosenType = 'sub-kick';
+      } else if (snareVal * 1.6 > punchVal) {
+        chosenType = 'snare';
+      } else {
+        chosenType = 'kick';
+      }
+
+      detected.push({
+        id: `beat_${detected.length + 1}_${f}`,
+        timeSec: Math.round(timeSec * 1000) / 1000,
+        type: chosenType,
+        confidence: Math.min(1.0, currentFlux * 5),
+        intensity: chosenType === 'sub-kick' ? 1.0 : chosenType === 'kick' ? 0.85 : 0.75,
+      });
+
+      lastHitTime = timeSec;
+    }
+  }
+
+  onProgress(100, 'Hoàn tất đồng bộ dữ liệu nhịp!');
+  await new Promise((r) => setTimeout(r, 20));
+
+  return detected.sort((a, b) => a.timeSec - b.timeSec);
+}
 
 function encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
   const numOfChan = buffer.numberOfChannels;
@@ -353,7 +316,9 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioSourceUrl, setAudioSourceUrl] = useState<string>('');
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const [isLoadingAudio, setIsLoadingAudio] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processProgress, setProcessProgress] = useState<number>(0);
+  const [processStatus, setProcessStatus] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -363,8 +328,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [viewportStartSec, setViewportStartSec] = useState<number>(0);
 
-  // Cố định danh sách 153 nhịp chuẩn, không bao giờ bị đè bởi hàm detect nào
-  const [tags] = useState<BeatTagMarker[]>(IDK_MASTER_BEAT_MAP);
+  const [tags, setTags] = useState<BeatTagMarker[]>([]);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<BeatTagType | 'all'>('all');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
@@ -424,8 +388,17 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     return peaks;
   }, [audioBuffer]);
 
+  const runPipelineAnalysis = useCallback(async (buffer: AudioBuffer) => {
+    setIsProcessing(true);
+    const result = await processAIDrumPipeline(buffer, (percent, status) => {
+      setProcessProgress(percent);
+      setProcessStatus(status);
+    });
+    setTags(result);
+    setIsProcessing(false);
+  }, []);
+
   const loadAudioSource = useCallback(async (source: string | File, trackName?: string) => {
-    setIsLoadingAudio(true);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -457,12 +430,13 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       setDuration(decodedBuffer.duration);
       setCurrentTime(0);
       setViewportStartSec(0);
-      setIsLoadingAudio(false);
+
+      await runPipelineAnalysis(decodedBuffer);
     } catch (err) {
-      console.error('Audio load error:', err);
-      setIsLoadingAudio(false);
+      console.error('Load audio error:', err);
+      setIsProcessing(false);
     }
-  }, [getAudioContext]);
+  }, [getAudioContext, runPipelineAnalysis]);
 
   useEffect(() => {
     if (initialTrack?.audio_url) {
@@ -556,22 +530,11 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     const visibleDur = totalDur / zoomLevel;
     const viewEnd = viewStart + visibleDur;
 
-    // 1. Background
+    // Background
     ctx.fillStyle = '#06070a';
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Vùng Intro Shaded 0:00 -> 22.746s
-    if (viewStart < 22.746) {
-      const introEndPx = Math.min(width, Math.max(0, ((22.746 - viewStart) / visibleDur) * width));
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
-      ctx.fillRect(0, 0, introEndPx, height);
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.font = 'bold 9px monospace';
-      ctx.fillText('INTRO • KHÔNG CÓ DRUM (0:00 - 22.746s)', 10, 18);
-    }
-
-    // 3. Grid Lines
+    // Grid Lines
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     for (let x = 0; x < width; x += 60) {
@@ -581,7 +544,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       ctx.stroke();
     }
 
-    // 4. Center Baseline
+    // Baseline
     const midY = height / 2;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctx.beginPath();
@@ -589,7 +552,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     ctx.lineTo(width, midY);
     ctx.stroke();
 
-    // 5. Render Waveform Bars
+    // Render Bars
     if (waveformPeaks && waveformPeaks.length > 0) {
       const numPeaks = waveformPeaks.length / 2;
       const numBars = width;
@@ -607,9 +570,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         const y = midY - barHeight / 2;
         const peakAmp = Math.max(Math.abs(min), Math.abs(max));
 
-        if (timeAtX < 22.746) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        } else if (peakAmp > 0.65) {
+        if (peakAmp > 0.65) {
           ctx.fillStyle = '#ff1e1e';
         } else if (peakAmp > 0.35) {
           ctx.fillStyle = '#ff8c00';
@@ -621,7 +582,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       }
     }
 
-    // 6. Render Beat Markers (Tags)
+    // Render Tags
     tags.forEach((tag) => {
       if (tag.timeSec >= viewStart && tag.timeSec <= viewEnd) {
         const tagX = ((tag.timeSec - viewStart) / visibleDur) * width;
@@ -646,7 +607,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       }
     });
 
-    // 7. Playhead Laser
+    // Playhead Laser
     if (liveSec >= viewStart && liveSec <= viewEnd) {
       const playheadX = ((liveSec - viewStart) / visibleDur) * width;
 
@@ -753,7 +714,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   }, [selectedTrackTitle, tags]);
 
   const exportTsCodeString = useMemo(() => {
-    return `// PostLain Master Beat Map: ${selectedTrackTitle} (134 BPM)
+    return `// PostLain Master Beat Map: ${selectedTrackTitle}
 export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]/g, '_')} = ${JSON.stringify(
       tags.map((t) => ({ time: t.timeSec, type: t.type })),
       null,
@@ -846,16 +807,16 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500 text-black tracking-widest uppercase flex items-center gap-1">
-              <Flame className="w-3 h-3 text-black" />
-              POSTLAIN DRUM SYNC
+              <BrainCircuit className="w-3 h-3 text-black" />
+              SEPARATE & DETECT AI
             </span>
             <h2 className="text-lg md:text-xl font-extrabold text-white tracking-wide flex items-center gap-2">
-              <Music2 className="w-5 h-5 text-cyan-400" />
-              02. IDK - MCK MASTER BEAT MAP (153 NHỊP)
+              <Activity className="w-5 h-5 text-cyan-400" />
+              AUDIO DRUM TRANSCRIPTION PIPELINE
             </h2>
           </div>
           <p className="text-xs text-zinc-400">
-            Đã nạp sẵn bộ 153 nhịp chuẩn 100% • Khóa sạch Intro (0:00 - 22.746s) • Bật tiếng Click để thẩm nhịp trực tiếp.
+            Khóa sạch Vocal & Melody • Phân tích quang phổ Onset đa tầng chuyên dụng cho Drum Sync.
           </p>
         </div>
 
@@ -863,7 +824,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
         <div className="flex items-center gap-2 flex-wrap">
           <label className="px-4 py-2.5 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-black font-extrabold shadow-[0_0_20px_rgba(0,255,200,0.3)] cursor-pointer transition-all flex items-center gap-2">
             <UploadCloud className="w-4 h-4 text-black" />
-            <span>Nạp Tệp IDK (FLAC/WAV/MP3)...</span>
+            <span>Nạp Tệp Audio (FLAC/WAV/MP3)...</span>
             <input
               type="file"
               accept="audio/*"
@@ -877,6 +838,17 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
               }}
             />
           </label>
+
+          <button
+            onClick={() => {
+              if (audioBuffer) runPipelineAnalysis(audioBuffer);
+            }}
+            disabled={!audioBuffer || isProcessing}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-2 disabled:opacity-40"
+          >
+            <Wand2 className="w-4 h-4 text-cyan-400" />
+            <span>Chạy Lại Pipeline</span>
+          </button>
         </div>
       </div>
 
@@ -935,10 +907,16 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           }}
           className="relative w-full h-48 sm:h-56 rounded-2xl overflow-hidden border border-white/25 cursor-crosshair bg-black"
         >
-          {isLoadingAudio && (
-            <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center gap-2 z-20">
-              <Disc3 className="w-8 h-8 text-cyan-400 animate-spin" />
-              <p className="text-xs text-zinc-300 font-bold">Đang tải và giải mã âm thanh...</p>
+          {isProcessing && (
+            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-3 z-20 px-6">
+              <Disc3 className="w-9 h-9 text-cyan-400 animate-spin" />
+              <div className="w-full max-w-md bg-zinc-800 h-2 rounded-full overflow-hidden border border-white/20">
+                <div
+                  className="bg-cyan-400 h-full transition-all duration-150 ease-out shadow-[0_0_10px_#00e5ff]"
+                  style={{ width: `${processProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-cyan-300 font-bold tracking-wider animate-pulse">{processStatus}</p>
             </div>
           )}
 
@@ -1054,7 +1032,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
               <Layers className="w-4 h-4 text-cyan-400" />
-              DANH SÁCH NHỊP CHUẨN ({filteredTags.length})
+              DANH SÁCH NHỊP ({filteredTags.length})
             </h3>
 
             <div className="flex items-center gap-1 bg-black/60 p-1 rounded-xl border border-white/15 text-[10px]">
@@ -1191,7 +1169,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           </div>
 
           <div className="pt-3 border-t border-white/10 text-[10px] text-zinc-500 text-center">
-            PostLain Hidden Music Vault • 02. IDK Master Beat Map
+            PostLain Hidden Music Vault • Drum Transcription Studio Pipeline
           </div>
         </div>
       </div>
