@@ -20,6 +20,9 @@
 4. **Kỷ Luật Import Lucide Icons**:
    - Mọi icon JSX `<IconName ... />` sử dụng trong component BẮT BUỘC phải được khai báo trong `import { IconName, ... } from 'lucide-react'`.
    - Thiếu import icon sẽ gây lỗi sập toàn bộ ứng dụng (`ReferenceError: IconName is not defined`).
+5. **Đồng Nhất Môi Trường Local & GitHub Actions (Cross-Platform CI/CD Parity)**:
+   - Môi trường phát triển cục bộ (Windows x64) và máy chủ GitHub Actions CI/CD (`ubuntu-latest` / Linux x64) phải luôn tương thích 100%.
+   - **TUYỆT ĐỐI KHÔNG** khai báo các gói binary ràng buộc hệ điều hành (ví dụ `@next/swc-win32-*`, `@next/swc-darwin-*`) trong `dependencies`/`devDependencies` của `package.json` để tránh lỗi `EBADPLATFORM` trên máy chủ Linux.
 
 ---
 

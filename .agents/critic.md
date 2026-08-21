@@ -21,18 +21,20 @@ Mỗi khi nhận một Kế hoạch (Plan), Yêu cầu tính năng (Feature Requ
 3. **Cross-Origin MediaElementSource Tainting**:
    - Không được gắn `createMediaElementSource(audio)` trực tiếp lên stream link ngoài không có header CORS vì sẽ gây lỗi im lặng (Silence/Muted Audio) hoặc khóa Canvas 2D/WebGL (`The canvas has been tainted`).
 
-### 📱 Trụ Cột 2: Cross-Platform Mobile Traps (iOS vs Android)
-1. **Web API Uniformity (Safari vs Chrome)**:
+### 📱 Trụ Cột 2: Cross-Platform Mobile & CI/CD Traps
+1. **CI/CD Platform Parity (Windows Local vs Ubuntu Linux Runner)**:
+   - Kiểm tra `package.json` không chứa bất kỳ binary package nào khóa theo OS (`@next/swc-win32-*`, `@next/swc-darwin-*`) gây lỗi `EBADPLATFORM` khi GitHub Actions chạy trên `ubuntu-latest`.
+2. **Web API Uniformity (Safari vs Chrome)**:
    - `navigator.vibrate` KHÔNG được hỗ trợ trên iOS Safari. Mọi lệnh gọi rung haptic PHẢI bọc điều kiện an toàn:
      ```typescript
      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
        navigator.vibrate(pattern);
      }
      ```
-2. **Viewport Height & Keyboard Resize Trap**:
+3. **Viewport Height & Keyboard Resize Trap**:
    - Tuyệt đối cấm sử dụng `100vh` cho layout toàn màn hình vì thanh địa chỉ Safari/Chrome sẽ đè lên Bottom Player Bar. BẮT BUỘC dùng `min-h-[100dvh]` hoặc CSS variable `calc(var(--vh, 1vh) * 100)`.
    - Bổ sung `overscroll-behavior-y: none;` để chống hiện tượng nảy trang (rubber band bounce) trên iOS.
-3. **Lockscreen MediaSession API**:
+4. **Lockscreen MediaSession API**:
    - Khi chuyển bài hoặc cập nhật trạng thái, phải khai báo đầy đủ các action handlers (`play`, `pause`, `previoustrack`, `nexttrack`, `seekto`) và artwork kích thước $512\times512$ JPG/PNG để hiển thị đẹp trên màn hình khóa.
 
 ### ⚡ Trụ Cột 3: React Re-render & 120 FPS Performance Leaks

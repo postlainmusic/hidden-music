@@ -16,7 +16,8 @@ Agent chuyên trách phản biện độc lập mọi Plan, Feature Request, ho�
    - Kiểm tra Mobile Autoplay policy (Unlock `AudioContext` khi có user gesture).
    - Kiểm tra Cross-Origin Canvas Tainting & MediaElementAudioSourceNode detachment.
 
-2. **Mobile Traps & Cross-Platform Invariants**:
+2. **Mobile Traps & Cross-Platform CI/CD Invariants**:
+   - Kiểm tra tương thích CI/CD giữa Windows local và Linux `ubuntu-latest` (không khai báo binary package cứng như `@next/swc-win32-*` trong `package.json`).
    - Kiểm tra `'vibrate' in navigator` cho Safari iOS.
    - Kiểm tra `100dvh` thay vì `100vh` để tránh lỗi thanh điều hướng đè UI.
    - Kiểm tra Lockscreen MediaSession API handlers & 512x512 artwork.
