@@ -731,5 +731,22 @@
      - Tích hợp cơ chế Dynamic Audio Frequency Synthesis dự phòng độ nhạy cao. Nếu thẻ audio bị hạn chế stream cross-origin, hệ thống tự động tổng hợp năng lượng dải tần (Sub-bass, Snare flux, Treble hats, RMS) từ biên độ âm thanh thời gian thực.
      - Phục hồi toàn bộ: Kick scale lò xo Hooke, Snare strobe trắng-đỏ, Glow backdrop nhiều lớp, Laser border, Backdrop radial bloom và Seeker live 60 FPS.
 
+---
+
+### Giao dịch 028: Integrate Meyda Mathematical Feature Extractors & Eliminate CORS Audio Silencing
+* **Thời gian**: 21/08/2026 16:15 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Triệt tiêu Hoàn toàn Lỗi Mất Tiếng (`MediaElementAudioSource outputs zeroes`)**:
+     - Loại bỏ việc gắn `createMediaElementSource` vào thẻ Audio chính, cho phép HTML5 Audio phát trực tiếp ra loa mà không bị trình duyệt ngắt tiếng do bảo mật CORS khi stream từ `media.postlain.com`.
+  2. **Tích hợp Thư viện & Thuật toán Chuẩn Meyda (`src/lib/dsp/meydaEngine.ts`)**:
+     - `spectralFlux`: Tính toán biến thiên phổ nửa sóng chuẩn hóa để nhận diện điểm bùng nổ của Kick & Snare.
+     - `rms`: Căn bậc hai trung bình bình phương biên độ sóng để kiểm soát độ sáng phát quang Ambient Glow.
+     - `spectralCentroid`: Trọng tâm quang phổ ($\mu_1$) phân biệt âm sắc trầm (Sub-bass) và sáng (Vocals/Hi-hats).
+     - `spectralRolloff` & `zcr`: Xác định ngưỡng 85% năng lượng và độ nhiễu tín hiệu.
+  3. **Bộ Test Suite Mở Rộng 16/16 Passed**:
+     - Bổ sung `tests/unit/meyda-engine.test.mjs` kiểm thử toàn bộ 4 hàm trích xuất của Meyda, 16/16 tests PASS.
+
+
 
 

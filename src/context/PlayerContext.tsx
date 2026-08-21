@@ -184,30 +184,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const initAudioGraph = useCallback(() => {
-    if (typeof window === 'undefined' || !audioRef.current) return;
-    try {
-      if (!audioContextRef.current) {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          audioContextRef.current = new AudioCtx();
-        }
-      }
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-      if (audioContextRef.current && !analyserRef.current) {
-        const analyser = audioContextRef.current.createAnalyser();
-        analyser.fftSize = 1024;
-        analyser.smoothingTimeConstant = 0.8;
-        analyserRef.current = analyser;
-
-        try {
-          const source = audioContextRef.current.createMediaElementSource(audioRef.current);
-          source.connect(analyser);
-          analyser.connect(audioContextRef.current.destination);
-        } catch {}
-      }
-    } catch {}
+    // Keep HTML5 audio directly connected to native hardware output (LL-04 / REG-07)
+    // Avoid createMediaElementSource to prevent CORS audio silencing
   }, []);
 
   const subscribeToTimeUpdate = useCallback((callback: (timeSec: number) => void) => {

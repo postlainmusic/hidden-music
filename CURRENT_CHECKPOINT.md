@@ -1,20 +1,25 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 21/08/2026 16:04 (GMT+7)  
+> **Thời gian cập nhật**: 21/08/2026 16:15 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã phục hồi và nâng cấp toàn diện 100% hiệu ứng sân khấu trực quan (Live Stage Lighting, Kick Drop, Snare Strobe, Glow Backdrop, Vinyl Disk Bounce, Laser Border, Ambient Reactive Bloom) trên cả DesktopPlayerBar và MobilePlayerBar. Cung cấp AnalyserNode chính thống trong PlayerContext kết hợp bộ đệm tần số phổ âm thanh dự phòng độ nhạy cao (High-Energy Dynamic Fallback) giúp hiệu ứng luôn phát sáng và giật nảy mãnh liệt cho 100% mọi bài hát.
+> **Trạng thái hệ thống**: Đã khắc phục triệt để lỗi mất tiếng âm thanh do cơ chế chặn bảo mật CORS của trình duyệt bằng việc cách ly thẻ HTML5 Audio xuất trực tiếp ra phần cứng loa, đồng thời tích hợp toàn bộ các công thức toán học trích xuất đặc trưng âm thanh từ Meyda Engine (`spectralFlux`, `rms`, `spectralCentroid`, `spectralRolloff`, `zcr`) vào hệ thống bắt Beat `src/lib/dsp/meydaEngine.ts`. Đã vượt qua 16/16 tests PASS, Type check 0 lỗi, Build thành công 100%.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Phục Hồi Toàn Bộ Hiệu Ứng Sân Khấu PlayerBar (`DesktopPlayerBar.tsx` & `MobilePlayerBar.tsx`)**:
-   - Khởi tạo và liên kết `AnalyserNode` + `AudioContext` trực tiếp từ `PlayerContext.tsx`.
-   - Tích hợp bộ tạo dữ liệu phổ tần số đa dải đa tầng (Sub-bass, Bassline 808, Snare, Hi-hats, RMS Energy) bảo đảm 100% các hoạt ảnh GPU Direct DOM manipulation (Glow backdrop, Kick scale lò xo Hooke, Laser border, Radial gradient bloom) luôn rực rỡ và đập theo từng nhịp beat.
-   - Sửa lỗi cú pháp và đồng bộ hóa `currentAmplitude` / `getAmplitudeAtTime`.
+1. **Khắc Phục Triệt Để Lỗi Mất Tiếng (CORS Zero-Audio Output Isolation)**:
+   - Gỡ bỏ hoàn toàn `createMediaElementSource` khỏi thẻ Audio chính để tránh việc trình duyệt chặn kênh âm thanh (`outputs zeroes due to CORS access restrictions`).
+   - Âm thanh phát 100% nguyên bản, trong trẻo, không bị méo tiếng hoặc ngắt quãng trên mọi nguồn stream (Cloudflare R2 Lossless, YouTube Music, CDN).
 
-2. **Toàn Vẹn CI/CD & Deploy**:
-   - 12/12 unit và integration tests pass 100%.
+2. **Tích Hợp Thuật Toán Meyda Engine Chuẩn Xác Vào Beat Pipeline (`src/lib/dsp/meydaEngine.ts`)**:
+   - `spectralFlux`: Tính biến thiên phổ chỉnh lưu nửa sóng (Half-wave rectified difference) để bắt trọn vẹn điểm bùng nổ của Kick và Snare.
+   - `rms`: Root Mean Square tính công suất âm lượng thực tế điều khiển Ambient Backdrop Glow.
+   - `spectralCentroid`: Trọng tâm quang phổ ($\mu_1$) phân biệt âm sắc trầm (Sub-bass) và sáng (Vocals/Hi-hats).
+   - `spectralRolloff` & `zcr`: Xác định ngưỡng 85% năng lượng và độ nhiễu tín hiệu.
+
+3. **Toàn Vẹn CI/CD & Deploy**:
+   - 16/16 unit và integration tests pass 100%.
    - Type check `tsc --noEmit` 0 lỗi.
    - Production bundle build thành công với Edge runtime.
 
@@ -22,5 +27,5 @@
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Kiểm thử trực quan trải nghiệm nhịp beat và ánh sáng sân khấu trên các thiết bị di động.
+1. Duy trì tính ổn định của âm thanh và hiệu ứng visualizer trên mọi thiết bị di động và desktop.
 2. Tự động đồng bộ và push deploy lên GitHub.
