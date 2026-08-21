@@ -13,10 +13,6 @@
     "test": "node --test tests/unit/audio-dsp.test.mjs tests/unit/safe-guards.test.mjs tests/unit/beat-detection.test.mjs tests/unit/lrc-parser.test.mjs tests/integration/stream-endpoints.test.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/cli": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
-    "@next/swc-win32-x64-msvc": "^16.3.1",
     "@react-three/drei": "^9.105.4",
     "@react-three/fiber": "^8.16.2",
     "@supabase/ssr": "^0.3.0",
