@@ -142,7 +142,7 @@ function encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
   return new Blob([out], { type: 'audio/wav' });
 }
 
-export default function AdminBeatTagger({ albums, onExportTags }: AdminBeatTaggerProps) {
+export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: AdminBeatTaggerProps) {
   // Flatten all tracks from albums
   const allTracks = useMemo(() => {
     const list: { albumTitle: string; track: TrackItem }[] = [];
