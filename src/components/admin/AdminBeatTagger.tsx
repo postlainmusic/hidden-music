@@ -50,6 +50,7 @@ export interface BeatTagMarker {
 
 interface AdminBeatTaggerProps {
   albums: Album[];
+  initialTrack?: TrackItem | null;
   onExportTags?: (trackTitle: string, tags: BeatTagMarker[]) => void;
 }
 
@@ -335,10 +336,19 @@ export default function AdminBeatTagger({ albums, onExportTags }: AdminBeatTagge
     }
   }, [getAudioContext, synthesizeDemoTrackBuffer, selectedTrackTitle]);
 
-  // Load Preset IDK on initial mount
+  // Load initialTrack or Preset IDK on initial mount
   useEffect(() => {
+    if (initialTrack) {
+      setSelectedTrackId(initialTrack.id);
+      setSelectedTrackTitle(initialTrack.title);
+      const url = initialTrack.audio_url ? getMediaCdnUrl(initialTrack.audio_url) : '';
+      if (url) {
+        loadAndDecodeAudio(url);
+        return;
+      }
+    }
     loadAndDecodeAudio('preset:idk');
-  }, [loadAndDecodeAudio]);
+  }, [initialTrack, loadAndDecodeAudio]);
 
   /**
    * Sound Tick generator for Audible Metronome / Tags

@@ -78,6 +78,7 @@ export default function AdminPage() {
   const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks' | 'users' | 'vouchers' | 'beat-tagger'>('albums');
+  const [selectedBeatTaggerTrack, setSelectedBeatTaggerTrack] = useState<TrackItem | null>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -2177,7 +2178,17 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => {
+                            setSelectedBeatTaggerTrack(t);
+                            setAdminTab('beat-tagger');
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-600 text-red-300 hover:text-white font-extrabold text-[10px] uppercase transition-all flex items-center gap-1 border border-red-500/40 shadow-sm"
+                          title="Gán nhãn Beat & Sóng âm thanh cho bài hát này"
+                        >
+                          <Activity className="w-3 h-3 text-red-400" /> BEAT TAG
+                        </button>
                         <button
                           onClick={() => startEditTrack(t)}
                           className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white text-white hover:text-black font-extrabold text-[10px] uppercase transition-all flex items-center gap-1 border border-white/20"
@@ -2373,6 +2384,7 @@ export default function AdminPage() {
         <div className="max-w-6xl mx-auto relative z-10 animate-fadeIn">
           <AdminBeatTagger
             albums={albums}
+            initialTrack={selectedBeatTaggerTrack}
             onExportTags={(title, exportedTags) => {
               setStatusMsg({
                 type: 'success',
