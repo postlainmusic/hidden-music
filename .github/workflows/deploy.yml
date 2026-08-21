@@ -31,34 +31,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
-      - name: Cache Node Modules & Build Tools
-        id: cache-deps
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            ~/.npm
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json', '**/package.json') }}-v2
-          restore-keys: |
-            ${{ runner.os }}-node-modules-
-
-      - name: Cache Next.js & Vercel Artifacts
+      - name: Restore Next.js cache
         uses: actions/cache@v4
         with:
           path: |
             .next/cache
             .vercel/cache
-          key: ${{ runner.os }}-nextjs-incremental-${{ github.sha }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-incremental-
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
             ${{ runner.os }}-nextjs-
 
       - name: Install dependencies & Build tools
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          npm install --prefer-offline
-          npm install -D @cloudflare/next-on-pages vercel wrangler
+        run: npm install --prefer-offline @cloudflare/next-on-pages vercel wrangler
 
       - name: Build Next.js with Cloudflare Adapter
         run: npx @cloudflare/next-on-pages
