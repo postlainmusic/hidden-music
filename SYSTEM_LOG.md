@@ -28,6 +28,7 @@
 - [Giao dịch 020: Priority Queue Architecture & In-App Cinema Video Modal Engine](#giao-dịch-020-priority-queue-architecture--in-app-cinema-video-modal-engine)
 - [Giao dịch 033: Rebuild 100% Live Waveform-Based Beat Tracking Engine (Zero-Fail Audio Graph)](#giao-dịch-033-rebuild-100-live-waveform-based-beat-tracking-engine-zero-fail-audio-graph)
 - [Giao dịch 034: Create Sub-Agent @agent-audio-tester & Automated Audio Graph Diagnostic Suite](#giao-dịch-034-create-sub-agent-agent-audio-tester--automated-audio-graph-diagnostic-suite)
+- [Giao dịch 035: Integrate Graphify Codebase Knowledge Graph Engine & Intelligence Layer](#giao-dịch-035-integrate-graphify-codebase-knowledge-graph-engine--intelligence-layer)
 
 ---
 
@@ -835,6 +836,22 @@
   4. **Cập nhật CI/CD Test Pipeline**:
      - Tích hợp test chẩn đoán vào `package.json` (`test:unit` & `test`).
      - Đảm bảo 100% tuân thủ Invariants và chuẩn Cross-Platform CI/CD.
+
+---
+
+### Giao dịch 035: Integrate Graphify Codebase Knowledge Graph Engine & Intelligence Layer
+* **Thời gian**: 21/08/2026 19:45 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Tích Hợp Workspace Skill Graphify (`.agents/skills/graphify/SKILL.md`)**:
+     - Áp dụng công nghệ từ repo [Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify).
+     - Định hình cơ chế trích xuất AST xác định (tree-sitter deterministic AST parsing), gom cụm cộng đồng Leiden, phân loại quan hệ `EXTRACTED` vs `INFERRED`.
+     - Cung cấp bộ lệnh điều hành: `graphify .`, `graphify . --update`, `graphify query`, `graphify path`, `graphify explain`, `graphify --wiki`.
+  2. **Khởi Tạo Sub-Agent `@agent-graphify` (`.agents/graphify.md`)**:
+     - Đặc tả năng lực phân tích cấu trúc mã nguồn toàn diện, phát hiện God Nodes, tối ưu hóa mức tiêu thụ token ngữ cảnh (~70x reduction).
+  3. **Cấu hình Quản Lý Tệp (`.gitignore`)**:
+     - Bổ sung `graphify-out/` vào `.gitignore` để lưu trữ an toàn các kết quả phân tích HTML/JSON trên máy cục bộ.
+
 
 
 
