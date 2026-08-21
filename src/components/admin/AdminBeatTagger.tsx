@@ -188,6 +188,9 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const rafIdRef = useRef<number | null>(null);
   const lastTriggeredTagRef = useRef<string | null>(null);
   const blobUrlToRevokeRef = useRef<string | null>(null);
+  const currentTimeRef = useRef<number>(0);
+  const viewportStartSecRef = useRef<number>(0);
+  const timeDisplayRef = useRef<HTMLSpanElement | null>(null);
 
   // Canvas & Overlay Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -541,17 +544,24 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   useEffect(() => {
     const renderLoop = () => {
       const audio = audioRef.current;
+      const liveSec = audio ? audio.currentTime : currentTimeRef.current;
+      currentTimeRef.current = liveSec;
+
+      if (timeDisplayRef.current) {
+        timeDisplayRef.current.textContent = formatMillis(liveSec);
+      }
+
       if (audio && !audio.paused) {
-        const liveSec = audio.currentTime;
-        setCurrentTime(liveSec);
+        const totalDur = duration || audioBuffer?.duration || 1;
+        const visibleDur = totalDur / zoomLevel;
 
         // Auto scroll viewport when playhead reaches right 80% of screen
-        const totalDur = duration || audioBuffer?.duration || 1;
-        const visibleSec = totalDur / zoomLevel;
-        if (liveSec > viewportStartSec + visibleSec * 0.8) {
-          setViewportStartSec(Math.max(0, liveSec - visibleSec * 0.2));
-        } else if (liveSec < viewportStartSec) {
-          setViewportStartSec(liveSec);
+        if (liveSec > viewportStartSecRef.current + visibleDur * 0.8) {
+          viewportStartSecRef.current = Math.max(0, liveSec - visibleDur * 0.2);
+          setViewportStartSec(viewportStartSecRef.current);
+        } else if (liveSec < viewportStartSecRef.current) {
+          viewportStartSecRef.current = Math.max(0, liveSec);
+          setViewportStartSec(viewportStartSecRef.current);
         }
 
         // Trigger Tag Audition / Visual Flash
@@ -571,7 +581,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         }
       }
 
-      drawWaveform();
+      drawWaveform(liveSec, viewportStartSecRef.current);
       rafIdRef.current = requestAnimationFrame(renderLoop);
     };
 
@@ -579,12 +589,12 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [duration, audioBuffer, zoomLevel, viewportStartSec, tags, playClickSound]);
+  }, [duration, audioBuffer, zoomLevel, tags, playClickSound]);
 
   /**
    * High-DPI Canvas Waveform & Tag Renderer
    */
-  const drawWaveform = () => {
+  const drawWaveform = (liveSec: number, viewStart: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !audioBuffer) return;
 
@@ -598,7 +608,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
 
     const totalDur = duration || audioBuffer.duration;
     const visibleDur = totalDur / zoomLevel;
-    const viewStart = viewportStartSec;
     const viewEnd = viewStart + visibleDur;
 
     const dataL = audioBuffer.getChannelData(0);
@@ -690,9 +699,9 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       }
     });
 
-    // Render Playhead Laser
-    if (currentTime >= viewStart && currentTime <= viewEnd) {
-      const playheadX = ((currentTime - viewStart) / visibleDur) * width;
+    // Render Playhead Laser directly at liveSec
+    if (liveSec >= viewStart && liveSec <= viewEnd) {
+      const playheadX = ((liveSec - viewStart) / visibleDur) * width;
 
       // Glowing Playhead Line
       ctx.strokeStyle = '#ff1e1e';
@@ -728,10 +737,10 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
 
     const totalDur = duration || audioBuffer.duration;
     const visibleDur = totalDur / zoomLevel;
-    const targetTime = viewportStartSec + widthRatio * visibleDur;
+    const targetTime = viewportStartSecRef.current + widthRatio * visibleDur;
 
     const clickedTag = tags.find((t) => {
-      const tagX = ((t.timeSec - viewportStartSec) / visibleDur) * rect.width;
+      const tagX = ((t.timeSec - viewportStartSecRef.current) / visibleDur) * rect.width;
       return Math.abs(tagX - clickX) < 8;
     });
 
@@ -996,7 +1005,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           <div className="flex items-center gap-3">
             <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs font-mono font-bold text-white flex items-center gap-2">
               <Clock className="w-4 h-4 text-red-500" />
-              <span className="text-red-400 font-extrabold text-sm">{formatMillis(currentTime)}</span>
+              <span ref={timeDisplayRef} className="text-red-400 font-extrabold text-sm">{formatMillis(currentTime)}</span>
               <span className="text-zinc-500">/ {formatMillis(duration || audioBuffer?.duration || 0)}</span>
             </div>
 
