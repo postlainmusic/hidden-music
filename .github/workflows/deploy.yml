@@ -9,6 +9,12 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-24.04
+    env:
+      npm_config_legacy_peer_deps: "true"
+      npm_config_audit: "false"
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,13 +39,10 @@ jobs:
             ${{ runner.os }}-nextjs-
 
       - name: Install dependencies
-        run: npm install --prefer-offline --no-audit --legacy-peer-deps
+        run: npm install --prefer-offline
 
       - name: Build Next.js with Cloudflare Adapter
         run: npx @cloudflare/next-on-pages
-        env:
-          NODE_ENV: production
-          NEXT_TELEMETRY_DISABLED: 1
 
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy .vercel/output/static --project-name=hidden-music --commit-dirty=true
