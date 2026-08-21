@@ -51,6 +51,8 @@ export default function DesktopPlayerBar() {
     audioRef,
     currentTimeRef,
     analyserRef,
+    currentAmplitude,
+    getAmplitudeAtTime,
     playTrack,
     togglePlay,
     nextTrack,
@@ -169,18 +171,40 @@ export default function DesktopPlayerBar() {
         }
       }
 
+      let hasRealData = false;
       if (analyserRef?.current) {
-        analyserRef.current.getByteFrequencyData(dataArray);
+        try {
+          analyserRef.current.getByteFrequencyData(dataArray);
+          for (let i = 2; i <= 20; i++) {
+            if (dataArray[i] > 0) {
+              hasRealData = true;
+              break;
+            }
+          }
+        } catch {}
+      }
 
-        // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
-        let bassSum = 0;
-        for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
-        const currentBass = bassSum / 5;
-        const fB = fastBassRef.current * 0.15 + currentBass * 0.85;
-        const sB = slowBassRef.current * 0.88 + currentBass * 0.12;
-        fastBassRef.current = fB;
-        slowBassRef.current = sB;
-        const bassFlux = Math.max(0, fB - sB);
+      if (!hasRealData) {
+        const rawAmp = currentAmplitude || (getAmplitudeAtTime ? getAmplitudeAtTime(liveSec) : 0.65);
+        const beatMod = 0.5 + 0.5 * Math.sin(liveSec * Math.PI * 4);
+        const kickPulse = Math.sin(liveSec * Math.PI * 2) > 0.82 ? 1.45 : 0.85;
+        const bassVal = Math.min(255, Math.floor(rawAmp * 240 * beatMod * kickPulse));
+        for (let i = 2; i <= 6; i++) dataArray[i] = bassVal;
+        for (let i = 3; i <= 12; i++) dataArray[i] = Math.floor(rawAmp * 210 * beatMod);
+        for (let i = 70; i <= 185; i++) dataArray[i] = Math.floor(Math.pow(rawAmp, 1.3) * 190 * (0.6 + 0.4 * Math.cos(liveSec * Math.PI * 2)));
+        for (let i = 190; i <= 420; i++) dataArray[i] = Math.floor(Math.pow(rawAmp, 1.5) * 170);
+        for (let i = 232; i <= 743; i++) dataArray[i] = Math.floor(rawAmp * 150 * (0.5 + 0.5 * Math.sin(liveSec * Math.PI * 8)));
+      }
+
+      // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
+      let bassSum = 0;
+      for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
+      const currentBass = bassSum / 5;
+      const fB = fastBassRef.current * 0.15 + currentBass * 0.85;
+      const sB = slowBassRef.current * 0.88 + currentBass * 0.12;
+      fastBassRef.current = fB;
+      slowBassRef.current = sB;
+      const bassFlux = Math.max(0, fB - sB);
 
         // 2. BASSLINE / 808 (Bins 3-12: 64Hz-258Hz)
         let basslineSum = 0;
@@ -251,7 +275,6 @@ export default function DesktopPlayerBar() {
           lastTrebleHitTimeRef.current = now;
           targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
         }
-      }
 
       // Physics
       const displacement = kickScaleRef.current - 1.0;

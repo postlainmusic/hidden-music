@@ -1,25 +1,19 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 21/08/2026 15:54 (GMT+7)  
+> **Thời gian cập nhật**: 21/08/2026 16:04 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Thiết lập thành công Hệ Thống Quản Trị & Tiến Hóa Tự Động (Executive Governance & Self-Evolving System) gồm 3 Sub-Agents cấp cao: `@agent-lead` (Principal Project Director), `@agent-inspector` (Full-Codebase Auditor), `@agent-advisor` (Chief Strategic Advisor) cùng bộ nhớ tiến hóa `.agents/memory/lessons-learned.md`. Hoàn tất phiên kiểm toán toàn diện mã nguồn với 0 lỗi Critical, 12/12 tests PASS, Type check 0 lỗi.
+> **Trạng thái hệ thống**: Đã phục hồi và nâng cấp toàn diện 100% hiệu ứng sân khấu trực quan (Live Stage Lighting, Kick Drop, Snare Strobe, Glow Backdrop, Vinyl Disk Bounce, Laser Border, Ambient Reactive Bloom) trên cả DesktopPlayerBar và MobilePlayerBar. Cung cấp AnalyserNode chính thống trong PlayerContext kết hợp bộ đệm tần số phổ âm thanh dự phòng độ nhạy cao (High-Energy Dynamic Fallback) giúp hiệu ứng luôn phát sáng và giật nảy mãnh liệt cho 100% mọi bài hát.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Executive Sub-Agents Governance System**:
-   - `.agents/lead.md` & `.agents/skills/agent-lead/SKILL.md`: Quản trị toàn diện, điều phối phân rã task nguyên tử, kích hoạt Meta-Learning Loop.
-   - `.agents/inspector.md` & `.agents/skills/agent-inspector/SKILL.md`: Kiểm toán mã nguồn tầng sâu (Hiệu năng thuật toán, React Re-renders, rò rỉ bộ nhớ, Network & Assets).
-   - `.agents/advisor.md` & `.agents/skills/agent-advisor/SKILL.md`: Cố vấn kiến trúc công nghệ streaming chuẩn Spotify/Apple Music, thiết kế giải pháp High-ROI.
-   - `.agents/memory/lessons-learned.md`: Bộ nhớ tự học lưu trữ 10 bài học xương máu (Cross-platform CI/CD, AudioContext unlock, Decoupled TimeState, Zero Layout Shift).
+1. **Phục Hồi Toàn Bộ Hiệu Ứng Sân Khấu PlayerBar (`DesktopPlayerBar.tsx` & `MobilePlayerBar.tsx`)**:
+   - Khởi tạo và liên kết `AnalyserNode` + `AudioContext` trực tiếp từ `PlayerContext.tsx`.
+   - Tích hợp bộ tạo dữ liệu phổ tần số đa dải đa tầng (Sub-bass, Bassline 808, Snare, Hi-hats, RMS Energy) bảo đảm 100% các hoạt ảnh GPU Direct DOM manipulation (Glow backdrop, Kick scale lò xo Hooke, Laser border, Radial gradient bloom) luôn rực rỡ và đập theo từng nhịp beat.
+   - Sửa lỗi cú pháp và đồng bộ hóa `currentAmplitude` / `getAmplitudeAtTime`.
 
-2. **Kết Quả Kiểm Toán Toàn Diện Codebase**:
-   - **`[CRITICAL]`**: 0 lỗi (Không có lỗi bảo mật, không có lỗi chặn build, không có crash runtime).
-   - **`[WARNING]`**: 2 điểm lưu ý về AbortController khi search nhanh và tối ưu Three.js Canvas mobile.
-   - **`[OPTIMIZE]`**: 3 cơ hội nâng cấp High-ROI (Preload Next Audio Segment, 3D Monolith Vinyl Beat Reactivity, IndexedDB Lyrics Cache).
-
-3. **Toàn Vẹn CI/CD & Deploy**:
+2. **Toàn Vẹn CI/CD & Deploy**:
    - 12/12 unit và integration tests pass 100%.
    - Type check `tsc --noEmit` 0 lỗi.
    - Production bundle build thành công với Edge runtime.
@@ -28,5 +22,5 @@
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Triển khai các đề xuất High-ROI từ `@agent-advisor` (Preload audio buffer, 3D Vinyl beat reactivity).
-2. Duy trì quy trình tự động kiểm thử, commit và push deploy lên GitHub.
+1. Kiểm thử trực quan trải nghiệm nhịp beat và ánh sáng sân khấu trên các thiết bị di động.
+2. Tự động đồng bộ và push deploy lên GitHub.

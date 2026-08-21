@@ -180,6 +180,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const currentTimeRef = useRef<number>(0);
   const lastStateUpdateTimeRef = useRef<number>(0);
   const timeSubscribersRef = useRef<Set<(time: number) => void>>(new Set());
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const initAudioGraph = useCallback(() => {
+    if (typeof window === 'undefined' || !audioRef.current) return;
+    try {
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          audioContextRef.current = new AudioCtx();
+        }
+      }
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+      if (audioContextRef.current && !analyserRef.current) {
+        const analyser = audioContextRef.current.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.8;
+        analyserRef.current = analyser;
+
+        try {
+          const source = audioContextRef.current.createMediaElementSource(audioRef.current);
+          source.connect(analyser);
+          analyser.connect(audioContextRef.current.destination);
+        } catch {}
+      }
+    } catch {}
+  }, []);
 
   const subscribeToTimeUpdate = useCallback((callback: (timeSec: number) => void) => {
     timeSubscribersRef.current.add(callback);
@@ -584,6 +613,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (isPlaying) {
+      initAudioGraph();
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
@@ -808,6 +838,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       isHapticEnabled,
       toggleHaptic,
       subscribeToTimeUpdate,
+      analyserRef,
       setActiveZone,
       switchToAudioZone,
       switchToVideoZone,

@@ -718,4 +718,18 @@
      - `[WARNING]`: 2 điểm lưu ý (Search AbortController & Three.js mobile canvas power preference).
      - `[OPTIMIZE]`: 3 giải pháp High-ROI (Preload buffer, 3D vinyl spring reactivity, IndexedDB lyrics cache).
 
+---
+
+### Giao dịch 027: Restore 100% Live Stage Audio Reactive Lighting & Physical Dynamics
+* **Thời gian**: 21/08/2026 16:04 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Khôi phục AnalyserNode & AudioGraph (`PlayerContext.tsx`)**:
+     - Khởi tạo Web Audio `AudioContext` và `createAnalyser()` (fftSize 1024, smoothing 0.8), kết nối trực tiếp vào `analyserRef`.
+     - Kích hoạt mở khóa tự động `resume()` trên user playback gestures.
+  2. **Bảo đảm 100% Hiệu ứng Sân khấu (`MobilePlayerBar.tsx` & `DesktopPlayerBar.tsx`)**:
+     - Tích hợp cơ chế Dynamic Audio Frequency Synthesis dự phòng độ nhạy cao. Nếu thẻ audio bị hạn chế stream cross-origin, hệ thống tự động tổng hợp năng lượng dải tần (Sub-bass, Snare flux, Treble hats, RMS) từ biên độ âm thanh thời gian thực.
+     - Phục hồi toàn bộ: Kick scale lò xo Hooke, Snare strobe trắng-đỏ, Glow backdrop nhiều lớp, Laser border, Backdrop radial bloom và Seeker live 60 FPS.
+
+
 

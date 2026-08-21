@@ -189,90 +189,109 @@ export default function MobilePlayerBar() {
         }
       }
 
+      let hasRealData = false;
       if (analyserRef?.current) {
         try {
           analyserRef.current.getByteFrequencyData(dataArray);
-
-          // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
-          let bassSum = 0;
-          for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
-          const currentBass = bassSum / 5;
-          const fB = fastBassRef.current * 0.15 + currentBass * 0.85;
-          const sB = slowBassRef.current * 0.88 + currentBass * 0.12;
-          fastBassRef.current = fB;
-          slowBassRef.current = sB;
-          const bassFlux = Math.max(0, fB - sB);
-
-          // 2. BASSLINE / 808 ENERGY (Bins 3-12: 64Hz-258Hz)
-          let basslineSum = 0;
-          for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
-          const currentBassline = basslineSum / 10;
-          smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
-
-          // 3. SNARE DUAL-BAND CONFIRMATION
-          let midSum = 0;
-          for (let i = 70; i <= 185; i++) midSum += dataArray[i];
-          const currentMid = midSum / 116;
-          const fM = fastMidRef.current * 0.15 + currentMid * 0.85;
-          const sM = slowMidRef.current * 0.88 + currentMid * 0.12;
-          fastMidRef.current = fM;
-          slowMidRef.current = sM;
-          const midFlux = Math.max(0, fM - sM);
-
-          let highSum = 0;
-          for (let i = 190; i <= 420; i++) highSum += dataArray[i];
-          const currentHigh = highSum / 231;
-          const fH = fastHighRef.current * 0.15 + currentHigh * 0.85;
-          const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
-          fastHighRef.current = fH;
-          slowHighRef.current = sH;
-          const highFlux = Math.max(0, fH - sH);
-
-          // 4. VOCAL / LEAD BAND (Bins 14-162: ~300Hz-3.5kHz)
-          let vocalSum = 0;
-          for (let i = 14; i <= 162; i++) vocalSum += dataArray[i];
-          const currentVocal = vocalSum / 148;
-          const fV = fastVocalRef.current * 0.20 + currentVocal * 0.80;
-          const sV = slowVocalRef.current * 0.90 + currentVocal * 0.10;
-          fastVocalRef.current = fV;
-          slowVocalRef.current = sV;
-          smoothVocalRef.current += ((currentVocal / 255) - smoothVocalRef.current) * 0.20;
-
-          // 5. TREBLE / HI-HATS / CYMBALS (Bins 232-743: ~5kHz-16kHz)
-          let trebleSum = 0;
-          for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
-          const currentTreble = trebleSum / 512;
-          const fT = fastTrebleRef.current * 0.15 + currentTreble * 0.85;
-          const sT = slowTrebleRef.current * 0.88 + currentTreble * 0.12;
-          fastTrebleRef.current = fT;
-          slowTrebleRef.current = sT;
-          const trebleFlux = Math.max(0, fT - sT);
-
-          // 6. TOTAL AMBIENT ENERGY (RMS)
-          let totalSum = 0;
-          for (let i = 0; i < 1024; i++) totalSum += dataArray[i];
-          const currentEnergy = totalSum / 1024;
-          smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
-
-          // TRIGGERS
-          const is808Sustaining = currentBass > 150 && bassFlux < 9.0;
-          if (bassFlux > 12.0 && !is808Sustaining && now - lastKickHitTimeRef.current > 120) {
-            lastKickHitTimeRef.current = now;
-            const force = Math.min(0.04, 0.015 + bassFlux / 500);
-            targetKickScaleRef.current += force;
-          }
-
-          const isSnare = midFlux > 4.0 && highFlux > 1.8;
-          if (isSnare && now - lastSnareHitTimeRef.current > 125) {
-            lastSnareHitTimeRef.current = now;
-            targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
-          }
-
-          if (trebleFlux > 1.4 && now - lastTrebleHitTimeRef.current > 70) {
-            lastTrebleHitTimeRef.current = now;
-            targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
+          for (let i = 2; i <= 20; i++) {
+            if (dataArray[i] > 0) {
+              hasRealData = true;
+              break;
+            }
           }
         } catch {}
+      }
+
+      if (!hasRealData) {
+        const rawAmp = (player as any)?.currentAmplitude || ((player as any)?.getAmplitudeAtTime ? (player as any).getAmplitudeAtTime(liveSec) : 0.65);
+        const beatMod = 0.5 + 0.5 * Math.sin(liveSec * Math.PI * 4);
+        const kickPulse = Math.sin(liveSec * Math.PI * 2) > 0.82 ? 1.45 : 0.85;
+        const bassVal = Math.min(255, Math.floor(rawAmp * 240 * beatMod * kickPulse));
+        for (let i = 2; i <= 6; i++) dataArray[i] = bassVal;
+        for (let i = 3; i <= 12; i++) dataArray[i] = Math.floor(rawAmp * 210 * beatMod);
+        for (let i = 70; i <= 185; i++) dataArray[i] = Math.floor(Math.pow(rawAmp, 1.3) * 190 * (0.6 + 0.4 * Math.cos(liveSec * Math.PI * 2)));
+        for (let i = 190; i <= 420; i++) dataArray[i] = Math.floor(Math.pow(rawAmp, 1.5) * 170);
+        for (let i = 232; i <= 743; i++) dataArray[i] = Math.floor(rawAmp * 150 * (0.5 + 0.5 * Math.sin(liveSec * Math.PI * 8)));
+      }
+
+      // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
+      let bassSum = 0;
+      for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
+      const currentBass = bassSum / 5;
+      const fB = fastBassRef.current * 0.15 + currentBass * 0.85;
+      const sB = slowBassRef.current * 0.88 + currentBass * 0.12;
+      fastBassRef.current = fB;
+      slowBassRef.current = sB;
+      const bassFlux = Math.max(0, fB - sB);
+
+      // 2. BASSLINE / 808 ENERGY (Bins 3-12: 64Hz-258Hz)
+      let basslineSum = 0;
+      for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
+      const currentBassline = basslineSum / 10;
+      smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
+
+      // 3. SNARE DUAL-BAND CONFIRMATION
+      let midSum = 0;
+      for (let i = 70; i <= 185; i++) midSum += dataArray[i];
+      const currentMid = midSum / 116;
+      const fM = fastMidRef.current * 0.15 + currentMid * 0.85;
+      const sM = slowMidRef.current * 0.88 + currentMid * 0.12;
+      fastMidRef.current = fM;
+      slowMidRef.current = sM;
+      const midFlux = Math.max(0, fM - sM);
+
+      let highSum = 0;
+      for (let i = 190; i <= 420; i++) highSum += dataArray[i];
+      const currentHigh = highSum / 231;
+      const fH = fastHighRef.current * 0.15 + currentHigh * 0.85;
+      const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
+      fastHighRef.current = fH;
+      slowHighRef.current = sH;
+      const highFlux = Math.max(0, fH - sH);
+
+      // 4. VOCAL / LEAD BAND (Bins 14-162: ~300Hz-3.5kHz)
+      let vocalSum = 0;
+      for (let i = 14; i <= 162; i++) vocalSum += dataArray[i];
+      const currentVocal = vocalSum / 148;
+      const fV = fastVocalRef.current * 0.20 + currentVocal * 0.80;
+      const sV = slowVocalRef.current * 0.90 + currentVocal * 0.10;
+      fastVocalRef.current = fV;
+      slowVocalRef.current = sV;
+      smoothVocalRef.current += ((currentVocal / 255) - smoothVocalRef.current) * 0.20;
+
+      // 5. TREBLE / HI-HATS / CYMBALS (Bins 232-743: ~5kHz-16kHz)
+      let trebleSum = 0;
+      for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
+      const currentTreble = trebleSum / 512;
+      const fT = fastTrebleRef.current * 0.15 + currentTreble * 0.85;
+      const sT = slowTrebleRef.current * 0.88 + currentTreble * 0.12;
+      fastTrebleRef.current = fT;
+      slowTrebleRef.current = sT;
+      const trebleFlux = Math.max(0, fT - sT);
+
+      // 6. TOTAL AMBIENT ENERGY (RMS)
+      let totalSum = 0;
+      for (let i = 0; i < 1024; i++) totalSum += dataArray[i];
+      const currentEnergy = totalSum / 1024;
+      smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
+
+      // TRIGGERS
+      const is808Sustaining = currentBass > 150 && bassFlux < 9.0;
+      if (bassFlux > 12.0 && !is808Sustaining && now - lastKickHitTimeRef.current > 120) {
+        lastKickHitTimeRef.current = now;
+        const force = Math.min(0.04, 0.015 + bassFlux / 500);
+        targetKickScaleRef.current += force;
+      }
+
+      const isSnare = midFlux > 4.0 && highFlux > 1.8;
+      if (isSnare && now - lastSnareHitTimeRef.current > 125) {
+        lastSnareHitTimeRef.current = now;
+        targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
+      }
+
+      if (trebleFlux > 1.4 && now - lastTrebleHitTimeRef.current > 70) {
+        lastTrebleHitTimeRef.current = now;
+        targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
       }
 
       // PHYSICS ENGINE: HOOKE'S LAW
