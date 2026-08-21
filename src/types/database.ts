@@ -61,6 +61,7 @@ export interface TrackItem {
   lyrics?: string;
   duration: number;
   created_at: string;
+  youtube_id?: string;
   // Legacy fields kept optional for backward DB compatibility
   video_offset?: number;
   sync_metadata?: SyncMetadata | string | null;

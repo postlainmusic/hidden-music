@@ -18,8 +18,9 @@ import {
   X,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
-import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
 import { useTelemetry } from '@/hooks/useTelemetry';
+import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
+import { BeatVisualizer } from '@/components/visualizer/BeatVisualizer';
 
 const formatTime = (secs: number) => {
   if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -368,38 +369,6 @@ export default function MobilePlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, swipeOffsetX, effectiveDuration, shuffleMode, repeatMode, activeView]);
 
-  const parsedLyrics = useMemo(() => {
-    if (!currentTrack?.lyrics) return [];
-    try {
-      return parseLrc(currentTrack.lyrics);
-    } catch {
-      return [];
-    }
-  }, [currentTrack?.lyrics]);
-
-  const activeLyricIdx = useMemo(() => {
-    if (!parsedLyrics || parsedLyrics.length === 0) return -1;
-    try {
-      return getActiveLyricIndex(parsedLyrics, currentTime);
-    } catch {
-      return -1;
-    }
-  }, [parsedLyrics, currentTime]);
-
-  useEffect(() => {
-    if (!isExpanded || activeView !== 'lyrics' || activeLyricIdx < 0) return;
-    const container = lyricsScrollRef.current;
-    if (!container) return;
-    const activeEl = container.querySelector('[data-active-mobile-lyric="true"]') as HTMLElement | null;
-    if (activeEl) {
-      activeEl.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'nearest',
-      });
-    }
-  }, [activeLyricIdx, isExpanded, activeView]);
-
   // Touch Handlers
   const handleMiniTouchStart = (e: React.TouchEvent) => {
     if (e.touches[0]) {
@@ -706,43 +675,16 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* LYRICS VIEW — GIỮ NGUYÊN 100% SIZE CHỮ, KHÔNG NHẢY DÒNG */}
+            {/* LYRICS VIEW — ĐỒNG BỘ MILI-GIÂY TỰ ĐỘNG, ZERO LAYOUT SHIFT */}
             {activeView === 'lyrics' && (
-              <div
-                ref={lyricsScrollRef}
-                className="w-full h-full overflow-y-auto no-scrollbar py-12 px-6 animate-fadeIn relative"
-                style={{
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
-                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
-                }}
-              >
-                {parsedLyrics.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs uppercase tracking-widest font-mono text-center">
-                    Chưa có lời bài hát cho tác phẩm này
-                  </div>
-                ) : (
-                  <div className="w-full max-w-md mx-auto py-8 space-y-6">
-                    {parsedLyrics.map((line, idx) => {
-                      const isActive = idx === activeLyricIdx;
-                      return (
-                        <p
-                          key={idx}
-                          data-active-mobile-lyric={isActive ? 'true' : 'false'}
-                          onClick={() => seekTo(line.time)}
-                          className={`text-[17px] leading-relaxed font-bold tracking-tight text-left select-none cursor-pointer transition-colors duration-300 ${
-                            isActive
-                              ? 'text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.4)]'
-                              : 'text-white/25 hover:text-white/50'
-                          }`}
-                        >
-                          {line.text}
-                        </p>
-                      );
-                    })}
-                  </div>
-                )}
+              <div className="w-full h-full overflow-hidden animate-fadeIn relative">
+                <SyncedLyricsView
+                  rawLrc={currentTrack?.lyrics}
+                  trackTitle={currentTrack?.title}
+                  artistName={currentTrack?.artist || currentAlbum?.artist}
+                  duration={effectiveDuration}
+                  className="w-full h-full"
+                />
               </div>
             )}
 

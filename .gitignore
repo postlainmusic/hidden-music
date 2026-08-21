@@ -31,3 +31,5 @@ yarn-error.log*
 
 # local backup folder
 no-upload/
+.reference_repos/
+

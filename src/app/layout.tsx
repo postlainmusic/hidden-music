@@ -24,6 +24,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
 };
 
 export const metadata: Metadata = {
@@ -50,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className={`${outfit.variable} ${dfvnGrafika.variable} dark`}>
+    <html lang="vi" className={`${outfit.variable} ${dfvnGrafika.variable} dark min-h-[100dvh]`}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icon.svg" />
@@ -63,9 +65,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-black text-white antialiased selection:bg-white selection:text-black overflow-x-hidden">
+      <body className="bg-black text-white antialiased selection:bg-white selection:text-black overflow-x-hidden min-h-[100dvh] [overscroll-behavior-y:none]">
         <PlayerProvider>
-          <div id="cinematic-viewport-wrapper" className="min-h-screen w-full transition-transform duration-75 ease-out">
+          <div id="cinematic-viewport-wrapper" className="min-h-[100dvh] w-full transition-transform duration-75 ease-out [overscroll-behavior-y:none]">
             {children}
           </div>
           <CinematicVisualizer />

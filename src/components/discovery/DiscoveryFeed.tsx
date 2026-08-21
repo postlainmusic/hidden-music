@@ -721,9 +721,19 @@ export default function DiscoveryFeed({
       trackRecommendationClick(track.id, sourceSection, album.id);
       const albumPlaylist = (album.tracks ?? [track]) as TrackItem[];
       playTrack(
-        { id: track.id, album_id: track.album_id, title: track.title, artist: track.artist ?? album.artist, audio_url: track.audio_url, duration: track.duration, lyrics: track.lyrics },
+        {
+          id: track.id,
+          album_id: track.album_id,
+          title: track.title,
+          artist: track.artist ?? album.artist,
+          audio_url: track.audio_url,
+          media_type: track.media_type ?? 'audio',
+          duration: track.duration,
+          lyrics: track.lyrics,
+          created_at: track.created_at ?? new Date().toISOString(),
+        },
         { id: album.id, title: album.title, artist: album.artist, cover_url: album.cover_url },
-        albumPlaylist.map((t) => ({ id: t.id, album_id: t.album_id, title: t.title, artist: t.artist ?? album.artist, audio_url: t.audio_url, duration: t.duration, lyrics: t.lyrics }))
+        albumPlaylist
       );
       trackPlay(track.id, album.id, track.media_type ?? 'audio', sourceSection);
     },
@@ -740,12 +750,15 @@ export default function DiscoveryFeed({
       playTrack(
         {
           id: track.ytmId,
+          album_id: `yt_${track.ytmId}`,
           title: track.title,
           artist: track.artist,
           audio_url: `yt:${track.ytmId}`,
           youtube_id: track.ytmId,
+          media_type: 'audio',
           duration: track.duration,
           cover_url: track.coverUrl,
+          created_at: new Date().toISOString(),
         },
         {
           id: `stream_${track.ytmId}`,
@@ -769,12 +782,15 @@ export default function DiscoveryFeed({
 
       addToQueue({
         id: trackId,
+        album_id: isYtm ? `yt_${trackId}` : (track as TrackItem).album_id || 'vault',
         title: track.title,
-        artist: isYtm ? track.artist : track.artist,
+        artist: track.artist,
+        media_type: (track as any).media_type || 'audio',
         audio_url: isYtm ? `yt:${track.ytmId}` : (track as TrackItem).audio_url,
         youtube_id: isYtm ? track.ytmId : undefined,
         duration: track.duration,
         cover_url: isYtm ? track.coverUrl : undefined,
+        created_at: (track as any).created_at || new Date().toISOString(),
       });
 
       setAddedQueueIds((prev) => new Set(prev).add(trackId));

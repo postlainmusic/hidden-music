@@ -22,7 +22,8 @@ import {
   Music2,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
-import { parseLrc, getActiveLyricIndex } from '@/lib/lrcParser';
+import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
+import { BeatVisualizer } from '@/components/visualizer/BeatVisualizer';
 
 const formatTime = (secs: number) => {
   if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -369,33 +370,6 @@ export default function DesktopPlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, effectiveDuration, shuffleMode, repeatMode, expandedMode]);
 
-  const parsedLyrics = useMemo(() => {
-    if (!currentTrack?.lyrics) return [];
-    return parseLrc(currentTrack.lyrics);
-  }, [currentTrack?.lyrics]);
-
-  const activeLyricIdx = useMemo(() => {
-    if (!parsedLyrics || parsedLyrics.length === 0) return -1;
-    return getActiveLyricIndex(parsedLyrics, currentTime);
-  }, [parsedLyrics, currentTime]);
-
-  // Smooth scroll lyrics
-  useEffect(() => {
-    if (expandedMode !== 'lyrics' || activeLyricIdx < 0) return;
-
-    const container = lyricsScrollRef.current;
-    if (!container) return;
-
-    const activeEl = container.querySelector('[data-active-lyric="true"]') as HTMLElement | null;
-    if (activeEl) {
-      activeEl.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'nearest',
-      });
-    }
-  }, [activeLyricIdx, expandedMode]);
-
   // Keyboard shortcuts (Audio Zone only)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -530,39 +504,16 @@ export default function DesktopPlayerBar() {
 
           {/* Body */}
           <div className="flex-1 min-h-0 px-6 sm:px-8 pb-3 overflow-hidden relative">
-            {/* Pure Centered Lyrics Stream */}
+            {/* Pure Centered Synced Lyrics Stream */}
             {expandedMode === 'lyrics' && (
-              <div
-                ref={lyricsScrollRef}
-                className="w-full h-full overflow-y-auto no-scrollbar text-center py-10 space-y-3.5 font-sans px-4 max-w-2xl mx-auto"
-                style={{
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                }}
-              >
-                {parsedLyrics.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-400 text-xs uppercase tracking-widest font-mono">
-                    Chưa có lời bài hát cho tác phẩm này
-                  </div>
-                ) : (
-                  parsedLyrics.map((line, idx) => {
-                    const isActive = idx === activeLyricIdx;
-                    return (
-                      <p
-                        key={idx}
-                        data-active-lyric={isActive ? 'true' : 'false'}
-                        onClick={() => seekTo(line.time)}
-                        className={`transition-all duration-300 cursor-pointer select-none leading-relaxed ${
-                          isActive
-                            ? 'text-white text-sm sm:text-base font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.85)] opacity-100'
-                            : 'text-zinc-400 hover:text-zinc-200 text-xs sm:text-sm font-medium opacity-40 hover:opacity-75'
-                        }`}
-                      >
-                        {line.text}
-                      </p>
-                    );
-                  })
-                )}
+              <div className="w-full h-full overflow-hidden">
+                <SyncedLyricsView
+                  rawLrc={currentTrack?.lyrics}
+                  trackTitle={currentTrack?.title}
+                  artistName={currentTrack?.artist || currentAlbum?.artist}
+                  duration={effectiveDuration}
+                  className="w-full h-full"
+                />
               </div>
             )}
 
