@@ -193,10 +193,42 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const timeSubscribersRef = useRef<Set<(time: number) => void>>(new Set());
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   const initAudioGraph = useCallback(() => {
-    // Keep HTML5 audio directly connected to native hardware output (LL-04 / REG-07)
-    // Avoid createMediaElementSource to prevent CORS audio silencing
+    if (typeof window === 'undefined') return;
+
+    try {
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          audioContextRef.current = new AudioCtx();
+        }
+      }
+
+      if (audioContextRef.current && !analyserRef.current) {
+        const analyser = audioContextRef.current.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.8;
+        analyserRef.current = analyser;
+      }
+
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+
+      // Connect Audio graph with safety fallback
+      if (audioRef.current && audioContextRef.current && analyserRef.current && !sourceNodeRef.current) {
+        try {
+          const source = audioContextRef.current.createMediaElementSource(audioRef.current);
+          source.connect(analyserRef.current);
+          analyserRef.current.connect(audioContextRef.current.destination);
+          sourceNodeRef.current = source;
+        } catch {
+          // Fallback: If browser restricts CORS or source already connected, silently ignore
+        }
+      }
+    } catch {}
   }, []);
 
   const subscribeToTimeUpdate = useCallback((callback: (timeSec: number) => void) => {
@@ -643,6 +675,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const playTrack = useCallback((track: TrackItem, album?: Album | Partial<Album> | null, newPlaylist?: TrackItem[]) => {
     if (!track) return;
+    initAudioGraph();
     setCurrentTrack(track);
     if (album) setCurrentAlbum(album as Album);
     if (newPlaylist && Array.isArray(newPlaylist) && newPlaylist.length > 0) {
@@ -653,9 +686,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsBuffering(false);
     setCurrentTime(0);
     currentTimeRef.current = 0;
-  }, []);
+  }, [initAudioGraph]);
 
   const togglePlay = useCallback(() => {
+    initAudioGraph();
     if (activeZone === 'video') {
       if (!videoRef.current) return;
       if (isPlaying) {
@@ -901,11 +935,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       <audio
         ref={audioRef}
         src={activeZone === 'audio' && currentTrack ? trackUrl : undefined}
+        crossOrigin="anonymous"
+        playsInline
         preload="auto"
         onWaiting={() => setIsBuffering(true)}
-        onPlaying={() => setIsBuffering(false)}
-        onCanPlay={() => setIsBuffering(false)}
-        onCanPlayThrough={() => setIsBuffering(false)}
+        onPlaying={() => {
+          setIsBuffering(false);
+          initAudioGraph();
+        }}
+        onCanPlay={() => {
+          setIsBuffering(false);
+          initAudioGraph();
+        }}
+        onCanPlayThrough={() => {
+          setIsBuffering(false);
+          initAudioGraph();
+        }}
         onTimeUpdate={() => {
           if (!audioRef.current) return;
           const cur = audioRef.current.currentTime;

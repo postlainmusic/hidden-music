@@ -8,9 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test:unit": "node --test tests/unit/audio-dsp.test.mjs tests/unit/safe-guards.test.mjs tests/unit/beat-detection.test.mjs tests/unit/lrc-parser.test.mjs tests/unit/meyda-engine.test.mjs tests/unit/no-cors-hijack.test.mjs",
+    "test:unit": "node --test tests/unit/audio-dsp.test.mjs tests/unit/safe-guards.test.mjs tests/unit/beat-detection.test.mjs tests/unit/lrc-parser.test.mjs tests/unit/meyda-engine.test.mjs tests/unit/no-cors-hijack.test.mjs tests/unit/live-waveform-beat.test.mjs",
     "test:integration": "node --test tests/integration/stream-endpoints.test.mjs",
-    "test": "node --test tests/unit/audio-dsp.test.mjs tests/unit/safe-guards.test.mjs tests/unit/beat-detection.test.mjs tests/unit/lrc-parser.test.mjs tests/unit/meyda-engine.test.mjs tests/unit/no-cors-hijack.test.mjs tests/integration/stream-endpoints.test.mjs"
+    "test": "node --test tests/unit/audio-dsp.test.mjs tests/unit/safe-guards.test.mjs tests/unit/beat-detection.test.mjs tests/unit/lrc-parser.test.mjs tests/unit/meyda-engine.test.mjs tests/unit/no-cors-hijack.test.mjs tests/unit/live-waveform-beat.test.mjs tests/integration/stream-endpoints.test.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.105.4",

@@ -25,6 +25,7 @@ import { usePlayer } from '@/context/PlayerContext';
 import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { BeatVisualizer } from '@/components/visualizer/BeatVisualizer';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
+import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
 
 const formatTime = (secs: number) => {
   if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -158,6 +159,7 @@ export default function DesktopPlayerBar() {
       return;
     }
 
+    const liveWaveformEngineRef = { current: new LiveWaveformBeatEngine(1024, 0.040, 110) };
     const dataArray = new Uint8Array(1024);
 
     const updateLiveDesktopShow = () => {
@@ -272,8 +274,15 @@ export default function DesktopPlayerBar() {
       const currentEnergy = totalSum / 1024;
       smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
 
+      // 7. LIVE WAVEFORM STREAM BEAT DETECTION
+      const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
+
       // TRIGGERS (STRICTLY GUARDED BY isDrumming & DRUM PROFILE SENSITIVITY)
       if (isDrumming) {
+        if (liveWaveBeat.isBeat) {
+          targetKickScaleRef.current += liveWaveBeat.kickForce;
+        }
+
         const minKickInterval = Math.max(160, (60 / drumProfile.bpm) * 700);
         const is808Sustaining = currentBass > 160 && bassFlux < 8.0;
         if (bassFlux > 13.0 * drumProfile.fluxSensitivity && !is808Sustaining && now - lastKickHitTimeRef.current > minKickInterval) {

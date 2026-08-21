@@ -1,19 +1,27 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 21/08/2026 16:37 (GMT+7)  
+> **Thời gian cập nhật**: 21/08/2026 16:47 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã tích hợp thành công bộ đôi kỹ năng thiết kế đỉnh cao của Anthropic Claude (300k+ installs) gồm `frontend-design` (Anti-AI Slop & Distilled Aesthetics) và `canvas-design` (WebGL, 3D Monolith, Generative Art) vào `.agents/skills/`. Toàn bộ hệ thống giao diện loại bỏ triệt để các rập khuôn của AI, tuân thủ bảng màu Monochrome Cyber Noir, phân cấp Typography chuẩn mực và vật lý lò xo 120 FPS. 17/17 tests PASS, Type check 0 lỗi, Build thành công.
+> **Trạng thái hệ thống**: Đã xây dựng và tích hợp thành công 100% Live Waveform-Based Beat Tracking Engine (Zero-Fail Audio Graph) vào `src/lib/dsp/liveWaveformBeat.ts` và PlayerContext/PlayerBars. Web Audio Graph được thiết lập an toàn với singleton AudioContext, `crossOrigin="anonymous"`, `playsInline`, và Autoplay Resume Guard trên user gesture. 19/19 tests PASS, Type check 0 lỗi, Build thành công.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Thiết Lập Bộ Kỹ Năng Thiết Kế Đỉnh Cao Anthropic Claude (`.agents/skills/`)**:
-   - **`frontend-design`** (`.agents/skills/frontend-design/SKILL.md`): Bộ quy tắc triệt tiêu giao diện AI rập khuôn (Anti-AI Slop), thiết lập chuẩn mực Monochrome Cyber Noir, phân cấp Typography (DFVN Grafika, JetBrains Mono, Outfit), vi tương tác cơ học phản hồi $<16\text{ms}$.
-   - **`canvas-design`** (`.agents/skills/canvas-design/SKILL.md`): Tiêu chuẩn kỹ thuật đồ họa tính toán Canvas 2D, WebGL Shaders và Three.js 3D Monolith cho sân khấu đĩa than và bộ quang phổ âm nhạc 120 FPS không rớt khung hình.
+1. **Khởi Tạo Live Waveform Beat Engine (`src/lib/dsp/liveWaveformBeat.ts`)**:
+   - Trích xuất mảng dạng sóng dao động biên độ thực `getByteTimeDomainData(waveArray)`.
+   - Tính toán năng lượng xung sóng tức thời `rms = Math.sqrt(sumSquares / N)` và độ giãn biên độ `peakToPeak = (max - min) / 255`.
+   - Ngưỡng thích ứng động Dual EMA (`fastEnergy`, `slowEnergy`, `energyFlux = Math.max(0, fast - slow)`).
+   - Tự động kích hoạt nhịp Drop khi `isBeat` nổ với lực lò xo `kickForce`.
 
-2. **Toàn Vẹn CI/CD & Deploy**:
-   - 17/17 unit và integration tests pass 100%.
+2. **Web Audio Graph Chống Câm Sóng (Audio Graph Resilience)**:
+   - Thẻ `<audio>` được cấu hình đầy đủ `crossOrigin="anonymous"`, `playsInline`, `preload="auto"`.
+   - Khởi tạo singleton `AudioContext` & `AnalyserNode` (`fftSize = 1024`, `smoothingTimeConstant = 0.8`).
+   - Tự động gọi `audioCtx.resume()` ngay khi người dùng nhấn Play/TogglePlay hoặc tương tác.
+   - Kết nối luồng chuẩn `source -> analyser -> destination` bọc trong khối an toàn try/catch để không bao giờ ngắt tiếng.
+
+3. **Toàn Vẹn CI/CD & Deploy**:
+   - 19/19 unit và integration tests pass 100% (bổ sung `tests/unit/live-waveform-beat.test.mjs`).
    - Type check `tsc --noEmit` 0 lỗi.
    - Production bundle build thành công với Edge runtime.
 
@@ -21,5 +29,5 @@
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Duy trì các chuẩn mực thiết kế Anti-AI cho toàn bộ các màn hình và modal mới.
+1. Duy trì tính ổn định của luồng live waveform beat tracking.
 2. Tự động đồng bộ và push deploy lên GitHub.

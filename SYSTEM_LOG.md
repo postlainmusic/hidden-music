@@ -797,6 +797,23 @@
      - Thiết lập chuẩn mực đồ họa tính toán Canvas 2D, WebGL Shaders, và Three.js 3D Monolith cho sân khấu đĩa than, hiệu ứng phosphor decay và phản hồi âm thanh 120 FPS độc lập với DOM React.
   3. **Hệ Thống Đạt Toàn Bộ Tiêu Chuẩn CI/CD, 17/17 Tests PASS, Build Thành Công**.
 
+---
+
+### Giao dịch 033: Rebuild 100% Live Waveform-Based Beat Tracking Engine (Zero-Fail Audio Graph)
+* **Thời gian**: 21/08/2026 16:47 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Tích hợp Module `LiveWaveformBeatEngine` (`src/lib/dsp/liveWaveformBeat.ts`)**:
+     - Phân tích trực tiếp mảng dao động thời gian thực (`getByteTimeDomainData`) quanh điểm cân bằng 128.
+     - Tính toán `rms`, `peakToPeak = (maxVal - minVal) / 255`, và `energyFlux` từ bộ lọc Dual EMA (Fast: 0.15/0.85, Slow: 0.92/0.08).
+     - Kích hoạt nhịp Beat chính xác theo sóng thực tế kết hợp kiểm tra `isDrumming`.
+  2. **Thiết lập Web Audio Graph Chống Câm Sóng (Audio Graph Resilience)**:
+     - Khởi tạo singleton `AudioContext` & `AnalyserNode` (`fftSize = 1024`), gán `crossOrigin="anonymous"` và `playsInline` trên thẻ `<audio>`.
+     - Tự động gọi `audioCtx.resume()` trên mọi hành động người dùng tương tác (`togglePlay`, `playTrack`, `onPlaying`).
+     - Kết nối an toàn `source -> analyser -> destination` với cơ chế fallback tự động.
+  3. **19/19 Tests PASS, Type Check 0 Lỗi & Build Edge Runtime Thành Công**.
+
+
 
 
 
