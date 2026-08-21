@@ -45,8 +45,8 @@ class LiveWaveformBeatEnginePy:
 
         time_since_last = now_ms - self.last_beat_time
         is_consecutive = (time_since_last >= self.min_interval_ms) and (time_since_last < 240)
-        req_flux = self.threshold * 0.65 if is_consecutive else self.threshold
-        req_peak = 0.09 if is_consecutive else 0.11
+        req_flux = self.threshold * 0.60 if is_consecutive else self.threshold
+        req_peak = 0.08 if is_consecutive else 0.10
 
         is_beat = (
             energy_flux > req_flux and
@@ -58,7 +58,7 @@ class LiveWaveformBeatEnginePy:
         if is_beat:
             self.last_beat_time = now_ms
             self.beat_count += 1
-            kick_force = min(0.045, max(0.015, energy_flux * 0.22 + peak_to_peak * 0.035))
+            kick_force = min(0.065, max(0.025, energy_flux * 0.28 + peak_to_peak * 0.045))
 
         return {
             "is_beat": is_beat,
@@ -88,7 +88,7 @@ def run_diagnostic():
     print("🎧 POSTLAIN VAULT - AUDIO GRAPH & BEAT PIPELINE DIAGNOSTIC")
     print("=" * 70)
 
-    engine = LiveWaveformBeatEnginePy(1024, threshold=0.016, min_interval_ms=60)
+    engine = LiveWaveformBeatEnginePy(1024, threshold=0.015, min_interval_ms=55)
 
     # Test 1: Silent Baseline (All 128)
     silent_buffer = [128] * 1024

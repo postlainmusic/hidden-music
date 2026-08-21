@@ -96,6 +96,8 @@ export default function DesktopPlayerBar() {
   // Multi-Band Audio Analyzer State
   const kickScaleRef = useRef<number>(1);
   const targetKickScaleRef = useRef<number>(1);
+  const kickRedIntensityRef = useRef<number>(0);
+  const targetKickRedIntensityRef = useRef<number>(0);
   const snareStrobeRef = useRef<number>(0);
   const targetSnareStrobeRef = useRef<number>(0);
 
@@ -151,6 +153,8 @@ export default function DesktopPlayerBar() {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
       targetKickScaleRef.current = 0;
       kickScaleRef.current = 1;
+      targetKickRedIntensityRef.current = 0;
+      kickRedIntensityRef.current = 0;
       targetSnareStrobeRef.current = 0;
       snareStrobeRef.current = 0;
       fastBassRef.current = 0; slowBassRef.current = 0;
@@ -163,7 +167,7 @@ export default function DesktopPlayerBar() {
       return;
     }
 
-    const liveWaveformEngineRef = { current: new LiveWaveformBeatEngine(1024, 0.016, 60) };
+    const liveWaveformEngineRef = { current: new LiveWaveformBeatEngine(1024, 0.015, 55) };
     const dataArray = new Uint8Array(1024);
 
     const updateLiveDesktopShow = () => {
@@ -281,39 +285,45 @@ export default function DesktopPlayerBar() {
       // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
-      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY FOR SMALL KICKS & CONSECUTIVE KICK ROLLS)
+      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY: REGULAR KICK vs 808/SUB PUNCH vs RAPID ROLLS)
       if (isDrumming) {
-        if (liveWaveBeat.isBeat) {
-          targetKickScaleRef.current += liveWaveBeat.kickForce;
-        }
-
-        // Rapid kick intervals: 60ms minimum to allow fast trap rolls and 16th-note double kicks
+        // Rapid kick intervals: 55ms minimum to allow fast trap rolls and 16th-note double kicks
         const timeSinceLastKick = now - lastKickHitTimeRef.current;
-        const isConsecutiveKick = timeSinceLastKick >= 60 && timeSinceLastKick < 240;
+        const isConsecutiveKick = timeSinceLastKick >= 55 && timeSinceLastKick < 240;
         const kickThreshold = isConsecutiveKick
-          ? 2.2 * drumProfile.fluxSensitivity
-          : 3.5 * drumProfile.fluxSensitivity;
+          ? 1.6 * drumProfile.fluxSensitivity
+          : 2.6 * drumProfile.fluxSensitivity;
 
-        const is808Sustaining = currentBass > 180 && bassFlux < 4.0;
-        if (bassFlux > kickThreshold && !is808Sustaining && timeSinceLastKick >= 60) {
+        const is808Sustaining = currentBass > 195 && bassFlux < 3.0;
+        const hasBassTransient = bassFlux > kickThreshold && !is808Sustaining && timeSinceLastKick >= 55;
+        const hasWaveformKick = liveWaveBeat.isBeat;
+
+        if (hasBassTransient || hasWaveformKick) {
           lastKickHitTimeRef.current = now;
-          // Multi-tier spring force:
-          // Small kick: 0.035 - 0.06
-          // Medium kick: 0.07 - 0.12
-          // Heavy kick / 808 drop: 0.13 - 0.18
-          const force = bassFlux > 9.0
-            ? Math.min(0.18, 0.08 + bassFlux / 110)
-            : bassFlux > 5.0
-            ? Math.min(0.11, 0.045 + bassFlux / 150)
-            : Math.min(0.06, 0.025 + bassFlux / 200);
-          targetKickScaleRef.current += force;
+
+          // Phân biệt chính xác giữa:
+          // 1. Kick có Sub / Bass / 808 (Heavy Sub-bass Punch / Drop / 808): Nảy mạnh vượt trội, bùng nổ, đỏ rực sâu
+          // 2. Kick thường / Kick nhỏ / Ghost Kick: Nảy khỏe rõ ràng, chớp đỏ tươi rõ nét
+          const isSub808HeavyKick = (currentBass > 135 || bassFlux > 7.0 || (drumProfile.hasKick && currentBass > 115));
+
+          if (isSub808HeavyKick) {
+            // 💥 KICK CÓ SUB/BASS/808: Nảy cực mạnh (0.16 - 0.26), bùng nổ xung lực, đỏ rực sâu
+            const force = Math.min(0.26, 0.13 + bassFlux / 70);
+            targetKickScaleRef.current += force;
+            targetKickRedIntensityRef.current = 1.0;
+          } else {
+            // 🥁 KICK THƯỜNG / KICK NHỎ: Nảy khỏe (0.075 - 0.13), chớp đỏ tươi rõ nét
+            const force = Math.min(0.13, 0.070 + bassFlux / 120);
+            targetKickScaleRef.current += force;
+            targetKickRedIntensityRef.current = Math.max(targetKickRedIntensityRef.current, 0.88);
+          }
         }
 
         const timeSinceLastSnare = now - lastSnareHitTimeRef.current;
-        const isSnare = midFlux > 3.2 * drumProfile.fluxSensitivity && highFlux > 1.4;
+        const isSnare = midFlux > 3.0 * drumProfile.fluxSensitivity && highFlux > 1.3;
         if (isSnare && timeSinceLastSnare >= 65) {
           lastSnareHitTimeRef.current = now;
-          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.30, midFlux / 18));
+          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 16));
         }
 
         const timeSinceLastTreble = now - lastTrebleHitTimeRef.current;
@@ -325,10 +335,14 @@ export default function DesktopPlayerBar() {
 
       // Physics
       const displacement = kickScaleRef.current - 1.0;
-      targetKickScaleRef.current -= displacement * 0.28;
-      targetKickScaleRef.current *= 0.62;
+      targetKickScaleRef.current -= displacement * 0.30;
+      targetKickScaleRef.current *= 0.65;
       kickScaleRef.current += targetKickScaleRef.current;
       if (kickScaleRef.current < 0.985) kickScaleRef.current = 0.985;
+
+      // Decay Kick Red Intensity
+      kickRedIntensityRef.current += (targetKickRedIntensityRef.current - kickRedIntensityRef.current) * 0.48;
+      targetKickRedIntensityRef.current *= 0.70;
 
       snareStrobeRef.current += (targetSnareStrobeRef.current - snareStrobeRef.current) * 0.55;
       targetSnareStrobeRef.current *= 0.72;
@@ -344,24 +358,27 @@ export default function DesktopPlayerBar() {
       const voc = Math.min(1.0, smoothVocalRef.current * 1.6 + (vocalFlux > 2.0 ? vocalFlux / 20 : 0));
       const nrg = smoothEnergyRef.current;
 
-      const kickWeight = Math.min(1.0, Math.max(0, (k - 1.03) / 0.07));
-      const g = Math.floor(255 - kickWeight * 205);
-      const b = Math.floor(255 - kickWeight * 205);
+      const redIntensity = Math.min(1.0, Math.max(0, kickRedIntensityRef.current));
+      const kickDelta = Math.max(0, k - 1.0);
+
+      // KICK COLOR: Mọi cú kick (cả thường lẫn sub/808) đều chớp đỏ rực rỡ, chỉ trắng khi không có kick
+      const g = Math.floor(255 - redIntensity * 230);
+      const b = Math.floor(255 - redIntensity * 230);
       const kickColor = `255, ${g}, ${b}`;
 
       // ── DOM UPDATES ────────────────────────────────────────────────────────
       if (coverBoxRef.current) {
         coverBoxRef.current.style.transform = `scale(${k})`;
-        coverBoxRef.current.style.borderColor = `rgba(${kickColor}, ${0.2 + (k - 1) * 0.5})`;
+        coverBoxRef.current.style.borderColor = `rgba(${kickColor}, ${0.25 + redIntensity * 0.65 + kickDelta * 2.0})`;
         coverBoxRef.current.style.boxShadow = `
-          0 0 ${(k - 1) * 35}px rgba(${kickColor}, ${(k - 1) * 0.6}),
-          0 0 ${s * 25}px rgba(255, 255, 255, ${s * 0.5})
+          0 0 ${10 + redIntensity * 35 + kickDelta * 80}px rgba(${kickColor}, ${0.25 + redIntensity * 0.65}),
+          0 0 ${s * 30}px rgba(255, 255, 255, ${s * 0.6})
         `;
       }
 
       if (playBtnRef.current) {
-        playBtnRef.current.style.transform = `scale(${1 + Math.max(0, k - 1) * 0.6})`;
-        playBtnRef.current.style.boxShadow = `0 0 ${12 + (k - 1) * 45 + s * 25}px rgba(255, 255, 255, ${0.35 + (k - 1) * 0.5 + s * 0.4})`;
+        playBtnRef.current.style.transform = `scale(${1 + kickDelta * 0.9})`;
+        playBtnRef.current.style.boxShadow = `0 0 ${12 + redIntensity * 30 + kickDelta * 60 + s * 25}px rgba(${kickColor}, ${0.35 + redIntensity * 0.5 + s * 0.4})`;
       }
 
       if (titleTextRef.current) {

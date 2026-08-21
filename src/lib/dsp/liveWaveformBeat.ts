@@ -22,7 +22,7 @@ export class LiveWaveformBeatEngine {
   private minIntervalMs: number = 60;
   private waveArray: Uint8Array;
 
-  constructor(fftSize: number = 1024, threshold: number = 0.016, minIntervalMs: number = 60) {
+  constructor(fftSize: number = 1024, threshold: number = 0.015, minIntervalMs: number = 55) {
     this.threshold = threshold;
     this.minIntervalMs = minIntervalMs;
     this.waveArray = new Uint8Array(fftSize);
@@ -84,16 +84,16 @@ export class LiveWaveformBeatEngine {
 
     // Multi-tier Beat Trigger: Catches both large heavy drops and small/rapid successive kicks
     const isConsecutiveKick = (now - this.lastBeatTime >= this.minIntervalMs) && (now - this.lastBeatTime < 240);
-    const requiredFlux = isConsecutiveKick ? this.threshold * 0.65 : this.threshold;
-    const requiredPeak = isConsecutiveKick ? 0.09 : 0.11;
+    const requiredFlux = isConsecutiveKick ? this.threshold * 0.60 : this.threshold;
+    const requiredPeak = isConsecutiveKick ? 0.08 : 0.10;
 
     const isBeat = energyFlux > requiredFlux && peakToPeak > requiredPeak && (now - this.lastBeatTime >= this.minIntervalMs);
 
     let kickForce = 0;
     if (isBeat) {
       this.lastBeatTime = now;
-      // Proportional kick force: small kicks give subtle bounce (0.015-0.025), heavy kicks give explosive punch (0.045)
-      kickForce = Math.min(0.045, Math.max(0.015, energyFlux * 0.22 + peakToPeak * 0.035));
+      // Proportional kick force: regular kicks give punchy bounce (0.025-0.040), heavy 808s give explosive punch (0.065)
+      kickForce = Math.min(0.065, Math.max(0.025, energyFlux * 0.28 + peakToPeak * 0.045));
     }
 
     return {

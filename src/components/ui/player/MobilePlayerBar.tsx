@@ -135,6 +135,8 @@ export default function MobilePlayerBar() {
   // Physics Spring State
   const kickScaleRef = useRef<number>(1);
   const targetKickScaleRef = useRef<number>(1);
+  const kickRedIntensityRef = useRef<number>(0);
+  const targetKickRedIntensityRef = useRef<number>(0);
   const snareStrobeRef = useRef<number>(0);
   const targetSnareStrobeRef = useRef<number>(0);
 
@@ -161,7 +163,7 @@ export default function MobilePlayerBar() {
   const lastTrebleHitTimeRef = useRef<number>(0);
 
   const smoothEnergyRef = useRef<number>(0);
-  const liveWaveformEngineRef = useRef<LiveWaveformBeatEngine>(new LiveWaveformBeatEngine(1024, 0.016, 60));
+  const liveWaveformEngineRef = useRef<LiveWaveformBeatEngine>(new LiveWaveformBeatEngine(1024, 0.015, 55));
 
   // 60FPS Live Stage Engine
   useEffect(() => {
@@ -169,6 +171,8 @@ export default function MobilePlayerBar() {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       targetKickScaleRef.current = 0;
       kickScaleRef.current = 1;
+      targetKickRedIntensityRef.current = 0;
+      kickRedIntensityRef.current = 0;
       targetSnareStrobeRef.current = 0;
       snareStrobeRef.current = 0;
       fastBassRef.current = 0; slowBassRef.current = 0;
@@ -183,19 +187,14 @@ export default function MobilePlayerBar() {
 
     const dataArray = new Uint8Array(1024);
 
-    const liveStageShow = () => {
+    const updateLiveMobileShow = () => {
       const now = performance.now();
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
       const isDrumming = isDrumActiveAtTime(drumProfile, liveSec);
 
-      // Cập nhật Seeker Text mượt mà 60 FPS
-      if (!isDraggingSeekerRef.current) {
-        if (expandedSeekerInputRef.current) {
-          expandedSeekerInputRef.current.value = String(liveSec);
-        }
-        if (expandedCurrentTimeTextRef.current) {
-          expandedCurrentTimeTextRef.current.textContent = formatTime(liveSec);
-        }
+      // Cập nhật Seeker Text 60 FPS
+      if (expandedCurrentTimeTextRef.current) {
+        expandedCurrentTimeTextRef.current.textContent = formatTime(liveSec);
       }
 
       let hasRealData = false;
@@ -212,7 +211,7 @@ export default function MobilePlayerBar() {
       }
 
       if (!hasRealData) {
-        const rawAmp = (player as any)?.currentAmplitude || ((player as any)?.getAmplitudeAtTime ? (player as any).getAmplitudeAtTime(liveSec) : 0.4);
+        const rawAmp = currentAmplitude || (getAmplitudeAtTime ? getAmplitudeAtTime(liveSec) : 0.4);
         for (let i = 0; i < 1024; i++) dataArray[i] = Math.floor(rawAmp * 120);
 
         if (isDrumming) {
@@ -244,13 +243,13 @@ export default function MobilePlayerBar() {
       slowBassRef.current = sB;
       const bassFlux = Math.max(0, fB - sB);
 
-      // 2. BASSLINE / 808 ENERGY (Bins 3-12: 64Hz-258Hz)
+      // 2. BASSLINE / 808 (Bins 3-12: 64Hz-258Hz)
       let basslineSum = 0;
       for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
       const currentBassline = basslineSum / 10;
       smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
 
-      // 3. SNARE DUAL-BAND CONFIRMATION (Isolated from Vocal formants)
+      // 3. SNARE DUAL-BAND GATE
       let midSum = 0;
       for (let i = 70; i <= 140; i++) midSum += dataArray[i];
       const currentMid = midSum / 71;
@@ -267,19 +266,8 @@ export default function MobilePlayerBar() {
       const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
       fastHighRef.current = fH;
       slowHighRef.current = sH;
-      const highFlux = Math.max(0, fH - sH);
 
-      // 4. VOCAL / LEAD BAND (Bins 14-162: ~300Hz-3.5kHz)
-      let vocalSum = 0;
-      for (let i = 14; i <= 162; i++) vocalSum += dataArray[i];
-      const currentVocal = vocalSum / 148;
-      const fV = fastVocalRef.current * 0.20 + currentVocal * 0.80;
-      const sV = slowVocalRef.current * 0.90 + currentVocal * 0.10;
-      fastVocalRef.current = fV;
-      slowVocalRef.current = sV;
-      smoothVocalRef.current += ((currentVocal / 255) - smoothVocalRef.current) * 0.20;
-
-      // 5. TREBLE / HI-HATS / CYMBALS (Bins 232-743: ~5kHz-16kHz)
+      // 5. TREBLE / HI-HATS (Bins 232-743: ~5kHz-16kHz)
       let trebleSum = 0;
       for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
       const currentTreble = trebleSum / 512;
@@ -298,39 +286,45 @@ export default function MobilePlayerBar() {
       // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
-      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY FOR SMALL KICKS & CONSECUTIVE KICK ROLLS)
+      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY: REGULAR KICK vs 808/SUB PUNCH vs RAPID ROLLS)
       if (isDrumming) {
-        if (liveWaveBeat.isBeat) {
-          targetKickScaleRef.current += liveWaveBeat.kickForce;
-        }
-
-        // Rapid kick intervals: 60ms minimum to allow fast trap rolls and 16th-note double kicks
+        // Rapid kick intervals: 55ms minimum to allow fast trap rolls and 16th-note double kicks
         const timeSinceLastKick = now - lastKickHitTimeRef.current;
-        const isConsecutiveKick = timeSinceLastKick >= 60 && timeSinceLastKick < 240;
+        const isConsecutiveKick = timeSinceLastKick >= 55 && timeSinceLastKick < 240;
         const kickThreshold = isConsecutiveKick
-          ? 2.2 * drumProfile.fluxSensitivity
-          : 3.5 * drumProfile.fluxSensitivity;
+          ? 1.6 * drumProfile.fluxSensitivity
+          : 2.6 * drumProfile.fluxSensitivity;
 
-        const is808Sustaining = currentBass > 180 && bassFlux < 4.0;
-        if (bassFlux > kickThreshold && !is808Sustaining && timeSinceLastKick >= 60) {
+        const is808Sustaining = currentBass > 195 && bassFlux < 3.0;
+        const hasBassTransient = bassFlux > kickThreshold && !is808Sustaining && timeSinceLastKick >= 55;
+        const hasWaveformKick = liveWaveBeat.isBeat;
+
+        if (hasBassTransient || hasWaveformKick) {
           lastKickHitTimeRef.current = now;
-          // Multi-tier spring force:
-          // Small kick: 0.015 - 0.025
-          // Medium kick: 0.028 - 0.038
-          // Heavy kick / 808 drop: 0.040 - 0.048
-          const force = bassFlux > 9.0
-            ? Math.min(0.048, 0.024 + bassFlux / 380)
-            : bassFlux > 5.0
-            ? Math.min(0.038, 0.018 + bassFlux / 480)
-            : Math.min(0.025, 0.012 + bassFlux / 600);
-          targetKickScaleRef.current += force;
+
+          // Phân biệt chính xác giữa:
+          // 1. Kick có Sub / Bass / 808 (Heavy Sub-bass Punch / Drop / 808): Nảy mạnh vượt trội, bùng nổ, đỏ rực sâu
+          // 2. Kick thường / Kick nhỏ / Ghost Kick: Nảy khỏe rõ ràng, chớp đỏ tươi rõ nét
+          const isSub808HeavyKick = (currentBass > 135 || bassFlux > 7.0 || (drumProfile.hasKick && currentBass > 115));
+
+          if (isSub808HeavyKick) {
+            // 💥 KICK CÓ SUB/BASS/808: Nảy cực mạnh (0.075 - 0.110), bùng nổ xung lực, đỏ rực sâu
+            const force = Math.min(0.110, 0.055 + bassFlux / 140);
+            targetKickScaleRef.current += force;
+            targetKickRedIntensityRef.current = 1.0;
+          } else {
+            // 🥁 KICK THƯỜNG / KICK NHỎ: Nảy khỏe (0.035 - 0.058), chớp đỏ tươi rõ nét
+            const force = Math.min(0.058, 0.030 + bassFlux / 260);
+            targetKickScaleRef.current += force;
+            targetKickRedIntensityRef.current = Math.max(targetKickRedIntensityRef.current, 0.88);
+          }
         }
 
         const timeSinceLastSnare = now - lastSnareHitTimeRef.current;
-        const isSnare = midFlux > 3.2 * drumProfile.fluxSensitivity && highFlux > 1.4;
+        const isSnare = midFlux > 3.0 * drumProfile.fluxSensitivity && highFlux > 1.3;
         if (isSnare && timeSinceLastSnare >= 65) {
           lastSnareHitTimeRef.current = now;
-          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.30, midFlux / 18));
+          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 16));
         }
 
         const timeSinceLastTreble = now - lastTrebleHitTimeRef.current;
@@ -341,15 +335,19 @@ export default function MobilePlayerBar() {
       }
 
       // PHYSICS ENGINE: HOOKE'S LAW
-      const tension = 0.32;
-      const dampening = 0.60;
+      const tension = 0.30;
+      const dampening = 0.65;
       const displacement = kickScaleRef.current - 1.0;
       targetKickScaleRef.current -= displacement * tension;
       targetKickScaleRef.current *= dampening;
       kickScaleRef.current += targetKickScaleRef.current;
       
-      if (kickScaleRef.current < 0.99) kickScaleRef.current = 0.99;
-      if (kickScaleRef.current > 1.04) kickScaleRef.current = 1.04;
+      if (kickScaleRef.current < 0.985) kickScaleRef.current = 0.985;
+      if (kickScaleRef.current > 1.15) kickScaleRef.current = 1.15;
+
+      // Decay Kick Red Intensity
+      kickRedIntensityRef.current += (targetKickRedIntensityRef.current - kickRedIntensityRef.current) * 0.48;
+      targetKickRedIntensityRef.current *= 0.70;
 
       snareStrobeRef.current += (targetSnareStrobeRef.current - snareStrobeRef.current) * 0.55;
       targetSnareStrobeRef.current *= 0.72;
@@ -361,10 +359,12 @@ export default function MobilePlayerBar() {
       const s = snareStrobeRef.current;
       const nrg = smoothEnergyRef.current;
 
+      const redIntensity = Math.min(1.0, Math.max(0, kickRedIntensityRef.current));
       const kickDelta = Math.max(0, k - 1.0);
-      const kickWeight = Math.min(1.0, kickDelta / 0.04); 
-      const g = Math.floor(255 - kickWeight * 205);
-      const b = Math.floor(255 - kickWeight * 205);
+
+      // KICK COLOR: Mọi cú kick (cả thường lẫn sub/808) đều chớp đỏ rực rỡ, chỉ trắng khi không có kick
+      const g = Math.floor(255 - redIntensity * 230);
+      const b = Math.floor(255 - redIntensity * 230);
       const kickColor = `255, ${g}, ${b}`;
 
       // MINI PLAYER DIRECT DOM MANIPULATION
@@ -424,10 +424,10 @@ export default function MobilePlayerBar() {
         expandLaserBorderRef.current.style.opacity = `${0.1 + s * 0.75 + kickDelta * 2.5 + nrg * 0.15}`;
       }
 
-      rafIdRef.current = requestAnimationFrame(liveStageShow);
+      rafIdRef.current = requestAnimationFrame(updateLiveMobileShow);
     };
 
-    rafIdRef.current = requestAnimationFrame(liveStageShow);
+    rafIdRef.current = requestAnimationFrame(updateLiveMobileShow);
 
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);

@@ -30,6 +30,7 @@
 - [Giao dịch 034: Create Sub-Agent @agent-audio-tester & Automated Audio Graph Diagnostic Suite](#giao-dịch-034-create-sub-agent-agent-audio-tester--automated-audio-graph-diagnostic-suite)
 - [Giao dịch 035: Integrate Graphify Codebase Knowledge Graph Engine & Intelligence Layer](#giao-dịch-035-integrate-graphify-codebase-knowledge-graph-engine--intelligence-layer)
 - [Giao dịch 036: Multi-tier Kick Detection, Universal Zero-Scrollbar Protocol & Audio Duration Sync](#giao-dịch-036-multi-tier-kick-detection-universal-zero-scrollbar-protocol--audio-duration-sync)
+- [Giao dịch 037: Visual Distinction for Regular Kicks vs 808/Sub Drops & Rapid Roll Response](#giao-dịch-037-visual-distinction-for-regular-kicks-vs-808sub-drops--rapid-roll-response)
 
 ---
 
@@ -872,6 +873,25 @@
      - Lắng nghe `onDurationChange` và `onLoadedMetadata` để cập nhật chính xác thời lượng từ `audioRef.current.duration` sang `duration`, `currentTrack.duration` và `playlist`.
      - Bài *01. Elegie* hiển thị chính xác `01:26` khi kết thúc thay vì `03:20`.
   4. **Toàn bộ 7/7 Audio Diagnostic Test Vectors PASS 100%**.
+
+---
+
+### Giao dịch 037: Visual Distinction for Regular Kicks vs 808/Sub Drops & Rapid Roll Response
+* **Thời gian**: 21/08/2026 20:38 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Nguyên nhân gốc rễ (Root Causes)**:
+  1. *Kick nhỏ/thường bị nhầm thành Snare (chớp trắng)*: `kickWeight` trong shader/DOM animation trước đó bị trừ `(k - 1.03)`, khiến tất cả các kick dưới scale 1.03 có `kickWeight = 0` $\rightarrow$ sinh ra màu trắng `rgb(255, 255, 255)` thay vì đỏ.
+  2. *Biên độ nảy của kick 808/sub-bass chưa đủ bùng nổ*: Bị giới hạn clamp trên mobile ở `1.04` và force ở mức thấp, chưa phản ánh được sự khác biệt giữa kick thường và kick có sub-bass 808 dày.
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Tách Biệt Hoàn Toàn Kick Color vs Snare White Strobe (`DesktopPlayerBar.tsx`, `MobilePlayerBar.tsx`)**:
+     - Khởi tạo `kickRedIntensityRef` độc lập: Mọi cú kick (từ ghost kick, kick thường tới 808 drop) đều kích hoạt xung màu Đỏ Rực rỡ (`rgb(255, 25, 25)` - `rgb(255, 60, 60)`). Snare là bộ phận duy nhất kích hoạt Strobe Trắng thuần túy.
+     - **Kick Thường / Kick Nhỏ**: Lực nảy `0.070 - 0.13` (Desktop) / `0.030 - 0.058` (Mobile), chớp đỏ tươi rõ ràng.
+     - **Kick có Sub / Bass / 808**: Lực nảy `0.13 - 0.26` (Desktop) / `0.055 - 0.110` (Mobile), chớp đỏ rực sâu, bùng nổ xung lực vinyl vượt trội.
+  2. **Tối Ưu Phản Hồi Thị Giác Cho Chuỗi Kick Dồn Dập (Rapid Rolls)**:
+     - Giảm `minIntervalMs` xuống **`55ms`**. Mỗi cú đánh liên tiếp trong chuỗi roll lập tức re-energize `targetKickScaleRef` và reset `kickRedIntensityRef = 1.0`, giúp từng cú nhồi kick liên tục có phản hồi thị giác giòn giã và rõ nét 100%.
+  3. **Mở Rộng Giới Hạn Scale Physics Lên `1.15`** trên mobile.
+  4. **Toàn bộ 7/7 Audio Diagnostic Test Vectors PASS 100%**.
+
 
 
 
