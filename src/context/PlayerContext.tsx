@@ -974,9 +974,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             setCurrentTime(cur);
           }
         }}
+        onDurationChange={() => {
+          if (audioRef.current && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
+            const trueDuration = Math.round(audioRef.current.duration);
+            setDuration(trueDuration);
+            setCurrentTrack((prev) => {
+              if (!prev) return prev;
+              return { ...prev, duration: trueDuration };
+            });
+            setPlaylist((prev) =>
+              prev.map((t) => (t.id === currentTrack?.id ? { ...t, duration: trueDuration } : t))
+            );
+          }
+        }}
         onLoadedMetadata={() => {
-          if (audioRef.current) {
-            setDuration(audioRef.current.duration);
+          if (audioRef.current && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
+            const trueDuration = Math.round(audioRef.current.duration);
+            setDuration(trueDuration);
+            setCurrentTrack((prev) => {
+              if (!prev) return prev;
+              return { ...prev, duration: trueDuration };
+            });
+            setPlaylist((prev) =>
+              prev.map((t) => (t.id === currentTrack?.id ? { ...t, duration: trueDuration } : t))
+            );
             if (currentTimeRef.current > 0 && Math.abs(audioRef.current.currentTime - currentTimeRef.current) > 2) {
               audioRef.current.currentTime = currentTimeRef.current;
             }

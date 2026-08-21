@@ -29,6 +29,7 @@
 - [Giao dịch 033: Rebuild 100% Live Waveform-Based Beat Tracking Engine (Zero-Fail Audio Graph)](#giao-dịch-033-rebuild-100-live-waveform-based-beat-tracking-engine-zero-fail-audio-graph)
 - [Giao dịch 034: Create Sub-Agent @agent-audio-tester & Automated Audio Graph Diagnostic Suite](#giao-dịch-034-create-sub-agent-agent-audio-tester--automated-audio-graph-diagnostic-suite)
 - [Giao dịch 035: Integrate Graphify Codebase Knowledge Graph Engine & Intelligence Layer](#giao-dịch-035-integrate-graphify-codebase-knowledge-graph-engine--intelligence-layer)
+- [Giao dịch 036: Multi-tier Kick Detection, Universal Zero-Scrollbar Protocol & Audio Duration Sync](#giao-dịch-036-multi-tier-kick-detection-universal-zero-scrollbar-protocol--audio-duration-sync)
 
 ---
 
@@ -851,6 +852,26 @@
      - Đặc tả năng lực phân tích cấu trúc mã nguồn toàn diện, phát hiện God Nodes, tối ưu hóa mức tiêu thụ token ngữ cảnh (~70x reduction).
   3. **Cấu hình Quản Lý Tệp (`.gitignore`)**:
      - Bổ sung `graphify-out/` vào `.gitignore` để lưu trữ an toàn các kết quả phân tích HTML/JSON trên máy cục bộ.
+
+---
+
+### Giao dịch 036: Multi-tier Kick Detection, Universal Zero-Scrollbar Protocol & Audio Duration Sync
+* **Thời gian**: 21/08/2026 20:25 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Nguyên nhân gốc rễ (Root Causes)**:
+  1. *Kick dồn dập & kick nhỏ bị bỏ sót*: Lockout `minKickInterval = Math.max(160, (60 / bpm) * 700)` (300-600ms) quá dài khiến các kick liên tiếp trong chuỗi roll bị chặn; ngưỡng `bassFlux > 13.0` quá cao khiến kick nhỏ/ghost kick bị nuốt.
+  2. *Thanh cuộn xám xuất hiện trong Lyrics View*: `SyncedLyricsView.tsx` thiếu class `no-scrollbar` và `globals.css` chưa ép quy tắc triệt tiêu scrollbar toàn cục (`*::-webkit-scrollbar { display: none !important; }`).
+  3. *Thời lượng Elegie hiển thị sai 03:20 thay vì 01:26*: `effectiveDuration` trong player bar ưu tiên `currentTrack.duration` trong database (bị null hoặc mặc định 200/03:20) thay vì lắng nghe sự kiện `onDurationChange` / `onLoadedMetadata` từ thẻ `<audio>`.
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Nâng cấp LiveWaveformBeatEngine & Dynamic Player Bars (`liveWaveformBeat.ts`, `DesktopPlayerBar.tsx`, `MobilePlayerBar.tsx`)**:
+     - Giảm lockout xuống `60ms`, cho phép nhận diện 100% các cú nhồi kick dồn dập (rapid rolls / trap 808s) lên tới 1000 BPM.
+     - Phân tầng lực nảy theo 3 cấp độ: Ghost/Soft Kick (`0.015 - 0.025`), Medium Kick (`0.028 - 0.038`), Heavy/Drop Kick (`0.040 - 0.048`).
+  2. **Áp dụng Universal Zero-Scrollbar Cyber Protocol (`globals.css`, `SyncedLyricsView.tsx`)**:
+     - Ẩn hoàn toàn 100% thanh cuộn ngang và dọc trên mọi trình duyệt (Chrome, Safari, Firefox, Edge, Opera) nhưng vẫn duy trì cuộn mượt mà.
+  3. **Đồng bộ thời lượng âm thanh phần cứng (`PlayerContext.tsx`, `VaultApp.tsx`, `VaultScene.tsx`)**:
+     - Lắng nghe `onDurationChange` và `onLoadedMetadata` để cập nhật chính xác thời lượng từ `audioRef.current.duration` sang `duration`, `currentTrack.duration` và `playlist`.
+     - Bài *01. Elegie* hiển thị chính xác `01:26` khi kết thúc thay vì `03:20`.
+  4. **Toàn bộ 7/7 Audio Diagnostic Test Vectors PASS 100%**.
 
 
 

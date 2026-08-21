@@ -18,11 +18,11 @@ export class LiveWaveformBeatEngine {
   private fastEnergy: number = 0;
   private slowEnergy: number = 0;
   private lastBeatTime: number = 0;
-  private threshold: number = 0.045;
-  private minIntervalMs: number = 110;
+  private threshold: number = 0.016;
+  private minIntervalMs: number = 60;
   private waveArray: Uint8Array;
 
-  constructor(fftSize: number = 1024, threshold: number = 0.045, minIntervalMs: number = 110) {
+  constructor(fftSize: number = 1024, threshold: number = 0.016, minIntervalMs: number = 60) {
     this.threshold = threshold;
     this.minIntervalMs = minIntervalMs;
     this.waveArray = new Uint8Array(fftSize);
@@ -78,17 +78,22 @@ export class LiveWaveformBeatEngine {
     const peakToPeak = (maxVal - minVal) / 255; // Spread of waveform amplitude
 
     // Dynamic Adaptive Threshold via Dual EMA
-    this.fastEnergy = this.fastEnergy * 0.15 + rms * 0.85;
-    this.slowEnergy = this.slowEnergy * 0.92 + rms * 0.08;
+    this.fastEnergy = this.fastEnergy * 0.18 + rms * 0.82;
+    this.slowEnergy = this.slowEnergy * 0.88 + rms * 0.12;
     const energyFlux = Math.max(0, this.fastEnergy - this.slowEnergy);
 
-    // Beat Trigger: Activated when waveform energy surges with sufficient peak-to-peak amplitude
-    const isBeat = energyFlux > this.threshold && peakToPeak > 0.28 && (now - this.lastBeatTime > this.minIntervalMs);
+    // Multi-tier Beat Trigger: Catches both large heavy drops and small/rapid successive kicks
+    const isConsecutiveKick = (now - this.lastBeatTime >= this.minIntervalMs) && (now - this.lastBeatTime < 240);
+    const requiredFlux = isConsecutiveKick ? this.threshold * 0.65 : this.threshold;
+    const requiredPeak = isConsecutiveKick ? 0.09 : 0.11;
+
+    const isBeat = energyFlux > requiredFlux && peakToPeak > requiredPeak && (now - this.lastBeatTime >= this.minIntervalMs);
 
     let kickForce = 0;
     if (isBeat) {
       this.lastBeatTime = now;
-      kickForce = Math.min(0.045, energyFlux * 0.18 + peakToPeak * 0.02);
+      // Proportional kick force: small kicks give subtle bounce (0.015-0.025), heavy kicks give explosive punch (0.045)
+      kickForce = Math.min(0.045, Math.max(0.015, energyFlux * 0.22 + peakToPeak * 0.035));
     }
 
     return {

@@ -117,3 +117,22 @@ test('5. Kiểm tra tính năng bắt nhịp thích ứng động Dual EMA trên
   assert.ok(beatResult.kickForce > 0);
   assert.ok(beatResult.energyFlux > 0.04);
 });
+
+test('6. Kiểm tra khả năng bắt kick nhỏ và các đợt kick dồn dập (Consecutive Kick Rolls)', () => {
+  const engine = new LiveWaveformBeatEngine(512, 0.016, 60);
+
+  // 1. Kiểm tra kick nhỏ (Soft kick: biên độ vừa phải)
+  const softKickArray = new Uint8Array(512);
+  for (let i = 0; i < 512; i++) {
+    const sample = Math.sin((2 * Math.PI * 60 * i) / 44100) * 0.35; // 35% amplitude
+    softKickArray[i] = Math.floor((sample + 1) * 127.5);
+  }
+  const softResult = engine.processWaveformArray(softKickArray, 200);
+  assert.equal(softResult.isBeat, true);
+  assert.ok(softResult.kickForce > 0.01);
+
+  // 2. Kiểm tra chuỗi kick dồn dập cách nhau 70ms (Rapid Trap/Drill double-kick roll)
+  const secondRollResult = engine.processWaveformArray(softKickArray, 275);
+  assert.equal(secondRollResult.isBeat, true);
+  assert.ok(secondRollResult.kickForce > 0.01);
+});

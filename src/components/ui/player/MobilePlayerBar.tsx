@@ -75,9 +75,13 @@ export default function MobilePlayerBar() {
     }
   } catch {}
 
-  const effectiveDuration = (currentTrack?.duration && currentTrack.duration > 0)
+  const effectiveDuration = (duration && Number.isFinite(duration) && duration > 0)
+    ? duration
+    : (currentTrack?.duration && currentTrack.duration > 0)
     ? currentTrack.duration
-    : duration;
+    : (audioRef?.current?.duration && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0)
+    ? audioRef.current.duration
+    : 0;
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeView, setActiveView] = useState<'player' | 'lyrics' | 'queue'>('player');
@@ -157,7 +161,7 @@ export default function MobilePlayerBar() {
   const lastTrebleHitTimeRef = useRef<number>(0);
 
   const smoothEnergyRef = useRef<number>(0);
-  const liveWaveformEngineRef = useRef<LiveWaveformBeatEngine>(new LiveWaveformBeatEngine(1024, 0.040, 110));
+  const liveWaveformEngineRef = useRef<LiveWaveformBeatEngine>(new LiveWaveformBeatEngine(1024, 0.016, 60));
 
   // 60FPS Live Stage Engine
   useEffect(() => {
@@ -294,30 +298,45 @@ export default function MobilePlayerBar() {
       // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
-      // TRIGGERS (STRICTLY GUARDED BY isDrumming & DRUM PROFILE SENSITIVITY)
+      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY FOR SMALL KICKS & CONSECUTIVE KICK ROLLS)
       if (isDrumming) {
         if (liveWaveBeat.isBeat) {
           targetKickScaleRef.current += liveWaveBeat.kickForce;
         }
 
-        const minKickInterval = Math.max(160, (60 / drumProfile.bpm) * 700);
-        const is808Sustaining = currentBass > 160 && bassFlux < 8.0;
-        if (bassFlux > 13.0 * drumProfile.fluxSensitivity && !is808Sustaining && now - lastKickHitTimeRef.current > minKickInterval) {
+        // Rapid kick intervals: 60ms minimum to allow fast trap rolls and 16th-note double kicks
+        const timeSinceLastKick = now - lastKickHitTimeRef.current;
+        const isConsecutiveKick = timeSinceLastKick >= 60 && timeSinceLastKick < 240;
+        const kickThreshold = isConsecutiveKick
+          ? 2.2 * drumProfile.fluxSensitivity
+          : 3.5 * drumProfile.fluxSensitivity;
+
+        const is808Sustaining = currentBass > 180 && bassFlux < 4.0;
+        if (bassFlux > kickThreshold && !is808Sustaining && timeSinceLastKick >= 60) {
           lastKickHitTimeRef.current = now;
-          const force = Math.min(0.045, 0.018 + bassFlux / 450);
+          // Multi-tier spring force:
+          // Small kick: 0.015 - 0.025
+          // Medium kick: 0.028 - 0.038
+          // Heavy kick / 808 drop: 0.040 - 0.048
+          const force = bassFlux > 9.0
+            ? Math.min(0.048, 0.024 + bassFlux / 380)
+            : bassFlux > 5.0
+            ? Math.min(0.038, 0.018 + bassFlux / 480)
+            : Math.min(0.025, 0.012 + bassFlux / 600);
           targetKickScaleRef.current += force;
         }
 
-        const minSnareInterval = Math.max(180, (60 / drumProfile.bpm) * 750);
-        const isSnare = midFlux > 6.0 * drumProfile.fluxSensitivity && highFlux > 2.5;
-        if (isSnare && now - lastSnareHitTimeRef.current > minSnareInterval) {
+        const timeSinceLastSnare = now - lastSnareHitTimeRef.current;
+        const isSnare = midFlux > 3.2 * drumProfile.fluxSensitivity && highFlux > 1.4;
+        if (isSnare && timeSinceLastSnare >= 65) {
           lastSnareHitTimeRef.current = now;
-          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 22));
+          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.30, midFlux / 18));
         }
 
-        if (trebleFlux > 2.0 && now - lastTrebleHitTimeRef.current > 90) {
+        const timeSinceLastTreble = now - lastTrebleHitTimeRef.current;
+        if (trebleFlux > 1.3 && timeSinceLastTreble >= 55) {
           lastTrebleHitTimeRef.current = now;
-          targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
+          targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.30, trebleFlux / 8));
         }
       }
 

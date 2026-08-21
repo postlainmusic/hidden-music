@@ -430,7 +430,7 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
   }, [tracks, selectedAlbum, shuffleMode, toggleShuffle, playTrack]);
 
   const formatDuration = useCallback((seconds?: number) => {
-    if (!seconds || seconds <= 0) return '03:20';
+    if (!seconds || seconds <= 0) return '--:--';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;

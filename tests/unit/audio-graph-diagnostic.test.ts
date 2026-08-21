@@ -100,4 +100,23 @@ describe('Web Audio Graph & Beat Pipeline Diagnostic', () => {
     expect(beatResult.kickForce).toBeGreaterThan(0);
     expect(beatResult.energyFlux).toBeGreaterThan(0.04);
   });
+
+  it('6. Kiểm tra khả năng bắt kick nhỏ và các đợt kick dồn dập (Consecutive Kick Rolls)', () => {
+    const engine = new LiveWaveformBeatEngine(512, 0.016, 60);
+
+    // 1. Kiểm tra kick nhỏ (Soft kick: biên độ vừa phải)
+    const softKickArray = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) {
+      const sample = Math.sin((2 * Math.PI * 60 * i) / 44100) * 0.35; // 35% amplitude
+      softKickArray[i] = Math.floor((sample + 1) * 127.5);
+    }
+    const softResult = engine.processWaveformArray(softKickArray, 200);
+    expect(softResult.isBeat).toBe(true);
+    expect(softResult.kickForce).toBeGreaterThan(0.01);
+
+    // 2. Kiểm tra chuỗi kick dồn dập cách nhau 70ms (Rapid Trap/Drill double-kick roll)
+    const secondRollResult = engine.processWaveformArray(softKickArray, 275);
+    expect(secondRollResult.isBeat).toBe(true);
+    expect(secondRollResult.kickForce).toBeGreaterThan(0.01);
+  });
 });

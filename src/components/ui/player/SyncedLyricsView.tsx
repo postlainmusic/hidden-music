@@ -117,8 +117,12 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
     return (
       <div
         ref={containerRef}
-        className={`overflow-y-auto px-6 py-8 text-center select-text font-sans space-y-4 ${className}`}
-        style={{ overscrollBehaviorY: 'contain' }}
+        className={`overflow-y-auto overflow-x-hidden no-scrollbar px-6 py-8 text-center select-text font-sans space-y-4 ${className}`}
+        style={{
+          overscrollBehaviorY: 'contain',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}
       >
         <p className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">— LỜI BÀI HÁT (STATIC) —</p>
         {plainLyrics.split('\n').map((line, idx) => (
@@ -133,10 +137,12 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`overflow-y-auto px-4 sm:px-8 py-12 space-y-6 text-center select-none font-sans scroll-smooth ${className}`}
+      className={`overflow-y-auto overflow-x-hidden no-scrollbar px-4 sm:px-8 py-12 space-y-6 text-center select-none font-sans scroll-smooth ${className}`}
       style={{
         overscrollBehaviorY: 'contain',
         contain: 'layout paint',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
       }}
     >
       {lyrics.map((line, idx) => {

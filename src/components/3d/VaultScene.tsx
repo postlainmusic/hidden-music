@@ -147,7 +147,7 @@ export default function VaultScene({
   toggleShuffle,
   handlePlayAlbum,
   handleShufflePlay,
-  formatDuration = (s) => (s ? `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}` : '03:20'),
+  formatDuration = (s) => (s && s > 0 ? `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}` : '--:--'),
   activeZone = 'audio',
   onSwitchToVideoZone,
   onSwitchToAudioZone,

@@ -137,9 +137,13 @@ export default function DesktopPlayerBar() {
     };
   }, []);
 
-  const effectiveDuration = (currentTrack?.duration && currentTrack.duration > 0)
+  const effectiveDuration = (duration && Number.isFinite(duration) && duration > 0)
+    ? duration
+    : (currentTrack?.duration && currentTrack.duration > 0)
     ? currentTrack.duration
-    : duration;
+    : (audioRef?.current?.duration && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0)
+    ? audioRef.current.duration
+    : 0;
 
   // High-Performance 60FPS Multi-Band Audio-Reactive Engine (Desktop Bar)
   useEffect(() => {
@@ -159,7 +163,7 @@ export default function DesktopPlayerBar() {
       return;
     }
 
-    const liveWaveformEngineRef = { current: new LiveWaveformBeatEngine(1024, 0.040, 110) };
+    const liveWaveformEngineRef = { current: new LiveWaveformBeatEngine(1024, 0.016, 60) };
     const dataArray = new Uint8Array(1024);
 
     const updateLiveDesktopShow = () => {
@@ -277,30 +281,45 @@ export default function DesktopPlayerBar() {
       // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
-      // TRIGGERS (STRICTLY GUARDED BY isDrumming & DRUM PROFILE SENSITIVITY)
+      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY FOR SMALL KICKS & CONSECUTIVE KICK ROLLS)
       if (isDrumming) {
         if (liveWaveBeat.isBeat) {
           targetKickScaleRef.current += liveWaveBeat.kickForce;
         }
 
-        const minKickInterval = Math.max(160, (60 / drumProfile.bpm) * 700);
-        const is808Sustaining = currentBass > 160 && bassFlux < 8.0;
-        if (bassFlux > 13.0 * drumProfile.fluxSensitivity && !is808Sustaining && now - lastKickHitTimeRef.current > minKickInterval) {
+        // Rapid kick intervals: 60ms minimum to allow fast trap rolls and 16th-note double kicks
+        const timeSinceLastKick = now - lastKickHitTimeRef.current;
+        const isConsecutiveKick = timeSinceLastKick >= 60 && timeSinceLastKick < 240;
+        const kickThreshold = isConsecutiveKick
+          ? 2.2 * drumProfile.fluxSensitivity
+          : 3.5 * drumProfile.fluxSensitivity;
+
+        const is808Sustaining = currentBass > 180 && bassFlux < 4.0;
+        if (bassFlux > kickThreshold && !is808Sustaining && timeSinceLastKick >= 60) {
           lastKickHitTimeRef.current = now;
-          const force = Math.min(0.18, 0.06 + bassFlux / 130);
+          // Multi-tier spring force:
+          // Small kick: 0.035 - 0.06
+          // Medium kick: 0.07 - 0.12
+          // Heavy kick / 808 drop: 0.13 - 0.18
+          const force = bassFlux > 9.0
+            ? Math.min(0.18, 0.08 + bassFlux / 110)
+            : bassFlux > 5.0
+            ? Math.min(0.11, 0.045 + bassFlux / 150)
+            : Math.min(0.06, 0.025 + bassFlux / 200);
           targetKickScaleRef.current += force;
         }
 
-        const minSnareInterval = Math.max(180, (60 / drumProfile.bpm) * 750);
-        const isSnare = midFlux > 6.0 * drumProfile.fluxSensitivity && highFlux > 2.5;
-        if (isSnare && now - lastSnareHitTimeRef.current > minSnareInterval) {
+        const timeSinceLastSnare = now - lastSnareHitTimeRef.current;
+        const isSnare = midFlux > 3.2 * drumProfile.fluxSensitivity && highFlux > 1.4;
+        if (isSnare && timeSinceLastSnare >= 65) {
           lastSnareHitTimeRef.current = now;
-          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
+          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.30, midFlux / 18));
         }
 
-        if (trebleFlux > 2.0 && now - lastTrebleHitTimeRef.current > 90) {
+        const timeSinceLastTreble = now - lastTrebleHitTimeRef.current;
+        if (trebleFlux > 1.3 && timeSinceLastTreble >= 55) {
           lastTrebleHitTimeRef.current = now;
-          targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
+          targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.30, trebleFlux / 8));
         }
       }
 
