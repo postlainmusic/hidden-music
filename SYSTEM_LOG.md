@@ -771,6 +771,21 @@
   2. **Tích hợp Module DSP Preset (`src/lib/dsp/trackDrumProfiles.ts`)**:
      - Cung cấp hàm `getTrackDrumProfile(titleOrId)` tự động nhận diện bài hát và trả về cấu hình dải tần số, hệ số đàn hồi lò xo Hooke (`springTension`, `springDampening`) và độ nhạy `fluxSensitivity`.
 
+---
+
+### Giao dịch 031: Eliminate Drum Contamination & Enforce Clean Vocal/Instrument Isolation
+* **Thời gian**: 21/08/2026 16:30 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Khử Bỏ Toàn Bộ Sóng Sine Nhân Tạo Gây Loạn Nhịp**:
+     - Loại bỏ việc tạo dao động chu kỳ giả định trong vòng lặp RAF của `MobilePlayerBar.tsx` và `DesktopPlayerBar.tsx`.
+  2. **Đồng Bộ Hóa Drum Start Timing (`isDrumActiveAtTime`)**:
+     - Nhận biết các phân đoạn intro không có trống: *Elegie* (0 - 45s), *IDK* (0 - 13.5s), *Ai Mới Là Kẻ Xấu Xa* (0 - 8s) $\rightarrow$ Khóa hoàn toàn Kick & Snare triggers về 0, không nảy và không chớp nháy loạn xạ.
+  3. **Tách Biệt Triệt Để Dải Snare Khỏi Giọng Hát (Vocal Formant Separation)**:
+     - Tinh chỉnh dải Mid-Snare ($70 - 140$ bins) kết hợp yêu cầu độ dốc biến thiên năng lượng cao ($>6.0 \times \text{fluxSensitivity}$) và xung nhọn tần số cao ($>2.5$) để giọng hát và nhạc cụ đệm không bao giờ kích hoạt nhầm Snare Strobe.
+  4. **Toàn Bộ 17/17 Tests PASS, Type Check 0 Lỗi & Build Thành Công**.
+
+
 
 
 

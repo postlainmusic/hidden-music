@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { usePlayer } from '@/context/PlayerContext';
 import { SpringMotion, calculateFrequencyDecomposition } from '@/lib/dsp/audioPhysics';
 import { HapticEngine } from '@/lib/dsp/hapticEngine';
+import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 
 interface BeatVisualizerProps {
   className?: string;
@@ -16,7 +17,8 @@ export const BeatVisualizer: React.FC<BeatVisualizerProps> = ({
   barCount = 16,
   showRings = true,
 }) => {
-  const { currentAmplitude, currentTime, isPlaying } = usePlayer();
+  const { currentAmplitude, currentTime, isPlaying, currentTrack } = usePlayer();
+  const drumProfile = useMemo(() => getTrackDrumProfile(currentTrack?.title || currentTrack?.id), [currentTrack?.title, currentTrack?.id]);
   const containerRef = useRef<HTMLDivElement>(null);
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
   const springRef = useRef<SpringMotion>(new SpringMotion(1.0, { stiffness: 220, damping: 12 }));
@@ -30,10 +32,11 @@ export const BeatVisualizer: React.FC<BeatVisualizerProps> = ({
       const dt = lastTimeRef.current > 0 ? (time - lastTimeRef.current) / 1000 : 0.016;
       lastTimeRef.current = time;
 
+      const isDrumming = isDrumActiveAtTime(drumProfile, currentTime);
       const decomp = calculateFrequencyDecomposition(currentAmplitude, currentTime, 1.0);
 
-      // Spring physics update for overall bounce
-      const targetScale = isPlaying ? 1.0 + decomp.subBass * 0.15 + decomp.snareFlux * 0.08 : 1.0;
+      // Spring physics update for overall bounce (strictly when drums are active)
+      const targetScale = isPlaying && isDrumming ? 1.0 + decomp.subBass * 0.15 + decomp.snareFlux * 0.08 : 1.0;
       springRef.current.setTarget(targetScale);
       const currentScale = springRef.current.update(dt);
 
@@ -41,8 +44,8 @@ export const BeatVisualizer: React.FC<BeatVisualizerProps> = ({
         containerRef.current.style.transform = `scale3d(${currentScale.toFixed(4)}, ${currentScale.toFixed(4)}, 1)`;
       }
 
-      // Haptic kick trigger when Sub-bass > 0.82
-      if (isPlaying && decomp.subBass > 0.82 && time - kickCooldownRef.current > 240) {
+      // Haptic kick trigger strictly during drum sections when Sub-bass > 0.82
+      if (isPlaying && isDrumming && decomp.subBass > 0.82 && time - kickCooldownRef.current > 240) {
         kickCooldownRef.current = time;
         HapticEngine.triggerKick();
       }

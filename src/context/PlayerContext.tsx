@@ -5,6 +5,7 @@ import { Album, TrackItem, PlayerZone } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession, hasVideoSubscription, activateVideoSubscription } from '@/lib/authSession';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
+import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -91,11 +92,13 @@ export interface PlayerContextType {
 const PLAYER_STATE_KEY = 'hidden_vault_player_state';
 const WAVEFORM_CACHE = new Map<string, number[]>();
 
-function generateDeterministicWaveform(trackId: string, durationSec: number): number[] {
-  if (WAVEFORM_CACHE.has(trackId)) {
-    return WAVEFORM_CACHE.get(trackId)!;
+function generateDeterministicWaveform(trackId: string, durationSec: number, trackTitle?: string): number[] {
+  const cacheKey = `${trackId}_${trackTitle || ''}`;
+  if (WAVEFORM_CACHE.has(cacheKey)) {
+    return WAVEFORM_CACHE.get(cacheKey)!;
   }
 
+  const profile = getTrackDrumProfile(trackTitle || trackId);
   const safeDuration = Math.max(10, durationSec || 180);
   const totalBuckets = Math.floor(safeDuration * 20); // 50ms per bucket
   const buckets: number[] = new Array(totalBuckets);
@@ -110,13 +113,14 @@ function generateDeterministicWaveform(trackId: string, durationSec: number): nu
     return x - Math.floor(x);
   };
 
-  const bpm = 120 + (Math.abs(seed) % 40);
+  const bpm = profile.bpm || 120;
   const beatIntervalSec = 60 / bpm;
   const beatBucketInterval = Math.max(1, Math.round(beatIntervalSec * 20));
 
   for (let i = 0; i < totalBuckets; i++) {
     const t = i * 0.05;
     const progress = t / safeDuration;
+    const hasDrums = isDrumActiveAtTime(profile, t);
 
     let macroEnvelope = 0.5;
     if (progress < 0.08) {
@@ -129,17 +133,24 @@ function generateDeterministicWaveform(trackId: string, durationSec: number): nu
       macroEnvelope = 0.65 + 0.35 * Math.sin(progress * Math.PI * 4);
     }
 
-    const isBeat = i % beatBucketInterval < 2;
-    const isOffbeat = (i + Math.floor(beatBucketInterval / 2)) % beatBucketInterval < 2;
-    const transient = isBeat ? 0.35 : isOffbeat ? 0.2 : 0;
-    const noise = pseudoRandom(i) * 0.25;
-    const subHarmonic = 0.15 * Math.sin(t * 8.0) + 0.1 * Math.sin(t * 19.5);
+    let transient = 0;
+    if (hasDrums) {
+      const isBeat = i % beatBucketInterval < 2;
+      const isOffbeat = (i + Math.floor(beatBucketInterval / 2)) % beatBucketInterval < 2;
+      transient = isBeat ? 0.40 : isOffbeat ? 0.22 : 0;
+    }
 
-    const rawAmp = macroEnvelope * 0.5 + transient + noise + subHarmonic;
+    const noise = pseudoRandom(i) * 0.15;
+    const subHarmonic = hasDrums ? (0.15 * Math.sin(t * 8.0) + 0.1 * Math.sin(t * 19.5)) : (0.05 * Math.sin(t * 2.0));
+
+    const rawAmp = hasDrums
+      ? macroEnvelope * 0.45 + transient + noise + subHarmonic
+      : 0.15 + 0.08 * Math.sin(t * 1.5) + noise * 0.5;
+
     buckets[i] = Math.max(0.05, Math.min(1.0, Number(rawAmp.toFixed(3))));
   }
 
-  WAVEFORM_CACHE.set(trackId, buckets);
+  WAVEFORM_CACHE.set(cacheKey, buckets);
   return buckets;
 }
 
@@ -222,7 +233,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const trackDuration = duration || currentTrack.duration || 180;
-    const buckets = generateDeterministicWaveform(currentTrack.id, trackDuration);
+    const buckets = generateDeterministicWaveform(currentTrack.id, trackDuration, currentTrack.title);
     setWaveformBuckets(buckets);
   }, [currentTrack, duration]);
 

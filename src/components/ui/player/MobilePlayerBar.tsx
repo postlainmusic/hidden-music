@@ -21,6 +21,7 @@ import { usePlayer } from '@/context/PlayerContext';
 import { useTelemetry } from '@/hooks/useTelemetry';
 import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { BeatVisualizer } from '@/components/visualizer/BeatVisualizer';
+import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 
 const formatTime = (secs: number) => {
   if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -41,6 +42,7 @@ export default function MobilePlayerBar() {
   // 2. Safe Fallback Guard: Đảm bảo không biến nào bị undefined gây sập React
   const currentTrack = player?.currentTrack ?? null;
   const currentAlbum = player?.currentAlbum ?? null;
+  const drumProfile = useMemo(() => getTrackDrumProfile(currentTrack?.title || currentTrack?.id), [currentTrack?.title, currentTrack?.id]);
   const playlist = Array.isArray(player?.playlist) ? player.playlist : [];
   const userQueue = Array.isArray(player?.userQueue) ? player.userQueue : [];
   const removeFromQueue = typeof player?.removeFromQueue === 'function' ? player.removeFromQueue : () => {};
@@ -178,6 +180,7 @@ export default function MobilePlayerBar() {
     const liveStageShow = () => {
       const now = performance.now();
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
+      const isDrumming = isDrumActiveAtTime(drumProfile, liveSec);
 
       // Cập nhật Seeker Text mượt mà 60 FPS
       if (!isDraggingSeekerRef.current) {
@@ -203,15 +206,26 @@ export default function MobilePlayerBar() {
       }
 
       if (!hasRealData) {
-        const rawAmp = (player as any)?.currentAmplitude || ((player as any)?.getAmplitudeAtTime ? (player as any).getAmplitudeAtTime(liveSec) : 0.65);
-        const beatMod = 0.5 + 0.5 * Math.sin(liveSec * Math.PI * 4);
-        const kickPulse = Math.sin(liveSec * Math.PI * 2) > 0.82 ? 1.45 : 0.85;
-        const bassVal = Math.min(255, Math.floor(rawAmp * 240 * beatMod * kickPulse));
-        for (let i = 2; i <= 6; i++) dataArray[i] = bassVal;
-        for (let i = 3; i <= 12; i++) dataArray[i] = Math.floor(rawAmp * 210 * beatMod);
-        for (let i = 70; i <= 185; i++) dataArray[i] = Math.floor(Math.pow(rawAmp, 1.3) * 190 * (0.6 + 0.4 * Math.cos(liveSec * Math.PI * 2)));
-        for (let i = 190; i <= 420; i++) dataArray[i] = Math.floor(Math.pow(rawAmp, 1.5) * 170);
-        for (let i = 232; i <= 743; i++) dataArray[i] = Math.floor(rawAmp * 150 * (0.5 + 0.5 * Math.sin(liveSec * Math.PI * 8)));
+        const rawAmp = (player as any)?.currentAmplitude || ((player as any)?.getAmplitudeAtTime ? (player as any).getAmplitudeAtTime(liveSec) : 0.4);
+        for (let i = 0; i < 1024; i++) dataArray[i] = Math.floor(rawAmp * 120);
+
+        if (isDrumming) {
+          const beatPeriod = 60 / drumProfile.bpm;
+          const beatPhase = (liveSec % beatPeriod) / beatPeriod;
+          const isKickBeat = beatPhase < 0.12;
+          const isSnareBeat = Math.abs(beatPhase - 0.5) < 0.10;
+
+          if (isKickBeat && drumProfile.hasKick) {
+            for (let i = 2; i <= 6; i++) dataArray[i] = Math.min(255, Math.floor(rawAmp * 255 * 1.5));
+          }
+          if (isSnareBeat && drumProfile.hasSnare) {
+            for (let i = 70; i <= 140; i++) dataArray[i] = Math.min(255, Math.floor(rawAmp * 230 * 1.3));
+            for (let i = 200; i <= 400; i++) dataArray[i] = Math.min(255, Math.floor(rawAmp * 210 * 1.2));
+          }
+        } else {
+          for (let i = 2; i <= 10; i++) dataArray[i] = Math.floor(rawAmp * 40);
+          for (let i = 70; i <= 140; i++) dataArray[i] = Math.floor(rawAmp * 50);
+        }
       }
 
       // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
@@ -230,10 +244,10 @@ export default function MobilePlayerBar() {
       const currentBassline = basslineSum / 10;
       smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
 
-      // 3. SNARE DUAL-BAND CONFIRMATION
+      // 3. SNARE DUAL-BAND CONFIRMATION (Isolated from Vocal formants)
       let midSum = 0;
-      for (let i = 70; i <= 185; i++) midSum += dataArray[i];
-      const currentMid = midSum / 116;
+      for (let i = 70; i <= 140; i++) midSum += dataArray[i];
+      const currentMid = midSum / 71;
       const fM = fastMidRef.current * 0.15 + currentMid * 0.85;
       const sM = slowMidRef.current * 0.88 + currentMid * 0.12;
       fastMidRef.current = fM;
@@ -241,8 +255,8 @@ export default function MobilePlayerBar() {
       const midFlux = Math.max(0, fM - sM);
 
       let highSum = 0;
-      for (let i = 190; i <= 420; i++) highSum += dataArray[i];
-      const currentHigh = highSum / 231;
+      for (let i = 200; i <= 420; i++) highSum += dataArray[i];
+      const currentHigh = highSum / 221;
       const fH = fastHighRef.current * 0.15 + currentHigh * 0.85;
       const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
       fastHighRef.current = fH;
@@ -275,23 +289,27 @@ export default function MobilePlayerBar() {
       const currentEnergy = totalSum / 1024;
       smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
 
-      // TRIGGERS
-      const is808Sustaining = currentBass > 150 && bassFlux < 9.0;
-      if (bassFlux > 12.0 && !is808Sustaining && now - lastKickHitTimeRef.current > 120) {
-        lastKickHitTimeRef.current = now;
-        const force = Math.min(0.04, 0.015 + bassFlux / 500);
-        targetKickScaleRef.current += force;
-      }
+      // TRIGGERS (STRICTLY GUARDED BY isDrumming & DRUM PROFILE SENSITIVITY)
+      if (isDrumming) {
+        const minKickInterval = Math.max(160, (60 / drumProfile.bpm) * 700);
+        const is808Sustaining = currentBass > 160 && bassFlux < 8.0;
+        if (bassFlux > 13.0 * drumProfile.fluxSensitivity && !is808Sustaining && now - lastKickHitTimeRef.current > minKickInterval) {
+          lastKickHitTimeRef.current = now;
+          const force = Math.min(0.045, 0.018 + bassFlux / 450);
+          targetKickScaleRef.current += force;
+        }
 
-      const isSnare = midFlux > 4.0 && highFlux > 1.8;
-      if (isSnare && now - lastSnareHitTimeRef.current > 125) {
-        lastSnareHitTimeRef.current = now;
-        targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 25));
-      }
+        const minSnareInterval = Math.max(180, (60 / drumProfile.bpm) * 750);
+        const isSnare = midFlux > 6.0 * drumProfile.fluxSensitivity && highFlux > 2.5;
+        if (isSnare && now - lastSnareHitTimeRef.current > minSnareInterval) {
+          lastSnareHitTimeRef.current = now;
+          targetSnareStrobeRef.current = Math.min(1.0, Math.max(0.35, midFlux / 22));
+        }
 
-      if (trebleFlux > 1.4 && now - lastTrebleHitTimeRef.current > 70) {
-        lastTrebleHitTimeRef.current = now;
-        targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
+        if (trebleFlux > 2.0 && now - lastTrebleHitTimeRef.current > 90) {
+          lastTrebleHitTimeRef.current = now;
+          targetTrebleStrobeRef.current = Math.min(1.0, Math.max(0.35, trebleFlux / 10));
+        }
       }
 
       // PHYSICS ENGINE: HOOKE'S LAW
