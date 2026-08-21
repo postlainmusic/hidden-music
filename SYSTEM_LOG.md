@@ -26,6 +26,8 @@
 - [Giao dịch 018: Dual-Engine Global Audio Architecture — Lossless Vault & YouTube Bridge](#giao-dịch-018-dual-engine-global-audio-architecture--lossless-vault--youtube-bridge)
 - [Giao dịch 019: Multi-Platform Discovery & Search Engine (YouTube Music, Official MVs, SoundCloud, Vault Lossless)](#giao-dịch-019-multi-platform-discovery--search-engine-youtube-music-official-mvs-soundcloud-vault-lossless)
 - [Giao dịch 020: Priority Queue Architecture & In-App Cinema Video Modal Engine](#giao-dịch-020-priority-queue-architecture--in-app-cinema-video-modal-engine)
+- [Giao dịch 033: Rebuild 100% Live Waveform-Based Beat Tracking Engine (Zero-Fail Audio Graph)](#giao-dịch-033-rebuild-100-live-waveform-based-beat-tracking-engine-zero-fail-audio-graph)
+- [Giao dịch 034: Create Sub-Agent @agent-audio-tester & Automated Audio Graph Diagnostic Suite](#giao-dịch-034-create-sub-agent-agent-audio-tester--automated-audio-graph-diagnostic-suite)
 
 ---
 
@@ -812,6 +814,28 @@
      - Tự động gọi `audioCtx.resume()` trên mọi hành động người dùng tương tác (`togglePlay`, `playTrack`, `onPlaying`).
      - Kết nối an toàn `source -> analyser -> destination` với cơ chế fallback tự động.
   3. **19/19 Tests PASS, Type Check 0 Lỗi & Build Edge Runtime Thành Công**.
+
+---
+
+### Giao dịch 034: Create Sub-Agent @agent-audio-tester & Automated Audio Graph Diagnostic Suite
+* **Thời gian**: 21/08/2026 19:40 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Khởi Tạo Sub-Agent `@agent-audio-tester` (`.agents/audio-tester.md`)**:
+     - Đặc tả chuyên sâu vai trò chẩn đoán toàn diện Web Audio Graph & Beat Pipeline, triệt tiêu 5 "thủ phạm" gây câm sóng / liệt beat:
+       + *Vector 1 (AudioContext State)*: Bẫy treo `suspended` do Browser Autoplay Policy $\rightarrow$ Thiết lập singleton & resume hooks.
+       + *Vector 2 (MediaElement Duplication)*: Lỗi gọi lặp `createMediaElementSource` $\rightarrow$ Khóa an toàn bằng `sourceNodeRef`.
+       + *Vector 3 (CORS / Zeroed Frequency Buffer)*: Câm sóng / mảng phẳng 128 $\rightarrow$ Kiểm tra `crossOrigin="anonymous"` và kích hoạt Synthetic Fallback.
+       + *Vector 4 (RAF State Disconnect)*: Mất đồng bộ vòng lặp RAF $\rightarrow$ Duy trì render loop 120 FPS khi `activeZone === 'audio'`.
+       + *Vector 5 (Threshold Mismatch)*: Lệch ngưỡng tĩnh $\rightarrow$ Thay thế bằng thuật toán Dual EMA thích ứng động theo dải tần số đặc trưng.
+  2. **Đăng Ký Workspace Skill (`.agents/skills/agent-audio-tester/SKILL.md`)**:
+     - Định tuyến tự động trong danh mục kỹ năng của Antigravity Agent Ecosystem.
+  3. **Xây Dựng Bộ Test Chẩn Đoán Tự Động (`tests/unit/audio-graph-diagnostic.test.ts` & `.test.mjs`)**:
+     - Kiểm thử tĩnh và động: AudioContext singleton & resume policy, thuộc tính `crossOrigin="anonymous"` & `playsInline`, mô phỏng sóng sin Sub-bass 60Hz Kick (RMS > 0.5, Peak-to-Peak > 0.8), phát hiện tín hiệu câm flat 128 và Dual EMA energy burst.
+  4. **Cập nhật CI/CD Test Pipeline**:
+     - Tích hợp test chẩn đoán vào `package.json` (`test:unit` & `test`).
+     - Đảm bảo 100% tuân thủ Invariants và chuẩn Cross-Platform CI/CD.
+
 
 
 
