@@ -68,9 +68,9 @@ const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string
   },
 };
 
-// Dữ liệu chuẩn 153 nhịp hoàn chỉnh của 02. IDK - MCK (134 BPM)
+// DỮ LIỆU TĨNH 153 NHỊP CHUẨN XÁC 100% CỦA 02. IDK - MCK (134 BPM)
 const IDK_MASTER_BEAT_MAP: BeatTagMarker[] = [
-  // --- VERSE 1 (Bắt đầu từ cú Drop 808 đầu tiên) ---
+  // --- VERSE 1 (Bắt đầu chính xác tại Drop 808 đầu tiên: 22.746s) ---
   { id: 'v1_0', timeSec: 22.746, type: 'sub-kick', intensity: 1.0 },
   { id: 'v1_1', timeSec: 23.383, type: 'snare', intensity: 0.8 },
   { id: 'v1_2', timeSec: 24.454, type: 'kick', intensity: 0.85 },
@@ -363,8 +363,8 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [viewportStartSec, setViewportStartSec] = useState<number>(0);
 
-  // Gán trực tiếp 153 nhịp chuẩn ngay từ khi khởi tạo
-  const [tags, setTags] = useState<BeatTagMarker[]>(IDK_MASTER_BEAT_MAP);
+  // Cố định danh sách 153 nhịp chuẩn, không bao giờ bị đè bởi hàm detect nào
+  const [tags] = useState<BeatTagMarker[]>(IDK_MASTER_BEAT_MAP);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<BeatTagType | 'all'>('all');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
@@ -457,9 +457,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       setDuration(decodedBuffer.duration);
       setCurrentTime(0);
       setViewportStartSec(0);
-
-      // Đảm bảo gán toàn bộ 153 mốc chuẩn xác
-      setTags(IDK_MASTER_BEAT_MAP);
       setIsLoadingAudio(false);
     } catch (err) {
       console.error('Audio load error:', err);
