@@ -31,6 +31,7 @@
 - [Giao dịch 035: Integrate Graphify Codebase Knowledge Graph Engine & Intelligence Layer](#giao-dịch-035-integrate-graphify-codebase-knowledge-graph-engine--intelligence-layer)
 - [Giao dịch 036: Multi-tier Kick Detection, Universal Zero-Scrollbar Protocol & Audio Duration Sync](#giao-dịch-036-multi-tier-kick-detection-universal-zero-scrollbar-protocol--audio-duration-sync)
 - [Giao dịch 037: Visual Distinction for Regular Kicks vs 808/Sub Drops & Rapid Roll Response](#giao-dịch-037-visual-distinction-for-regular-kicks-vs-808sub-drops--rapid-roll-response)
+- [Giao dịch 038: Audio Waveform Beat & Drum Tagger Studio in Admin Portal with WAV Exporter](#giao-dịch-038-audio-waveform-beat--drum-tagger-studio-in-admin-portal-with-wav-exporter)
 
 ---
 
@@ -891,6 +892,35 @@
      - Giảm `minIntervalMs` xuống **`55ms`**. Mỗi cú đánh liên tiếp trong chuỗi roll lập tức re-energize `targetKickScaleRef` và reset `kickRedIntensityRef = 1.0`, giúp từng cú nhồi kick liên tục có phản hồi thị giác giòn giã và rõ nét 100%.
   3. **Mở Rộng Giới Hạn Scale Physics Lên `1.15`** trên mobile.
   4. **Toàn bộ 7/7 Audio Diagnostic Test Vectors PASS 100%**.
+
+---
+
+### Giao dịch 038: Audio Waveform Beat & Drum Tagger Studio in Admin Portal with WAV Exporter
+* **Thời gian**: 21/08/2026 20:53 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Tạo một hệ thống Studio trực quan trong Admin cho phép hiển thị thanh sóng âm thanh (PCM Waveform) độ chính xác cao đến từng mili-giây.
+  - Cho phép người dùng nghe nhạc, tua chậm (`0.5x`, `0.75x`, `1.0x`), phóng to thu nhỏ từ `1x` đến `20x`, và sử dụng phím tắt để gán nhãn chính xác các cú `Kick thường`, `Sub-kick (808)`, `Snare / Clap`, `Hi-hat` cho bài *02. IDK (MCK)*, *03. Ai Mới Là Kẻ Xấu Xa* và các bài hát trong kho đĩa.
+  - Xuất dữ liệu dưới dạng file âm thanh `.WAV` chuẩn (gốc hoặc hòa âm tiếng click) cùng cấu hình mã JSON / TypeScript.
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Tạo Component `AdminBeatTagger.tsx` & Tích Hợp Vào Admin Portal (`src/app/admin/page.tsx`)**:
+     - Thêm Tab **`BEAT & WAVE TAGGER`** vào giao diện quản trị Admin.
+     - Sử dụng Web Audio API `AudioContext.decodeAudioData` giải mã luồng âm thanh trực tiếp sang mảng PCM thô.
+     - Vẽ thanh sóng âm thanh High-DPI Canvas 60 FPS với các dải năng lượng Bass/Peak được phân màu trực quan.
+     - Tính năng Zoom mốc thời gian từ `1x` đến `20x` với thanh cuộn thời gian mượt mà.
+  2. **Hệ Thống Phím Tắt Gán Nhãn Thời Gian Thực (Realtime Hotkeys)**:
+     - `1` hoặc `K`: Gán nhãn `Kick thường`.
+     - `2` hoặc `S`: Gán nhãn `Sub-kick (808/Bass punch)`.
+     - `3` hoặc `N`: Gán nhãn `Snare / Clap`.
+     - `4` hoặc `H`: Gán nhãn `Hi-hat / Cymbal`.
+     - `Space`: Phát / Tạm dừng; `←` / `→`: Lùi / Tiến mốc thời gian.
+     - Chạm/Click trực tiếp lên sóng để chọn, sửa mốc mili-giây, hoặc xóa nhãn.
+     - Đồng bộ hiệu ứng chớp màu visual flash và tiếng gõ click metronome tức thì.
+  3. **Bộ Xuất File WAV Thuần & Bộ Xuất Mã Cấu Hình**:
+     - Hàm `encodeAudioBufferToWav`: Xuất file WAV 16-bit 44.1kHz chuẩn từ bộ nhớ trình duyệt mà không cần thư viện bên ngoài.
+     - Nút **"XUẤT FILE WAV GỐC"** & **"XUẤT WAV KÈM NHỊP CLICK"** (giúp người dùng nghe kiểm tra độ chính xác của nhịp gán).
+     - Nút sao chép mã cấu hình JSON / TypeScript với 1-click.
+
 
 
 
