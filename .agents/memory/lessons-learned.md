@@ -22,9 +22,9 @@
   - *Sự cố*: Trên iOS Safari và Android Chrome, `AudioContext` khởi tạo ngầm sẽ bị khóa `suspended` nếu chưa có tương tác chạm từ người dùng.
   - *Bài học vĩnh viễn*: Luôn gắn handler mở khóa `if (audioCtx.state === 'suspended') audioCtx.resume()` vào sự kiện click/tap đầu tiên của người dùng.
 
-* **LL-04: Cross-Origin Audio Tainting & Silent Playback**
-  - *Sự cố*: Gắn `createMediaElementSource(audio)` trực tiếp lên stream link ngoài thiếu header CORS khiến Web Audio tắt tiếng thẻ audio (`outputs zeroes`).
-  - *Bài học vĩnh viễn*: HTML5 Audio element phát trực tiếp ra loa, dữ liệu trực quan FFT tách rời và trích xuất qua pre-computed waveform 50ms buckets off-thread.
+* **LL-04: Cross-Origin Audio Tainting & Silent Playback [CRITICAL INVARIANT - PERMANENT BAN]**
+  - *Sự cố*: Gắn `createMediaElementSource(audio)` lên stream audio từ CDN ngoài (`media.postlain.com`, YouTube Music, R2) khiến trình duyệt lập tức tắt tiếng hoàn toàn thẻ audio (`MediaElementAudioSource outputs zeroes due to CORS access restrictions`).
+  - *Bài học vĩnh viễn*: TUYỆT ĐỐI CẤM gọi `createMediaElementSource` trên thẻ audio chính. Thẻ HTML5 Audio element PHẢI luôn xuất âm thanh trực tiếp ra loa. Mọi hoạt ảnh Visualizer, Beat Detection, Dynamic Glow, Strobe và Physics PHẢI trích xuất độc lập qua `MeydaEngine` (`spectralFlux`, `rms`, `spectralCentroid`) kết hợp deterministic waveform buckets. Được giám sát tự động bởi unit test `tests/unit/no-cors-hijack.test.mjs`.
 
 * **LL-05: Mobile Haptic API Uniformity & Battery Guard**
   - *Sự cố*: Gọi `navigator.vibrate` trực tiếp gây crash trên iOS Safari (không hỗ trợ) hoặc làm nóng máy nếu kích hoạt ở tần số cao.

@@ -747,6 +747,20 @@
   3. **Bộ Test Suite Mở Rộng 16/16 Passed**:
      - Bổ sung `tests/unit/meyda-engine.test.mjs` kiểm thử toàn bộ 4 hàm trích xuất của Meyda, 16/16 tests PASS.
 
+---
+
+### Giao dịch 029: Invariant 6 & Automated Regression Test against CORS Audio Hijacking
+* **Thời gian**: 21/08/2026 16:20 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Hạng mục Nâng cấp (Features Delivered)**:
+  1. **Đóng băng Invariant 6 trong `AGENTS.md` & `lessons-learned.md`**:
+     - `Invariant 6: Tuyệt Đối Cấm Can Thiệp createMediaElementSource Vào Thẻ Audio Chính (CORS Audio-Silencing Invariant)`: Thiết lập rào cản vĩnh viễn không cho phép bất kỳ Agent nào can thiệp Web Audio API vào thẻ Audio phát nhạc của người dùng.
+  2. **Thiết lập Bộ Test Tự Động `tests/unit/no-cors-hijack.test.mjs`**:
+     - Quét toàn bộ thư mục `src/context`, `src/components/ui/player`, `src/components/visualizer`, `src/hooks` trong mỗi lần chạy `npm run test` để tự động chặn build nếu phát hiện lệnh gọi `createMediaElementSource`.
+  3. **Đạt 17/17 Unit & Integration Tests PASS**:
+     - Toàn bộ test suite hoàn thành 100% không có lỗi.
+
+
 
 
 

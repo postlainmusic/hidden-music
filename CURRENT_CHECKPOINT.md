@@ -1,16 +1,16 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 21/08/2026 16:15 (GMT+7)  
+> **Thời gian cập nhật**: 21/08/2026 16:20 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã khắc phục triệt để lỗi mất tiếng âm thanh do cơ chế chặn bảo mật CORS của trình duyệt bằng việc cách ly thẻ HTML5 Audio xuất trực tiếp ra phần cứng loa, đồng thời tích hợp toàn bộ các công thức toán học trích xuất đặc trưng âm thanh từ Meyda Engine (`spectralFlux`, `rms`, `spectralCentroid`, `spectralRolloff`, `zcr`) vào hệ thống bắt Beat `src/lib/dsp/meydaEngine.ts`. Đã vượt qua 16/16 tests PASS, Type check 0 lỗi, Build thành công 100%.
+> **Trạng thái hệ thống**: Đóng băng vĩnh viễn Invariant 6 (CORS Audio-Silencing Invariant) vào AGENTS.md và bộ nhớ tự học lessons-learned.md. Thiết lập bộ kiểm thử tự động `tests/unit/no-cors-hijack.test.mjs` nhằm ngăn chặn vĩnh viễn việc gọi `createMediaElementSource` trên hệ thống phát nhạc. Tích hợp trọn vẹn Meyda Feature Extraction Engine, 17/17 tests PASS, Type check 0 lỗi, Build thành công 100%.
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Khắc Phục Triệt Để Lỗi Mất Tiếng (CORS Zero-Audio Output Isolation)**:
-   - Gỡ bỏ hoàn toàn `createMediaElementSource` khỏi thẻ Audio chính để tránh việc trình duyệt chặn kênh âm thanh (`outputs zeroes due to CORS access restrictions`).
-   - Âm thanh phát 100% nguyên bản, trong trẻo, không bị méo tiếng hoặc ngắt quãng trên mọi nguồn stream (Cloudflare R2 Lossless, YouTube Music, CDN).
+1. **Đóng Băng Nguyên Tắc Bất Biến 6 Trong `AGENTS.md` & `lessons-learned.md`**:
+   - `Invariant 6: Tuyệt Đối Cấm Can Thiệp createMediaElementSource Vào Thẻ Audio Chính`: Thẻ Audio luôn kết nối trực tiếp với phần cứng loa. Mọi phân tích visualizer/beat tracking chạy qua `MeydaEngine` độc lập.
+   - Thêm unit test tự động `tests/unit/no-cors-hijack.test.mjs` quét toàn bộ codebase trong CI pipeline.
 
 2. **Tích Hợp Thuật Toán Meyda Engine Chuẩn Xác Vào Beat Pipeline (`src/lib/dsp/meydaEngine.ts`)**:
    - `spectralFlux`: Tính biến thiên phổ chỉnh lưu nửa sóng (Half-wave rectified difference) để bắt trọn vẹn điểm bùng nổ của Kick và Snare.
@@ -19,7 +19,7 @@
    - `spectralRolloff` & `zcr`: Xác định ngưỡng 85% năng lượng và độ nhiễu tín hiệu.
 
 3. **Toàn Vẹn CI/CD & Deploy**:
-   - 16/16 unit và integration tests pass 100%.
+   - 17/17 unit và integration tests pass 100%.
    - Type check `tsc --noEmit` 0 lỗi.
    - Production bundle build thành công với Edge runtime.
 
@@ -27,5 +27,5 @@
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Duy trì tính ổn định của âm thanh và hiệu ứng visualizer trên mọi thiết bị di động và desktop.
+1. Duy trì tính toàn vẹn của âm thanh không bao giờ bị ngắt tiếng.
 2. Tự động đồng bộ và push deploy lên GitHub.

@@ -23,6 +23,10 @@
 5. **Đồng Nhất Môi Trường Local & GitHub Actions (Cross-Platform CI/CD Parity)**:
    - Môi trường phát triển cục bộ (Windows x64) và máy chủ GitHub Actions CI/CD (`ubuntu-latest` / Linux x64) phải luôn tương thích 100%.
    - **TUYỆT ĐỐI KHÔNG** khai báo các gói binary ràng buộc hệ điều hành (ví dụ `@next/swc-win32-*`, `@next/swc-darwin-*`) trong `dependencies`/`devDependencies` của `package.json` để tránh lỗi `EBADPLATFORM` trên máy chủ Linux.
+6. **Tuyệt Đối Cấm Can Thiệp `createMediaElementSource` Vào Thẻ Audio Chính (CORS Audio-Silencing Invariant)**:
+   - Thẻ `<audio>` chính (`audioRef.current`) PHẢI luôn phát trực tiếp ra phần cứng loa để đảm bảo 100% người dùng luôn nghe thấy âm thanh.
+   - **TUYỆT ĐỐI KHÔNG** gọi `createMediaElementSource(audioRef.current)` vì trình duyệt sẽ tự động ngắt tiếng hoàn toàn (`MediaElementAudioSource outputs zeroes due to CORS access restrictions`) khi stream nhạc từ CDN ngoài (`media.postlain.com`, YouTube Music, Cloudflare R2).
+   - Mọi hoạt ảnh Visualizer, Beat Detection, Dynamic Glow, Strobe và Physics PHẢI sử dụng dữ liệu trích xuất từ `MeydaEngine` kết hợp pre-computed deterministic buckets (`waveformBuckets`) và `subscribeToTimeUpdate` để đạt 120 FPS mượt mà không bao giờ can thiệp vào luồng phát âm thanh trực tiếp.
 
 ---
 
