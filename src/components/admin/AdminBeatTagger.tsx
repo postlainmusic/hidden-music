@@ -1340,11 +1340,15 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
             {/* JSON / TypeScript Code Preview */}
             <div className="space-y-2 pt-2 border-t border-white/10">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-zinc-400 font-bold">MÃ CẤU HÌNH NHÃN:</span>
+                <span className="text-zinc-400 font-bold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-yellow-400" />
+                  MÃ HỌC MÁY CHO AI (GROUND-TRUTH):
+                </span>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={handleCopyJson}
                     className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white flex items-center gap-1 font-bold"
+                    title="Sao chép dạng JSON chuẩn"
                   >
                     {copiedJson ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                     <span>JSON</span>
@@ -1352,13 +1356,32 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
 
                   <button
                     onClick={handleCopyCode}
-                    className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white flex items-center gap-1 font-bold"
+                    className="px-2 py-0.5 rounded bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-[10px] text-red-300 hover:text-white flex items-center gap-1 font-bold"
+                    title="Sao chép mã Ground-Truth Dataset TypeScript cho AI học máy"
                   >
                     {copiedCode ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                    <span>TypeScript</span>
+                    <span>Dataset TS</span>
                   </button>
                 </div>
               </div>
+
+              {/* Realtime Beat Analysis & Calibration Specs */}
+              {tags.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[10px] space-y-1 text-zinc-300">
+                  <div className="flex items-center justify-between">
+                    <span>Tổng cú Kick/Sub:</span>
+                    <strong className="text-red-400">{tagCounts.kick + tagCounts.subKick} nhịp ({tagCounts.subKick} Sub-808)</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Tổng cú Snare/Clap:</span>
+                    <strong className="text-white">{tagCounts.snare} nhịp</strong>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-white/10 pt-1 text-zinc-400">
+                    <span>Định dạng:</span>
+                    <span className="text-emerald-400 font-bold">Standard Ground-Truth v2.0 (AI Verified)</span>
+                  </div>
+                </div>
+              )}
 
               <pre className="p-2.5 rounded-xl bg-black/90 border border-white/15 text-[10px] text-zinc-300 overflow-x-auto max-h-36 no-scrollbar font-mono leading-relaxed">
                 {exportJsonString}
@@ -1367,7 +1390,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           </div>
 
           <div className="pt-3 border-t border-white/10 text-[10px] text-zinc-500 text-center">
-            PostLain Hidden Music Vault • Audio Graph Drum Tagger
+            PostLain Hidden Music Vault • Audio Graph Drum Tagger & AI Benchmark
           </div>
         </div>
       </div>
