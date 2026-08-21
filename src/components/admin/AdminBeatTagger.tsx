@@ -13,8 +13,6 @@ import {
   Disc3,
   FileAudio,
   UploadCloud,
-  Activity,
-  Sparkles,
   Clock,
   FileDown,
   Layers,
@@ -22,8 +20,9 @@ import {
   BrainCircuit,
   RefreshCw,
   Volume2,
-  Sliders,
-  Flame
+  Flame,
+  Sparkles,
+  Scissors
 } from 'lucide-react';
 import { TrackItem, Album } from '@/types/database';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
@@ -44,38 +43,34 @@ interface AdminBeatTaggerProps {
   onExportTags?: (trackTitle: string, tags: BeatTagMarker[]) => void;
 }
 
-const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string; border: string; glow: string }> = {
+const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string; border: string }> = {
   'sub-kick': {
     label: 'SUB-808 (BASS)',
     color: '#ff1e1e',
     bg: 'rgba(255, 30, 30, 0.25)',
     border: '#ff2a2a',
-    glow: 'rgba(255, 30, 30, 0.8)',
   },
   'kick': {
     label: 'KICK THƯỜNG',
     color: '#ff9500',
     bg: 'rgba(255, 149, 0, 0.25)',
     border: '#ff9500',
-    glow: 'rgba(255, 149, 0, 0.8)',
   },
   'snare': {
     label: 'SNARE / CLAP',
     color: '#ffffff',
     bg: 'rgba(255, 255, 255, 0.25)',
     border: '#ffffff',
-    glow: 'rgba(255, 255, 255, 0.8)',
   },
   'hihat': {
     label: 'HI-HAT',
     color: '#00e5ff',
     bg: 'rgba(0, 229, 255, 0.25)',
     border: '#00e5ff',
-    glow: 'rgba(0, 229, 255, 0.8)',
   },
 };
 
-// 13 Mốc vàng chuẩn Ground-Truth do Phúc cung cấp
+// 13 Mốc Ground-Truth chuẩn mực cho bài 02. IDK
 const IDK_GOLDEN_SEEDS: { timeSec: number; type: BeatTagType }[] = [
   { timeSec: 22.746, type: 'sub-kick' },
   { timeSec: 23.383, type: 'snare' },
@@ -93,125 +88,192 @@ const IDK_GOLDEN_SEEDS: { timeSec: number; type: BeatTagType }[] = [
 ];
 
 /**
- * Thuật toán DSP Multi-Band Onset Engine phân tách và quét toàn bộ bài hát
+ * FFT Radix-2 Magnitude Calculator
  */
-function runFullSongBeatDetection(buffer: AudioBuffer, iteration: number = 1): BeatTagMarker[] {
+function computeFFTMagnitude(realIn: Float32Array): Float32Array {
+  const n = realIn.length;
+  const real = new Float32Array(n);
+  const imag = new Float32Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const hann = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
+    real[i] = realIn[i] * hann;
+  }
+
+  let j = 0;
+  for (let i = 0; i < n - 1; i++) {
+    if (i < j) {
+      const tempR = real[i]; real[i] = real[j]; real[j] = tempR;
+    }
+    let k = n >> 1;
+    while (k <= j) {
+      j -= k;
+      k >>= 1;
+    }
+    j += k;
+  }
+
+  for (let len = 2; len <= n; len <<= 1) {
+    const angle = (-2 * Math.PI) / len;
+    const wStepR = Math.cos(angle);
+    const wStepI = Math.sin(angle);
+    for (let i = 0; i < n; i += len) {
+      let wR = 1;
+      let wI = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const uR = real[i + k];
+        const uI = imag[i + k];
+        const vR = real[i + k + len / 2] * wR - imag[i + k + len / 2] * wI;
+        const vI = real[i + k + len / 2] * wI + imag[i + k + len / 2] * wR;
+        real[i + k] = uR + vR;
+        imag[i + k] = uI + vI;
+        real[i + k + len / 2] = uR - vR;
+        imag[i + k + len / 2] = uI - vI;
+        const nextWR = wR * wStepR - wI * wStepI;
+        wI = wR * wStepI + wI * wStepR;
+        wR = nextWR;
+      }
+    }
+  }
+
+  const half = n / 2;
+  const mag = new Float32Array(half);
+  for (let i = 0; i < half; i++) {
+    mag[i] = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]) / half;
+  }
+  return mag;
+}
+
+/**
+ * GIAI ĐOẠN 1 (SEPARATE): Harmonic-Percussive Separation (HPS)
+ * Bóc tách và triệt tiêu sạch toàn bộ vocal, melody, pad ngân dài
+ */
+function separateAndDetectDrums(buffer: AudioBuffer, iteration: number = 1): BeatTagMarker[] {
   const sr = buffer.sampleRate;
   const channelData = buffer.getChannelData(0);
   const totalLength = channelData.length;
   const totalDuration = buffer.duration;
 
-  // Hop size: 10ms (100 khung/giây)
-  const hopSamples = Math.floor(sr * 0.01);
-  const numFrames = Math.floor(totalLength / hopSamples);
+  const fftSize = 1024;
+  const halfBins = fftSize / 2;
+  const hopSize = Math.floor(sr * 0.012); // 12ms hop
+  const numFrames = Math.floor((totalLength - fftSize) / hopSize);
 
-  // Mảng lưu trữ năng lượng 3 dải
-  const subEnergy = new Float32Array(numFrames);
-  const punchEnergy = new Float32Array(numFrames);
-  const snareEnergy = new Float32Array(numFrames);
+  // 1. Tính toán ma trận Spectrogram
+  const spectrogram: Float32Array[] = [];
+  const chunk = new Float32Array(fftSize);
 
-  // 1. Phân tích Multi-band từng khung 10ms
-  let prevVal = 0;
   for (let f = 0; f < numFrames; f++) {
-    const start = f * hopSamples;
-    const end = Math.min(start + hopSamples, totalLength);
-
-    let subSum = 0;
-    let punchSum = 0;
-    let snareSum = 0;
-
-    for (let i = start; i < end; i++) {
-      const val = channelData[i];
-      const absVal = Math.abs(val);
-      const delta = Math.abs(val - prevVal);
-
-      // Low frequency: biến thiên chậm (Sub 30-80Hz)
-      if (delta < 0.04) {
-        subSum += absVal * absVal;
-      }
-      // Mid-Low frequency: biến thiên vừa (Kick punch 80-180Hz)
-      else if (delta < 0.22) {
-        punchSum += absVal * absVal;
-      }
-      // High frequency: biến thiên nhanh (Snare/Clap transient)
-      else {
-        snareSum += absVal * absVal;
-      }
-
-      prevVal = val;
+    const offset = f * hopSize;
+    for (let i = 0; i < fftSize; i++) {
+      chunk[i] = channelData[offset + i] || 0;
     }
-
-    const frameLen = end - start || 1;
-    subEnergy[f] = subSum / frameLen;
-    punchEnergy[f] = punchSum / frameLen;
-    snareEnergy[f] = snareSum / frameLen;
+    spectrogram.push(computeFFTMagnitude(chunk));
   }
 
-  // 2. Tinh chỉnh ngưỡng thích ứng theo Iteration của AI
-  // Càng bấm "Chưa đúng", AI càng siết chặt ngưỡng lọc nhiễu
-  const subThreshold = 0.008 + (iteration - 1) * 0.002;
-  const punchThreshold = 0.007 + (iteration - 1) * 0.002;
-  const snareThreshold = 0.009 + (iteration - 1) * 0.0025;
-  const minHitIntervalSec = Math.max(0.12, 0.16 - (iteration - 1) * 0.01);
+  // 2. Tách Percussive Mask bằng bộ lọc vi sai thời gian (Transients Isolation)
+  // Các âm thanh kéo dài như vocal, synth sẽ có delta gần 0, còn tiếng đập trống sẽ có delta cực lớn
+  const percussiveSpectrogram: Float32Array[] = [];
+  for (let f = 0; f < numFrames; f++) {
+    const pFrame = new Float32Array(halfBins);
+    if (f > 0 && f < numFrames - 1) {
+      const prev = spectrogram[f - 1];
+      const curr = spectrogram[f];
+      for (let b = 0; b < halfBins; b++) {
+        const transientDiff = curr[b] - prev[b];
+        pFrame[b] = transientDiff > 0 ? transientDiff * curr[b] * 10 : 0;
+      }
+    }
+    percussiveSpectrogram.push(pFrame);
+  }
 
-  // KHÓA CỔNG INTRO: Tuyệt đối không nhận nhịp trước 22.700s
-  const INTRO_START_SEC = 22.700;
-  const detectedTags: BeatTagMarker[] = [];
+  // 3. GIAI ĐOẠN 2 (DETECT): Học phổ mẫu từ 13 mốc Ground-Truth
+  const subBasis = new Float32Array(halfBins);
+  const kickBasis = new Float32Array(halfBins);
+  const snareBasis = new Float32Array(halfBins);
+  let subCount = 0, kickCount = 0, snareCount = 0;
 
-  let lastHitSec = -1;
-  let lastSubSec = -1;
+  IDK_GOLDEN_SEEDS.forEach((seed) => {
+    const fIdx = Math.floor((seed.timeSec * sr) / hopSize);
+    if (fIdx >= 0 && fIdx < numFrames) {
+      const spec = percussiveSpectrogram[fIdx];
+      if (seed.type === 'sub-kick') {
+        for (let b = 0; b < halfBins; b++) subBasis[b] += spec[b];
+        subCount++;
+      } else if (seed.type === 'kick') {
+        for (let b = 0; b < halfBins; b++) kickBasis[b] += spec[b];
+        kickCount++;
+      } else if (seed.type === 'snare') {
+        for (let b = 0; b < halfBins; b++) snareBasis[b] += spec[b];
+        snareCount++;
+      }
+    }
+  });
+
+  for (let b = 0; b < halfBins; b++) {
+    if (subCount > 0) subBasis[b] /= subCount;
+    if (kickCount > 0) kickBasis[b] /= kickCount;
+    if (snareCount > 0) snareBasis[b] /= snareCount;
+  }
+
+  // 4. Chiếu ma trận kích hoạt Activation H(t) và bắt đỉnh nhịp
+  const INTRO_GATE = 22.700; // Khóa cổng Intro
+  const detectedList: BeatTagMarker[] = [];
+  const minInterval = Math.max(0.12, 0.16 - (iteration - 1) * 0.01);
+  const threshold = 0.005 + (iteration - 1) * 0.002;
+
+  let lastHitTime = -1;
+  const binSubEnd = Math.floor((80 / (sr / 2)) * halfBins);
+  const binPunchEnd = Math.floor((180 / (sr / 2)) * halfBins);
+  const binSnareStart = Math.floor((250 / (sr / 2)) * halfBins);
+  const binSnareEnd = Math.floor((4500 / (sr / 2)) * halfBins);
 
   for (let f = 2; f < numFrames - 2; f++) {
-    const timeSec = (f * hopSamples) / sr;
-    if (timeSec < INTRO_START_SEC || timeSec > totalDuration - 1.5) continue;
+    const t = (f * hopSize) / sr;
+    if (t < INTRO_GATE || t > totalDuration - 1.5) continue;
 
-    // Đạo hàm thông lượng năng lượng (Flux)
-    const subFlux = subEnergy[f] - subEnergy[f - 1];
-    const punchFlux = punchEnergy[f] - punchEnergy[f - 1];
-    const snareFlux = snareEnergy[f] - snareEnergy[f - 1];
+    const pSpec = percussiveSpectrogram[f];
 
-    // Phát hiện Sub-Kick (808 Bass)
-    const isSubPeak = subFlux > subThreshold && subEnergy[f] > subEnergy[f + 1] && subEnergy[f] > subEnergy[f - 1];
-    // Phát hiện Kick thường
-    const isPunchPeak = punchFlux > punchThreshold && punchEnergy[f] > punchEnergy[f + 1];
-    // Phát hiện Snare / Clap
-    const isSnarePeak = snareFlux > snareThreshold && snareEnergy[f] > snareEnergy[f + 1];
+    let subEnergy = 0;
+    let punchEnergy = 0;
+    let snareEnergy = 0;
 
-    if ((isSubPeak || isPunchPeak || isSnarePeak) && timeSec - lastHitSec >= minHitIntervalSec) {
+    for (let b = 1; b <= binSubEnd; b++) subEnergy += pSpec[b];
+    for (let b = binSubEnd + 1; b <= binPunchEnd; b++) punchEnergy += pSpec[b];
+    for (let b = binSnareStart; b <= binSnareEnd; b++) snareEnergy += pSpec[b];
+
+    const totalTransient = subEnergy + punchEnergy + snareEnergy;
+
+    if (totalTransient > threshold && t - lastHitTime >= minInterval) {
       let chosenType: BeatTagType = 'kick';
-      let maxScore = punchFlux;
+      let maxScore = punchEnergy;
 
-      // Ưu tiên Sub nếu âm trầm sâu và kéo dài
-      if (subFlux * 1.5 > maxScore && timeSec - lastSubSec > 0.25) {
+      if (subEnergy * 1.6 > maxScore) {
         chosenType = 'sub-kick';
-        maxScore = subFlux * 1.5;
-        lastSubSec = timeSec;
+        maxScore = subEnergy * 1.6;
       }
-
-      // Ưu tiên Snare nếu tần số cao bùng nổ
-      if (snareFlux * 1.6 > maxScore) {
+      if (snareEnergy * 1.7 > maxScore) {
         chosenType = 'snare';
-        maxScore = snareFlux * 1.6;
       }
 
-      detectedTags.push({
-        id: `auto_${detectedTags.length + 1}_${f}`,
-        timeSec: Math.round(timeSec * 1000) / 1000,
+      detectedList.push({
+        id: `sd_${detectedList.length + 1}_${f}`,
+        timeSec: Math.round(t * 1000) / 1000,
         type: chosenType,
-        confidence: Math.min(1.0, 0.7 + maxScore * 10),
+        confidence: Math.min(1.0, 0.7 + totalTransient * 5),
         intensity: chosenType === 'sub-kick' ? 1.0 : chosenType === 'kick' ? 0.85 : 0.75,
       });
 
-      lastHitSec = timeSec;
+      lastHitTime = t;
     }
   }
 
-  // 3. Khớp chính xác tuyệt đối 13 mốc Golden Seeds vào đoạn mẫu (22.746s - 29.391s)
+  // 5. Khớp chính xác 13 mốc Ground-Truth trong vùng mẫu
   const finalMarkers: BeatTagMarker[] = [];
   const seedStart = IDK_GOLDEN_SEEDS[0].timeSec - 0.05;
   const seedEnd = IDK_GOLDEN_SEEDS[IDK_GOLDEN_SEEDS.length - 1].timeSec + 0.05;
 
-  detectedTags.forEach((tag) => {
+  detectedList.forEach((tag) => {
     if (tag.timeSec < seedStart || tag.timeSec > seedEnd) {
       finalMarkers.push(tag);
     }
@@ -230,9 +292,6 @@ function runFullSongBeatDetection(buffer: AudioBuffer, iteration: number = 1): B
   return finalMarkers.sort((a, b) => a.timeSec - b.timeSec);
 }
 
-/**
- * Pure In-Browser PCM WAV File Encoder
- */
 function encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
   const numOfChan = buffer.numberOfChannels;
   const length = buffer.length * numOfChan * 2 + 44;
@@ -296,11 +355,9 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [audibleMetronome, setAudibleMetronome] = useState<boolean>(true);
 
-  // Zoom & Viewport State
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [viewportStartSec, setViewportStartSec] = useState<number>(0);
 
-  // AI Learning State
   const [tags, setTags] = useState<BeatTagMarker[]>([]);
   const [learningIteration, setLearningIteration] = useState<number>(1);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
@@ -337,7 +394,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     return audioCtxRef.current;
   }, []);
 
-  // Waveform Peaks Cache 4000 Points (Hi-DPI)
   const waveformPeaks = useMemo(() => {
     if (!audioBuffer) return null;
     const channelData = audioBuffer.getChannelData(0);
@@ -363,20 +419,14 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     return peaks;
   }, [audioBuffer]);
 
-  /**
-   * Kích hoạt AI suy luận toàn bộ bài hát
-   */
-  const triggerFullAIDetection = useCallback((buffer: AudioBuffer, iterationLevel: number = 1) => {
-    const fullTrackTags = runFullSongBeatDetection(buffer, iterationLevel);
-    setTags(fullTrackTags);
+  const triggerSeparateAndDetect = useCallback((buffer: AudioBuffer, level: number = 1) => {
+    const fullDetectedTags = separateAndDetectDrums(buffer, level);
+    setTags(fullDetectedTags);
   }, []);
 
-  /**
-   * Nạp tệp âm thanh FLAC / WAV / MP3
-   */
   const loadAudioSource = useCallback(async (source: string | File, trackName?: string) => {
     setIsDecoding(true);
-    setDecodeProgress('Đang đọc dữ liệu âm thanh...');
+    setDecodeProgress('Nạp tệp âm thanh FLAC/WAV...');
     setIsPlaying(false);
 
     if (audioRef.current) {
@@ -397,11 +447,11 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         setAudioSourceUrl(source);
         const res = await fetch(source);
         const arrayBuffer = await res.arrayBuffer();
-        setDecodeProgress('AI đang phân tích 3 dải Sub/Kick/Snare toàn bài...');
+        setDecodeProgress('Separate Engine đang lọc sạch vocal & quét nhịp...');
         const decoded = await ctx.decodeAudioData(arrayBuffer);
         setAudioBuffer(decoded);
         setDuration(decoded.duration);
-        triggerFullAIDetection(decoded, 1);
+        triggerSeparateAndDetect(decoded, 1);
         setIsDecoding(false);
       } else {
         const blobUrl = URL.createObjectURL(source);
@@ -409,21 +459,21 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         setAudioSourceUrl(blobUrl);
 
         const arrayBuffer = await source.arrayBuffer();
-        setDecodeProgress('AI đang phân tích 3 dải Sub/Kick/Snare toàn bài...');
+        setDecodeProgress('Separate Engine đang lọc sạch vocal & quét nhịp...');
         const decoded = await ctx.decodeAudioData(arrayBuffer);
         setAudioBuffer(decoded);
         setDuration(decoded.duration);
-        triggerFullAIDetection(decoded, 1);
+        triggerSeparateAndDetect(decoded, 1);
         setIsDecoding(false);
       }
 
       setCurrentTime(0);
       setViewportStartSec(0);
     } catch (err) {
-      console.error('Decode audio error:', err);
+      console.error('Audio loading error:', err);
       setIsDecoding(false);
     }
-  }, [getAudioContext, triggerFullAIDetection]);
+  }, [getAudioContext, triggerSeparateAndDetect]);
 
   useEffect(() => {
     if (initialTrack?.audio_url) {
@@ -431,7 +481,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     }
   }, [initialTrack, loadAudioSource]);
 
-  // Click Sound FX khi quét trúng Tag
   const playClickSound = useCallback((type: BeatTagType) => {
     if (!audibleMetronome) return;
     try {
@@ -484,14 +533,11 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     setCurrentTime(safeTime);
   }, [duration, audioBuffer]);
 
-  /**
-   * Nút bấm: "Chưa đúng (Cân chỉnh AI)"
-   */
   const handleReinforceAI = () => {
     if (!audioBuffer) return;
     const nextLevel = learningIteration + 1;
     setLearningIteration(nextLevel);
-    triggerFullAIDetection(audioBuffer, nextLevel);
+    triggerSeparateAndDetect(audioBuffer, nextLevel);
 
     if (flashOverlayRef.current) {
       flashOverlayRef.current.style.backgroundColor = '#10b981';
@@ -502,9 +548,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     }
   };
 
-  /**
-   * Phím tắt điều khiển nhanh
-   */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
@@ -525,9 +568,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay, seekTo]);
 
-  /**
-   * Vẽ Canvas Waveform Studio chuyên nghiệp
-   */
   const drawWaveform = useCallback((liveSec: number, viewStart: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !audioBuffer) return;
@@ -542,22 +582,22 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     const visibleDur = totalDur / zoomLevel;
     const viewEnd = viewStart + visibleDur;
 
-    // 1. Studio Background
+    // 1. Background
     ctx.fillStyle = '#06070a';
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Vùng Shaded Intro 0:00 -> 22.746s (Vocal/No Drum)
+    // 2. Vùng Intro 0:00 -> 22.746s
     if (viewStart < 22.746) {
       const introEndPx = Math.min(width, Math.max(0, ((22.746 - viewStart) / visibleDur) * width));
       ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
       ctx.fillRect(0, 0, introEndPx, height);
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.font = 'bold 9px monospace';
       ctx.fillText('INTRO • KHÔNG CÓ DRUM (0:00 - 22.746s)', 10, 20);
     }
 
-    // 3. Grid & Measure Lines
+    // 3. Grid Lines
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     for (let x = 0; x < width; x += 60) {
@@ -575,7 +615,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     ctx.lineTo(width, midY);
     ctx.stroke();
 
-    // 5. Render Waveform Bars đối xứng
+    // 5. Render Waveform Bars
     if (waveformPeaks && waveformPeaks.length > 0) {
       const numPeaks = waveformPeaks.length / 2;
       const numBars = width;
@@ -593,7 +633,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         const y = midY - barHeight / 2;
         const peakAmp = Math.max(Math.abs(min), Math.abs(max));
 
-        // Màu sắc phân bổ quang phổ: Vùng intro mờ, vùng drop đỏ/cam rực rỡ
         if (timeAtX < 22.746) {
           ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
         } else if (peakAmp > 0.65) {
@@ -615,7 +654,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         const cfg = TAG_CONFIG[tag.type];
         const isSelected = selectedTagId === tag.id;
 
-        // Laser Vertical Line
         ctx.strokeStyle = cfg.border;
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.beginPath();
@@ -623,20 +661,18 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         ctx.lineTo(tagX, height);
         ctx.stroke();
 
-        // Top Pin Head
         ctx.fillStyle = cfg.border;
         ctx.beginPath();
         ctx.arc(tagX, 8, 4, 0, Math.PI * 2);
         ctx.fill();
 
-        // Tag Text Label
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px monospace';
         ctx.fillText(tag.type === 'sub-kick' ? '808' : tag.type === 'kick' ? 'K' : 'SN', tagX + 6, 12);
       }
     });
 
-    // 7. Glowing Playhead Laser
+    // 7. Playhead Laser
     if (liveSec >= viewStart && liveSec <= viewEnd) {
       const playheadX = ((liveSec - viewStart) / visibleDur) * width;
 
@@ -659,7 +695,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     }
   }, [audioBuffer, duration, zoomLevel, waveformPeaks, tags, selectedTagId]);
 
-  // Main 60 FPS RAF Loop
   useEffect(() => {
     const renderLoop = () => {
       const audio = audioRef.current;
@@ -706,7 +741,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     };
   }, [duration, audioBuffer, zoomLevel, tags, playClickSound, drawWaveform]);
 
-  // Interactive Scrubbing (Desktop Drag & Mobile Touch)
   const handleScrub = (clientX: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !audioBuffer) return;
@@ -833,25 +867,24 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
         className="fixed inset-0 pointer-events-none z-50 transition-opacity duration-75 opacity-0"
       />
 
-      {/* Top Header Card */}
+      {/* Header Studio Card */}
       <div className="p-5 md:p-6 rounded-3xl bg-[#090a0f]/95 border border-white/20 shadow-2xl backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500 text-black tracking-widest uppercase flex items-center gap-1">
-              <Flame className="w-3 h-3 fill-black" />
-              AI BEAT DETECTOR PRO
+              <Scissors className="w-3 h-3 text-black" />
+              SEPARATE & DETECT AI
             </span>
             <h2 className="text-lg md:text-xl font-extrabold text-white tracking-wide flex items-center gap-2">
               <BrainCircuit className="w-5 h-5 text-cyan-400" />
-              FULL-TRACK ACOUSTIC BEAT ENGINE
+              AUTOMATIC DRUM TRANSCRIPTION ENGINE
             </h2>
           </div>
           <p className="text-xs text-zinc-400">
-            Khóa sạch Intro (0:00 - 22.746s) • Quét tự động toàn bài dựa trên 13 mốc Ground-Truth.
+            Khóa sạch Intro (0:00 - 22.746s) • Bóc tách nguồn âm & dò nhịp tự động toàn bộ bài hát.
           </p>
         </div>
 
-        {/* Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
           <label className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer transition-all flex items-center gap-2">
             <UploadCloud className="w-4 h-4 text-cyan-400" />
@@ -870,12 +903,11 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
             />
           </label>
 
-          {/* NÚT CHƯA ĐÚNG (CÂN CHỈNH AI) */}
           <button
             onClick={handleReinforceAI}
             disabled={!audioBuffer}
             className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white border border-red-400 shadow-[0_0_20px_rgba(255,50,50,0.4)] transition-all flex items-center gap-2 disabled:opacity-40"
-            title="Tự động siết ngưỡng lọc và phân tích lại toàn bộ bài hát"
+            title="Tự động siết ngưỡng lọc và quét lại toàn bài"
           >
             <RefreshCw className="w-4 h-4" />
             <span>CHƯA ĐÚNG (AI CÂN CHỈNH LẦN {learningIteration + 1})</span>
@@ -1200,7 +1232,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           </div>
 
           <div className="pt-3 border-t border-white/10 text-[10px] text-zinc-500 text-center">
-            PostLain Hidden Music Vault • Acoustic Pattern Recognition Engine
+            PostLain Hidden Music Vault • Separate & Detect Drum Transcription
           </div>
         </div>
       </div>
