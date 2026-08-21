@@ -65,9 +65,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-black text-white antialiased selection:bg-white selection:text-black overflow-x-hidden min-h-[100dvh] [overscroll-behavior-y:none]">
+      <body className="bg-black text-white antialiased selection:bg-white selection:text-black overflow-x-hidden min-h-screen">
         <PlayerProvider>
-          <div id="cinematic-viewport-wrapper" className="min-h-[100dvh] w-full transition-transform duration-75 ease-out [overscroll-behavior-y:none]">
+          <div id="cinematic-viewport-wrapper" className="min-h-screen w-full transition-transform duration-75 ease-out">
             {children}
           </div>
           <CinematicVisualizer />

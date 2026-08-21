@@ -1563,8 +1563,8 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 md:p-8 pb-36 sm:pb-40 font-cyber relative">
-      <div className="tv-grain-overlay" />
+    <main className="min-h-screen w-full overflow-y-auto bg-black text-white p-4 md:p-8 pb-36 sm:pb-40 font-cyber relative">
+      <div className="tv-grain-overlay pointer-events-none" />
 
       {/* Top Header Navigation */}
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-4 border-b border-white/20 relative z-10">

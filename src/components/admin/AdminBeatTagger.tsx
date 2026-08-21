@@ -36,7 +36,6 @@ import {
 } from 'lucide-react';
 import { TrackItem, Album } from '@/types/database';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
-import { TRACK_DRUM_PROFILES } from '@/lib/dsp/trackDrumProfiles';
 
 export type BeatTagType = 'sub-kick' | 'kick' | 'snare' | 'hihat';
 
@@ -45,7 +44,7 @@ export interface BeatTagMarker {
   timeSec: number;
   type: BeatTagType;
   label?: string;
-  intensity?: number; // 0.0 to 1.0
+  intensity?: number;
 }
 
 interface AdminBeatTaggerProps {
@@ -86,7 +85,7 @@ const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string
 };
 
 /**
- * Pure In-Browser PCM WAV File Encoder (Zero external dependencies)
+ * Pure In-Browser PCM WAV File Encoder
  */
 function encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
   const numOfChan = buffer.numberOfChannels;
@@ -156,14 +155,16 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
 
   const [selectedTrackId, setSelectedTrackId] = useState<string>('preset_idk');
   const [selectedTrackTitle, setSelectedTrackTitle] = useState<string>('02. IDK - MCK');
-  const [audioUrl, setAudioUrl] = useState<string>('');
   
-  // Audio Decoding & Playback State
+  // HTML5 Audio Master & Web Audio State
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioSourceUrl, setAudioSourceUrl] = useState<string>('');
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isDecoding, setIsDecoding] = useState<boolean>(false);
   const [decodeProgress, setDecodeProgress] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [volume, setVolume] = useState<number>(1.0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -182,38 +183,33 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const [copiedJson, setCopiedJson] = useState<boolean>(false);
   const [isExportingWav, setIsExportingWav] = useState<boolean>(false);
 
-  // Web Audio Nodes
+  // Web Audio Context for Metronome & Waveform Decoding
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const startOffsetRef = useRef<number>(0);
   const rafIdRef = useRef<number | null>(null);
   const lastTriggeredTagRef = useRef<string | null>(null);
+  const blobUrlToRevokeRef = useRef<string | null>(null);
 
-  // Canvas Refs
+  // Canvas & Overlay Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // Flash Feedback Ref
   const flashOverlayRef = useRef<HTMLDivElement | null>(null);
 
-  // Initialize Audio Context
+  // Get Web Audio Context
   const getAudioContext = useCallback(() => {
     if (!audioCtxRef.current) {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       audioCtxRef.current = new AudioCtx();
     }
     if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume();
+      audioCtxRef.current.resume().catch(() => {});
     }
     return audioCtxRef.current;
   }, []);
 
   /**
-   * Synthesize high-fidelity demo audio buffer for offline / preset tracks
+   * Synthesize realistic demo audio buffer & WAV blob for preset tracks
    */
-  const synthesizeDemoTrackBuffer = useCallback((title: string, durationSec: number = 120, bpm: number = 134): AudioBuffer => {
+  const synthesizeDemoTrack = useCallback((title: string, durationSec: number = 180, bpm: number = 134): { buffer: AudioBuffer; wavBlob: Blob } => {
     const ctx = getAudioContext();
     const sampleRate = ctx.sampleRate;
     const numSamples = Math.floor(sampleRate * durationSec);
@@ -238,7 +234,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         const beatPhase = (t - drumStart) % beatInterval;
         const beatNum = Math.floor(((t - drumStart) / beatInterval) % 4);
 
-        // Kick on beat 0 (and rapid roll on trap)
+        // Kick on beat 0 (and double roll on trap)
         if (beatNum === 0 || (isTrap && beatNum === 2 && beatPhase < 0.15)) {
           if (beatPhase < 0.18) {
             const kickEnv = Math.exp(-beatPhase * 28);
@@ -263,7 +259,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
           }
         }
 
-        // Hi-hats 8th notes
+        // Hi-hats
         const hatPhase = ((t - drumStart) % (beatInterval / 2)) / (beatInterval / 2);
         if (hatPhase < 0.04) {
           const hatEnv = Math.exp(-hatPhase * 80);
@@ -275,80 +271,110 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       right[i] = sample;
     }
 
-    return buffer;
+    const wavBlob = encodeAudioBufferToWav(buffer);
+    return { buffer, wavBlob };
   }, [getAudioContext]);
 
   /**
-   * Load and decode audio from URL or File or Synthesizer
+   * Load and decode audio from File or URL or Preset
    */
-  const loadAndDecodeAudio = useCallback(async (source: string | File) => {
+  const loadAudioSource = useCallback(async (source: string | File) => {
     setIsDecoding(true);
-    setDecodeProgress('Đang tải luồng âm thanh...');
+    setDecodeProgress('Đang nạp luồng âm thanh...');
     setIsPlaying(false);
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch {}
-      sourceNodeRef.current = null;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    if (blobUrlToRevokeRef.current) {
+      URL.revokeObjectURL(blobUrlToRevokeRef.current);
+      blobUrlToRevokeRef.current = null;
     }
 
     const ctx = getAudioContext();
 
     try {
-      let arrayBuffer: ArrayBuffer;
-
       if (typeof source === 'string') {
         if (source.startsWith('preset:')) {
-          setDecodeProgress('Đang khởi tạo bộ giải mã âm thanh...');
+          setDecodeProgress('Khởi tạo bộ tổng hợp âm thanh...');
           const trackKey = source.replace('preset:', '');
           const isIdk = trackKey === 'idk';
           const title = isIdk ? '02. IDK - MCK' : '03. Ai Mới Là Kẻ Xấu Xa';
           const bpm = isIdk ? 134 : 88;
-          const duration = isIdk ? 180 : 210;
-          const synthBuffer = synthesizeDemoTrackBuffer(title, duration, bpm);
-          setAudioBuffer(synthBuffer);
+          const dur = isIdk ? 180 : 210;
+
+          const { buffer, wavBlob } = synthesizeDemoTrack(title, dur, bpm);
+          setAudioBuffer(buffer);
+          setDuration(buffer.duration);
+
+          const blobUrl = URL.createObjectURL(wavBlob);
+          blobUrlToRevokeRef.current = blobUrl;
+          setAudioSourceUrl(blobUrl);
+
           setIsDecoding(false);
           setDecodeProgress('');
           return;
         }
 
-        setDecodeProgress('Đang tải dữ liệu nhị phân từ CDN...');
+        setDecodeProgress('Tải dữ liệu âm thanh từ CDN...');
+        setAudioSourceUrl(source);
+
         const res = await fetch(source);
         if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-        arrayBuffer = await res.arrayBuffer();
+        const arrayBuffer = await res.arrayBuffer();
+
+        setDecodeProgress('Đang vẽ thanh sóng PCM...');
+        const decoded = await ctx.decodeAudioData(arrayBuffer);
+        setAudioBuffer(decoded);
+        setDuration(decoded.duration);
+        setIsDecoding(false);
+        setDecodeProgress('');
       } else {
         setDecodeProgress('Đang đọc tệp cục bộ...');
-        arrayBuffer = await source.arrayBuffer();
+        const blobUrl = URL.createObjectURL(source);
+        blobUrlToRevokeRef.current = blobUrl;
+        setAudioSourceUrl(blobUrl);
+
+        const arrayBuffer = await source.arrayBuffer();
+        setDecodeProgress('Đang giải mã thanh sóng...');
+        const decoded = await ctx.decodeAudioData(arrayBuffer);
+        setAudioBuffer(decoded);
+        setDuration(decoded.duration);
+        setIsDecoding(false);
+        setDecodeProgress('');
       }
 
-      setDecodeProgress('Đang giải mã PCM Waveform với Web Audio API...');
-      const decoded = await ctx.decodeAudioData(arrayBuffer);
-      setAudioBuffer(decoded);
       setCurrentTime(0);
       setViewportStartSec(0);
-      setIsDecoding(false);
-      setDecodeProgress('');
     } catch (err) {
-      console.warn('Audio decode failed, falling back to synthesizer:', err);
-      setDecodeProgress('Chuyển sang bộ tổng hợp sóng chính xác...');
-      const synthBuffer = synthesizeDemoTrackBuffer(selectedTrackTitle, 180, 134);
-      setAudioBuffer(synthBuffer);
+      console.warn('Direct decode failed, synthesizing fallback waveform:', err);
+      setDecodeProgress('Khởi tạo sóng chuẩn fallback...');
+      const { buffer, wavBlob } = synthesizeDemoTrack(selectedTrackTitle, 180, 134);
+      setAudioBuffer(buffer);
+      setDuration(buffer.duration);
+      const blobUrl = URL.createObjectURL(wavBlob);
+      blobUrlToRevokeRef.current = blobUrl;
+      setAudioSourceUrl(blobUrl);
       setIsDecoding(false);
       setDecodeProgress('');
     }
-  }, [getAudioContext, synthesizeDemoTrackBuffer, selectedTrackTitle]);
+  }, [getAudioContext, synthesizeDemoTrack, selectedTrackTitle]);
 
-  // Load initialTrack or Preset IDK on initial mount
+  // Handle initialTrack or default Preset
   useEffect(() => {
     if (initialTrack) {
       setSelectedTrackId(initialTrack.id);
       setSelectedTrackTitle(initialTrack.title);
       const url = initialTrack.audio_url ? getMediaCdnUrl(initialTrack.audio_url) : '';
       if (url) {
-        loadAndDecodeAudio(url);
+        loadAudioSource(url);
         return;
       }
     }
-    loadAndDecodeAudio('preset:idk');
-  }, [initialTrack, loadAndDecodeAudio]);
+    loadAudioSource('preset:idk');
+  }, [initialTrack, loadAudioSource]);
 
   /**
    * Sound Tick generator for Audible Metronome / Tags
@@ -391,65 +417,29 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   }, [audibleMetronome, getAudioContext]);
 
   /**
-   * Audio Playback Control
+   * Audio Playback Control via HTML5 Audio Element
    */
-  const startPlaybackAt = useCallback((offsetSec: number) => {
-    if (!audioBuffer) return;
-    const ctx = getAudioContext();
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch {}
-      sourceNodeRef.current = null;
-    }
-
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.playbackRate.value = playbackRate;
-
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = isMuted ? 0 : volume;
-
-    source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    sourceNodeRef.current = source;
-    gainNodeRef.current = gainNode;
-
-    const safeOffset = Math.max(0, Math.min(audioBuffer.duration, offsetSec));
-    startTimeRef.current = ctx.currentTime;
-    startOffsetRef.current = safeOffset;
-
-    source.start(0, safeOffset);
-    setIsPlaying(true);
-
-    source.onended = () => {
+    if (audio.paused) {
+      audio.play().then(() => setIsPlaying(true)).catch(() => {});
+    } else {
+      audio.pause();
       setIsPlaying(false);
-    };
-  }, [audioBuffer, getAudioContext, playbackRate, volume, isMuted]);
-
-  const pausePlayback = useCallback(() => {
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch {}
-      sourceNodeRef.current = null;
     }
-    setIsPlaying(false);
   }, []);
 
-  const togglePlay = useCallback(() => {
-    if (isPlaying) {
-      pausePlayback();
-    } else {
-      startPlaybackAt(currentTime);
-    }
-  }, [isPlaying, pausePlayback, startPlaybackAt, currentTime]);
-
   const seekTo = useCallback((timeSec: number) => {
-    const safeTime = Math.max(0, Math.min(audioBuffer?.duration || 1000, timeSec));
-    setCurrentTime(safeTime);
-    if (isPlaying) {
-      startPlaybackAt(safeTime);
+    const audio = audioRef.current;
+    const maxDur = duration || audioBuffer?.duration || 1000;
+    const safeTime = Math.max(0, Math.min(maxDur, timeSec));
+    if (audio) {
+      audio.currentTime = safeTime;
     }
-  }, [audioBuffer, isPlaying, startPlaybackAt]);
+    setCurrentTime(safeTime);
+  }, [duration, audioBuffer]);
 
   /**
    * Add a new Tag Marker at current timestamp
@@ -460,7 +450,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     // Check if tag already exists within 20ms
     const existingIdx = tags.findIndex((t) => Math.abs(t.timeSec - roundedTime) < 0.02);
     if (existingIdx !== -1) {
-      // Update existing tag
       setTags((prev) => prev.map((t, idx) => (idx === existingIdx ? { ...t, type } : t)));
     } else {
       const newTag: BeatTagMarker = {
@@ -476,7 +465,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     if (flashOverlayRef.current) {
       const cfg = TAG_CONFIG[type];
       flashOverlayRef.current.style.backgroundColor = cfg.border;
-      flashOverlayRef.current.style.opacity = '0.4';
+      flashOverlayRef.current.style.opacity = type === 'sub-kick' ? '0.5' : '0.3';
       setTimeout(() => {
         if (flashOverlayRef.current) flashOverlayRef.current.style.opacity = '0';
       }, 70);
@@ -503,7 +492,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
    */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
@@ -513,16 +501,20 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         togglePlay();
       } else if (e.key === '1' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        addTagAtTime(currentTime, 'kick');
+        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTime;
+        addTagAtTime(liveSec, 'kick');
       } else if (e.key === '2' || e.key.toLowerCase() === 's') {
         e.preventDefault();
-        addTagAtTime(currentTime, 'sub-kick');
+        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTime;
+        addTagAtTime(liveSec, 'sub-kick');
       } else if (e.key === '3' || e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        addTagAtTime(currentTime, 'snare');
+        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTime;
+        addTagAtTime(liveSec, 'snare');
       } else if (e.key === '4' || e.key.toLowerCase() === 'h') {
         e.preventDefault();
-        addTagAtTime(currentTime, 'hihat');
+        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTime;
+        addTagAtTime(liveSec, 'hihat');
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         const step = e.shiftKey ? 0.01 : 0.05;
@@ -547,25 +539,23 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
    * Main 60 FPS RAF Loop for Canvas Waveform & Realtime Tag Tracker
    */
   useEffect(() => {
-    const ctx = getAudioContext();
-
     const renderLoop = () => {
-      if (isPlaying && ctx) {
-        const liveSec = startOffsetRef.current + (ctx.currentTime - startTimeRef.current) * playbackRate;
-        const totalDur = audioBuffer?.duration || 1;
-        const boundedTime = Math.min(totalDur, Math.max(0, liveSec));
-        setCurrentTime(boundedTime);
+      const audio = audioRef.current;
+      if (audio && !audio.paused) {
+        const liveSec = audio.currentTime;
+        setCurrentTime(liveSec);
 
         // Auto scroll viewport when playhead reaches right 80% of screen
+        const totalDur = duration || audioBuffer?.duration || 1;
         const visibleSec = totalDur / zoomLevel;
-        if (boundedTime > viewportStartSec + visibleSec * 0.8) {
-          setViewportStartSec(Math.max(0, boundedTime - visibleSec * 0.2));
-        } else if (boundedTime < viewportStartSec) {
-          setViewportStartSec(boundedTime);
+        if (liveSec > viewportStartSec + visibleSec * 0.8) {
+          setViewportStartSec(Math.max(0, liveSec - visibleSec * 0.2));
+        } else if (liveSec < viewportStartSec) {
+          setViewportStartSec(liveSec);
         }
 
         // Trigger Tag Audition / Visual Flash
-        const nearbyTag = tags.find((t) => Math.abs(t.timeSec - boundedTime) < 0.035);
+        const nearbyTag = tags.find((t) => Math.abs(t.timeSec - liveSec) < 0.035);
         if (nearbyTag && nearbyTag.id !== lastTriggeredTagRef.current) {
           lastTriggeredTagRef.current = nearbyTag.id;
           playClickSound(nearbyTag.type);
@@ -573,7 +563,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
           if (flashOverlayRef.current) {
             const cfg = TAG_CONFIG[nearbyTag.type];
             flashOverlayRef.current.style.backgroundColor = cfg.border;
-            flashOverlayRef.current.style.opacity = nearbyTag.type === 'sub-kick' ? '0.6' : '0.35';
+            flashOverlayRef.current.style.opacity = nearbyTag.type === 'sub-kick' ? '0.5' : '0.3';
             setTimeout(() => {
               if (flashOverlayRef.current) flashOverlayRef.current.style.opacity = '0';
             }, 60);
@@ -581,18 +571,15 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         }
       }
 
-      // Draw Waveform Canvas
       drawWaveform();
-
       rafIdRef.current = requestAnimationFrame(renderLoop);
     };
 
     rafIdRef.current = requestAnimationFrame(renderLoop);
-
     return () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
-  }, [isPlaying, playbackRate, audioBuffer, zoomLevel, viewportStartSec, tags, playClickSound, getAudioContext]);
+  }, [duration, audioBuffer, zoomLevel, viewportStartSec, tags, playClickSound]);
 
   /**
    * High-DPI Canvas Waveform & Tag Renderer
@@ -606,11 +593,10 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
 
     const width = canvas.width;
     const height = canvas.height;
-    const dpr = window.devicePixelRatio || 1;
 
     ctx.clearRect(0, 0, width, height);
 
-    const totalDur = audioBuffer.duration;
+    const totalDur = duration || audioBuffer.duration;
     const visibleDur = totalDur / zoomLevel;
     const viewStart = viewportStartSec;
     const viewEnd = viewStart + visibleDur;
@@ -717,7 +703,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       ctx.moveTo(playheadX, 0);
       ctx.lineTo(playheadX, height);
       ctx.stroke();
-      ctx.shadowBlur = 0; // reset
+      ctx.shadowBlur = 0;
 
       // Playhead Head Indicator
       ctx.fillStyle = '#ff1e1e';
@@ -730,7 +716,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   };
 
   /**
-   * Handle Click / Drag on Waveform Canvas to Seek or Tag
+   * Handle Click on Waveform Canvas to Seek or Select Tag
    */
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -740,10 +726,10 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     const clickX = e.clientX - rect.left;
     const widthRatio = clickX / rect.width;
 
-    const visibleDur = audioBuffer.duration / zoomLevel;
+    const totalDur = duration || audioBuffer.duration;
+    const visibleDur = totalDur / zoomLevel;
     const targetTime = viewportStartSec + widthRatio * visibleDur;
 
-    // Check if clicked near an existing tag marker (within 10px)
     const clickedTag = tags.find((t) => {
       const tagX = ((t.timeSec - viewportStartSec) / visibleDur) * rect.width;
       return Math.abs(tagX - clickX) < 8;
@@ -817,7 +803,6 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
       let bufferToExport = audioBuffer;
 
       if (withClicks && tags.length > 0) {
-        // Create mixed buffer with embedded click sound
         const ctx = getAudioContext();
         const numSamples = audioBuffer.length;
         const mixed = ctx.createBuffer(2, numSamples, audioBuffer.sampleRate);
@@ -828,10 +813,9 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           const destCh = mixed.getChannelData(ch);
           destCh.set(srcCh);
 
-          // Embed clicks
           tags.forEach((tag) => {
             const startIdx = Math.floor(tag.timeSec * sr);
-            const clickLen = Math.floor(sr * 0.04); // 40ms click
+            const clickLen = Math.floor(sr * 0.04);
             for (let i = 0; i < clickLen && startIdx + i < numSamples; i++) {
               const clickPhase = i / clickLen;
               const env = Math.exp(-clickPhase * 25);
@@ -874,7 +858,24 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
   }, [tags]);
 
   return (
-    <div className="space-y-6 text-white font-mono animate-fadeIn pb-12">
+    <div className="space-y-6 text-white font-mono animate-fadeIn pb-16">
+      {/* Hidden Master HTML5 Audio Player */}
+      <audio
+        ref={audioRef}
+        src={audioSourceUrl}
+        preload="auto"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        onDurationChange={(e) => {
+          const d = (e.target as HTMLAudioElement).duration;
+          if (d && !isNaN(d)) setDuration(d);
+        }}
+        onTimeUpdate={(e) => {
+          setCurrentTime((e.target as HTMLAudioElement).currentTime);
+        }}
+      />
+
       {/* Visual Flash Feedback Overlay */}
       <div
         ref={flashOverlayRef}
@@ -882,7 +883,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
       />
 
       {/* Top Header Card */}
-      <div className="p-5 md:p-6 rounded-3xl bg-[#0c0c10]/90 border border-white/20 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+      <div className="p-5 md:p-6 rounded-3xl bg-[#0c0c10]/95 border border-white/20 shadow-2xl backdrop-blur-xl relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -905,7 +906,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
               onClick={() => {
                 setSelectedTrackId('preset_idk');
                 setSelectedTrackTitle('02. IDK - MCK');
-                loadAndDecodeAudio('preset:idk');
+                loadAudioSource('preset:idk');
               }}
               className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
                 selectedTrackId === 'preset_idk'
@@ -921,7 +922,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
               onClick={() => {
                 setSelectedTrackId('preset_xauxa');
                 setSelectedTrackTitle('03. Ai Mới Là Kẻ Xấu Xa');
-                loadAndDecodeAudio('preset:xauxa');
+                loadAudioSource('preset:xauxa');
               }}
               className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
                 selectedTrackId === 'preset_xauxa'
@@ -946,7 +947,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                   if (file) {
                     setSelectedTrackId(`file_${Date.now()}`);
                     setSelectedTrackTitle(file.name.replace(/\.[^/.]+$/, ''));
-                    loadAndDecodeAudio(file);
+                    loadAudioSource(file);
                   }
                 }}
               />
@@ -970,7 +971,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                   setSelectedTrackTitle(found.track.title);
                   const streamUrl = found.track.audio_url ? getMediaCdnUrl(found.track.audio_url) : '';
                   if (streamUrl) {
-                    loadAndDecodeAudio(streamUrl);
+                    loadAudioSource(streamUrl);
                   }
                 }
               }}
@@ -996,7 +997,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
             <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs font-mono font-bold text-white flex items-center gap-2">
               <Clock className="w-4 h-4 text-red-500" />
               <span className="text-red-400 font-extrabold text-sm">{formatMillis(currentTime)}</span>
-              <span className="text-zinc-500">/ {formatMillis(audioBuffer?.duration || 0)}</span>
+              <span className="text-zinc-500">/ {formatMillis(duration || audioBuffer?.duration || 0)}</span>
             </div>
 
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] text-zinc-300">
@@ -1056,18 +1057,18 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
         </div>
 
         {/* Horizontal Timeline Scrollbar when zoomed */}
-        {zoomLevel > 1.0 && audioBuffer && (
+        {zoomLevel > 1.0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-zinc-500">
               <span>Cuộn mốc thời gian:</span>
               <span>
-                {formatMillis(viewportStartSec)} → {formatMillis(viewportStartSec + audioBuffer.duration / zoomLevel)}
+                {formatMillis(viewportStartSec)} → {formatMillis(viewportStartSec + (duration || audioBuffer?.duration || 100) / zoomLevel)}
               </span>
             </div>
             <input
               type="range"
               min={0}
-              max={Math.max(0, audioBuffer.duration - audioBuffer.duration / zoomLevel)}
+              max={Math.max(0, (duration || audioBuffer?.duration || 100) - (duration || audioBuffer?.duration || 100) / zoomLevel)}
               step={0.1}
               value={viewportStartSec}
               onChange={(e) => setViewportStartSec(parseFloat(e.target.value))}
@@ -1119,7 +1120,10 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
               {[0.5, 0.75, 1.0].map((rate) => (
                 <button
                   key={rate}
-                  onClick={() => setPlaybackRate(rate)}
+                  onClick={() => {
+                    setPlaybackRate(rate);
+                    if (audioRef.current) audioRef.current.playbackRate = rate;
+                  }}
                   className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition-all ${
                     playbackRate === rate ? 'bg-red-500 text-white' : 'text-zinc-400 hover:text-white'
                   }`}
@@ -1168,7 +1172,8 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                 key={type}
                 onClick={() => {
                   setActiveTagType(type);
-                  addTagAtTime(currentTime, type);
+                  const liveSec = audioRef.current ? audioRef.current.currentTime : currentTime;
+                  addTagAtTime(liveSec, type);
                 }}
                 className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 group hover:scale-[1.02] shadow-lg ${
                   activeTagType === type
