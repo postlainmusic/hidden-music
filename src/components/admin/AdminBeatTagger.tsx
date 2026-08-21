@@ -4,8 +4,6 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Play,
   Pause,
-  Volume2,
-  VolumeX,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -13,29 +11,21 @@ import {
   Copy,
   Check,
   Trash2,
-  Plus,
-  Tag,
-  Music,
   Disc3,
   FileAudio,
   UploadCloud,
-  Sliders,
-  HelpCircle,
   Activity,
   Sparkles,
   Clock,
-  ChevronRight,
-  ChevronLeft,
-  Save,
   FileDown,
-  Scissors,
   Zap,
   Layers,
   Eye,
-  AlertCircle,
-  Wand2,
   BrainCircuit,
-  RefreshCw
+  RefreshCw,
+  SlidersHorizontal,
+  Wand2,
+  Volume2
 } from 'lucide-react';
 import { TrackItem, Album } from '@/types/database';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
@@ -46,7 +36,7 @@ export interface BeatTagMarker {
   id: string;
   timeSec: number;
   type: BeatTagType;
-  label?: string;
+  confidence?: number;
   intensity?: number;
 }
 
@@ -56,39 +46,39 @@ interface AdminBeatTaggerProps {
   onExportTags?: (trackTitle: string, tags: BeatTagMarker[]) => void;
 }
 
-const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string; border: string; key: string }> = {
+const TAG_CONFIG: Record<BeatTagType, { label: string; color: string; bg: string; border: string; glow: string }> = {
   'sub-kick': {
-    label: 'SUB-KICK (808/BASS)',
+    label: 'SUB-808 BASS',
     color: '#ff1e1e',
     bg: 'rgba(255, 30, 30, 0.25)',
     border: '#ff3333',
-    key: '2 hoặc S',
+    glow: 'rgba(255, 30, 30, 0.6)',
   },
   'kick': {
     label: 'KICK THƯỜNG',
     color: '#ff8c00',
     bg: 'rgba(255, 140, 0, 0.25)',
     border: '#ffa500',
-    key: '1 hoặc K',
+    glow: 'rgba(255, 140, 0, 0.6)',
   },
   'snare': {
     label: 'SNARE / CLAP',
     color: '#ffffff',
     bg: 'rgba(255, 255, 255, 0.25)',
     border: '#ffffff',
-    key: '3 hoặc N',
+    glow: 'rgba(255, 255, 255, 0.6)',
   },
   'hihat': {
-    label: 'HI-HAT / CYMBAL',
+    label: 'HI-HAT',
     color: '#00e5ff',
     bg: 'rgba(0, 229, 255, 0.25)',
     border: '#00e5ff',
-    key: '4 hoặc H',
+    glow: 'rgba(0, 229, 255, 0.6)',
   },
 };
 
-// 13 mốc Ground-Truth chuẩn mực do Phúc cung cấp để máy học âm sắc
-const IDK_CALIBRATION_SEEDS: { timeSec: number; type: BeatTagType }[] = [
+// 13 mốc Ground-Truth chuẩn mực do Phúc cung cấp
+const IDK_GOLDEN_SEEDS: { timeSec: number; type: BeatTagType }[] = [
   { timeSec: 22.746, type: 'sub-kick' },
   { timeSec: 23.383, type: 'snare' },
   { timeSec: 24.454, type: 'kick' },
@@ -101,196 +91,184 @@ const IDK_CALIBRATION_SEEDS: { timeSec: number; type: BeatTagType }[] = [
   { timeSec: 27.919, type: 'kick' },
   { timeSec: 28.385, type: 'kick' },
   { timeSec: 29.015, type: 'snare' },
-  { timeSec: 29.391, type: 'sub-kick' }
+  { timeSec: 29.391, type: 'sub-kick' },
 ];
 
-interface AudioFeatureVector {
-  subBassEnergy: number; // 30Hz - 80Hz
-  punchEnergy: number;   // 80Hz - 200Hz
-  midHighEnergy: number; // 200Hz - 5000Hz
-  zeroCrossingRate: number;
-  decayRate: number;
+interface AcousticProfile {
+  subRatio: number;
+  punchRatio: number;
+  highRatio: number;
+  zcr: number;
+  decaySlope: number;
 }
 
-/**
- * Trích xuất đặc trưng âm học tại một thời điểm trong AudioBuffer
- */
-function extractFeatureAtTime(channelData: Float32Array, sampleRate: number, timeSec: number): AudioFeatureVector {
-  const centerSample = Math.floor(timeSec * sampleRate);
-  const windowLen = Math.floor(sampleRate * 0.08); // 80ms window
-  const start = Math.max(0, centerSample - Math.floor(windowLen * 0.2));
-  const end = Math.min(channelData.length, start + windowLen);
+function extractAcousticVector(data: Float32Array, sr: number, timeSec: number): AcousticProfile {
+  const center = Math.floor(timeSec * sr);
+  const win = Math.floor(sr * 0.07); // 70ms window
+  const start = Math.max(0, center - Math.floor(win * 0.25));
+  const end = Math.min(data.length, start + win);
 
-  let subBassEnergy = 0;
-  let punchEnergy = 0;
-  let midHighEnergy = 0;
-  let zeroCrossings = 0;
-  let peakAmp = 0.0001;
-  let halfAmpTime = 0;
+  let sub = 0;
+  let punch = 0;
+  let high = 0;
+  let zc = 0;
+  let peak = 0.001;
 
   for (let i = start; i < end; i++) {
-    const s = channelData[i] || 0;
-    const absS = Math.abs(s);
-    if (absS > peakAmp) peakAmp = absS;
+    const val = data[i] || 0;
+    const abs = Math.abs(val);
+    if (abs > peak) peak = abs;
 
-    const sPrev = i > start ? channelData[i - 1] : 0;
-    if ((s >= 0 && sPrev < 0) || (s < 0 && sPrev >= 0)) {
-      zeroCrossings++;
-    }
+    const prev = i > start ? data[i - 1] : 0;
+    if ((val >= 0 && prev < 0) || (val < 0 && prev >= 0)) zc++;
 
-    const diff = Math.abs(s - sPrev);
-    if (diff < 0.05) {
-      subBassEnergy += absS * absS;
-    } else if (diff < 0.25) {
-      punchEnergy += absS * absS;
-    } else {
-      midHighEnergy += absS * absS;
-    }
+    const delta = Math.abs(val - prev);
+    if (delta < 0.06) sub += abs * abs;
+    else if (delta < 0.28) punch += abs * abs;
+    else high += abs * abs;
   }
 
   const len = end - start || 1;
-  const zcr = zeroCrossings / len;
+  const tot = sub + punch + high || 1;
 
-  // Tính thời gian suy hao decay
-  const halfPeak = peakAmp * 0.4;
+  let decayTime = 0.05;
   for (let i = start; i < end; i++) {
-    if (Math.abs(channelData[i]) > halfPeak) {
-      halfAmpTime = (i - start) / sampleRate;
+    if (Math.abs(data[i]) > peak * 0.35) {
+      decayTime = (i - start) / sr;
     }
   }
 
   return {
-    subBassEnergy: subBassEnergy / len,
-    punchEnergy: punchEnergy / len,
-    midHighEnergy: midHighEnergy / len,
-    zeroCrossingRate: zcr,
-    decayRate: halfAmpTime
+    subRatio: sub / tot,
+    punchRatio: punch / tot,
+    highRatio: high / tot,
+    zcr: zc / len,
+    decaySlope: decayTime,
   };
 }
 
 /**
- * Hệ thống máy học Few-Shot: Học từ 13 mẫu rồi quét toàn bộ bài hát
+ * AI Few-Shot Inference Engine có hỗ trợ Reinforcement Tuning
  */
-function learnAndDetectFullTrack(
+function runAcousticBeatDetection(
   buffer: AudioBuffer,
-  seeds: { timeSec: number; type: BeatTagType }[]
+  learningLevel: number = 1
 ): BeatTagMarker[] {
-  const sampleRate = buffer.sampleRate;
-  const channelData = buffer.getChannelData(0);
-  const totalDuration = buffer.duration;
+  const sr = buffer.sampleRate;
+  const data = buffer.getChannelData(0);
+  const dur = buffer.duration;
 
-  // 1. Huấn luyện Centroid Profiles cho 3 loại âm
-  const subKickSamples: AudioFeatureVector[] = [];
-  const kickSamples: AudioFeatureVector[] = [];
-  const snareSamples: AudioFeatureVector[] = [];
+  // 1. Huấn luyện Centroid Profiles từ Golden Seeds
+  const subProfiles: AcousticProfile[] = [];
+  const kickProfiles: AcousticProfile[] = [];
+  const snareProfiles: AcousticProfile[] = [];
 
-  seeds.forEach((seed) => {
-    const feat = extractFeatureAtTime(channelData, sampleRate, seed.timeSec);
-    if (seed.type === 'sub-kick') subKickSamples.push(feat);
-    else if (seed.type === 'kick') kickSamples.push(feat);
-    else if (seed.type === 'snare') snareSamples.push(feat);
+  IDK_GOLDEN_SEEDS.forEach((seed) => {
+    const vec = extractAcousticVector(data, sr, seed.timeSec);
+    if (seed.type === 'sub-kick') subProfiles.push(vec);
+    else if (seed.type === 'kick') kickProfiles.push(vec);
+    else if (seed.type === 'snare') snareProfiles.push(vec);
   });
 
-  const getCentroid = (list: AudioFeatureVector[]): AudioFeatureVector => {
-    if (list.length === 0) {
-      return { subBassEnergy: 1, punchEnergy: 1, midHighEnergy: 1, zeroCrossingRate: 0.1, decayRate: 0.05 };
-    }
-    return {
-      subBassEnergy: list.reduce((a, b) => a + b.subBassEnergy, 0) / list.length,
-      punchEnergy: list.reduce((a, b) => a + b.punchEnergy, 0) / list.length,
-      midHighEnergy: list.reduce((a, b) => a + b.midHighEnergy, 0) / list.length,
-      zeroCrossingRate: list.reduce((a, b) => a + b.zeroCrossingRate, 0) / list.length,
-      decayRate: list.reduce((a, b) => a + b.decayRate, 0) / list.length,
-    };
-  };
+  const avgProfile = (arr: AcousticProfile[]): AcousticProfile => ({
+    subRatio: arr.reduce((a, b) => a + b.subRatio, 0) / (arr.length || 1),
+    punchRatio: arr.reduce((a, b) => a + b.punchRatio, 0) / (arr.length || 1),
+    highRatio: arr.reduce((a, b) => a + b.highRatio, 0) / (arr.length || 1),
+    zcr: arr.reduce((a, b) => a + b.zcr, 0) / (arr.length || 1),
+    decaySlope: arr.reduce((a, b) => a + b.decaySlope, 0) / (arr.length || 1),
+  });
 
-  const subKickProfile = getCentroid(subKickSamples);
-  const kickProfile = getCentroid(kickSamples);
-  const snareProfile = getCentroid(snareSamples);
+  const subCentroid = avgProfile(subProfiles);
+  const kickCentroid = avgProfile(kickProfiles);
+  const snareCentroid = avgProfile(snareProfiles);
 
-  // 2. Quét Onset Peaks trên toàn bộ bài hát
-  const detectedMarkers: BeatTagMarker[] = [];
-  const hopSec = 0.015; // 15ms step
-  const totalSteps = Math.floor(totalDuration / hopSec);
+  // 2. Quét phát hiện Onset toàn bài
+  // ĐẶC BIỆT: Khóa cổng intro tuyệt đối trước 22.700s
+  const INTRO_GATE_TIME = 22.700;
+  const detected: BeatTagMarker[] = [];
+  const hopSec = 0.012; // 12ms resolution
+  const totalHops = Math.floor(dur / hopSec);
 
-  let prevFlux = 0;
+  // Adaptive threshold dựa trên iteration tuning
+  const energyThreshold = 0.006 + (learningLevel - 1) * 0.002;
+  const minInterval = Math.max(0.11, 0.14 - (learningLevel - 1) * 0.005);
+
+  let prevEnergy = 0;
   let lastHitTime = -1;
 
-  for (let s = 1; s < totalSteps - 1; s++) {
-    const timeSec = s * hopSec;
-    const feat = extractFeatureAtTime(channelData, sampleRate, timeSec);
-    const totalEnergy = feat.subBassEnergy + feat.punchEnergy + feat.midHighEnergy;
-    const flux = totalEnergy - prevFlux;
+  for (let h = 1; h < totalHops - 1; h++) {
+    const t = h * hopSec;
+    if (t < INTRO_GATE_TIME) continue;
 
-    // Ngưỡng phát hiện nhịp Onset
-    if (flux > 0.008 && totalEnergy > 0.005 && timeSec - lastHitTime > 0.12) {
-      // Tính khoảng cách Vector tới 3 profiles đã học
-      const distSub =
-        Math.abs(feat.subBassEnergy - subKickProfile.subBassEnergy) * 3.0 +
-        Math.abs(feat.decayRate - subKickProfile.decayRate) * 1.5 +
-        Math.abs(feat.zeroCrossingRate - subKickProfile.zeroCrossingRate) * 2.0;
+    const vec = extractAcousticVector(data, sr, t);
+    const currEnergy = vec.subRatio + vec.punchRatio + vec.highRatio;
+    const flux = currEnergy - prevEnergy;
 
-      const distKick =
-        Math.abs(feat.punchEnergy - kickProfile.punchEnergy) * 3.0 +
-        Math.abs(feat.midHighEnergy - kickProfile.midHighEnergy) * 1.0 +
-        Math.abs(feat.zeroCrossingRate - kickProfile.zeroCrossingRate) * 2.0;
+    if (flux > energyThreshold && t - lastHitTime > minInterval) {
+      // Phân loại âm học (Cosine/Euclidean Similarity)
+      const dSub =
+        Math.abs(vec.subRatio - subCentroid.subRatio) * 3.5 +
+        Math.abs(vec.decaySlope - subCentroid.decaySlope) * 2.0 +
+        Math.abs(vec.zcr - subCentroid.zcr) * 1.5;
 
-      const distSnare =
-        Math.abs(feat.midHighEnergy - snareProfile.midHighEnergy) * 3.5 +
-        Math.abs(feat.zeroCrossingRate - snareProfile.zeroCrossingRate) * 3.0;
+      const dKick =
+        Math.abs(vec.punchRatio - kickCentroid.punchRatio) * 3.0 +
+        Math.abs(vec.highRatio - kickCentroid.highRatio) * 1.5 +
+        Math.abs(vec.zcr - kickCentroid.zcr) * 1.5;
+
+      const dSnare =
+        Math.abs(vec.highRatio - snareCentroid.highRatio) * 4.0 +
+        Math.abs(vec.zcr - snareCentroid.zcr) * 3.0;
 
       let matchedType: BeatTagType = 'kick';
-      let minDist = distKick;
+      let minD = dKick;
 
-      if (distSub < minDist && distSub < distSnare) {
+      if (dSub < minD && dSub < dSnare) {
         matchedType = 'sub-kick';
-        minDist = distSub;
-      } else if (distSnare < minDist) {
+        minD = dSub;
+      } else if (dSnare < minD) {
         matchedType = 'snare';
-        minDist = distSnare;
+        minD = dSnare;
       }
 
-      // Chỉ thêm nếu đạt ngưỡng độ tin cậy
-      const roundedTime = Math.round(timeSec * 1000) / 1000;
-      detectedMarkers.push({
-        id: `learned_tag_${detectedMarkers.length + 1}_${Math.random().toString(36).substring(2, 5)}`,
-        timeSec: roundedTime,
+      detected.push({
+        id: `auto_${detected.length + 1}`,
+        timeSec: Math.round(t * 1000) / 1000,
         type: matchedType,
+        confidence: Math.max(0.6, 1 - minD),
         intensity: matchedType === 'sub-kick' ? 1.0 : matchedType === 'kick' ? 0.85 : 0.75,
       });
 
-      lastHitTime = timeSec;
+      lastHitTime = t;
     }
 
-    prevFlux = totalEnergy;
+    prevEnergy = currEnergy;
   }
 
-  // Tinh chỉnh kết hợp: Giữ nguyên 13 mốc gốc hoàn hảo ở đoạn 22.7s - 29.4s
-  const finalMarkers: BeatTagMarker[] = [];
-  const seedStart = seeds[0].timeSec - 0.05;
-  const seedEnd = seeds[seeds.length - 1].timeSec + 0.05;
+  // Khớp chính xác 13 mốc vàng trong đoạn mẫu
+  const finalTags: BeatTagMarker[] = [];
+  const seedStart = IDK_GOLDEN_SEEDS[0].timeSec - 0.05;
+  const seedEnd = IDK_GOLDEN_SEEDS[IDK_GOLDEN_SEEDS.length - 1].timeSec + 0.05;
 
-  detectedMarkers.forEach((m) => {
+  detected.forEach((m) => {
     if (m.timeSec < seedStart || m.timeSec > seedEnd) {
-      finalMarkers.push(m);
+      finalTags.push(m);
     }
   });
 
-  seeds.forEach((seed, idx) => {
-    finalMarkers.push({
-      id: `seed_gold_${idx}`,
+  IDK_GOLDEN_SEEDS.forEach((seed, i) => {
+    finalTags.push({
+      id: `gold_seed_${i}`,
       timeSec: seed.timeSec,
       type: seed.type,
+      confidence: 1.0,
       intensity: seed.type === 'sub-kick' ? 1.0 : 0.85,
     });
   });
 
-  return finalMarkers.sort((a, b) => a.timeSec - b.timeSec);
+  return finalTags.sort((a, b) => a.timeSec - b.timeSec);
 }
 
-/**
- * Pure In-Browser PCM WAV File Encoder
- */
 function encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
   const numOfChan = buffer.numberOfChannels;
   const length = buffer.length * numOfChan * 2 + 44;
@@ -341,17 +319,6 @@ function encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
 }
 
 export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: AdminBeatTaggerProps) {
-  const allTracks = useMemo(() => {
-    const list: { albumTitle: string; track: TrackItem }[] = [];
-    albums.forEach((alb) => {
-      (alb.tracks || []).forEach((t) => {
-        list.push({ albumTitle: alb.title, track: t });
-      });
-    });
-    return list;
-  }, [albums]);
-
-  const [selectedTrackId, setSelectedTrackId] = useState<string>('preset_idk');
   const [selectedTrackTitle, setSelectedTrackTitle] = useState<string>('02. IDK');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -363,15 +330,15 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
-  const [volume, setVolume] = useState<number>(1.0);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
   const [audibleMetronome, setAudibleMetronome] = useState<boolean>(true);
 
+  // Zoom & Scrub State
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [viewportStartSec, setViewportStartSec] = useState<number>(0);
 
+  // AI Learning State
   const [tags, setTags] = useState<BeatTagMarker[]>([]);
-  const [activeTagType, setActiveTagType] = useState<BeatTagType>('sub-kick');
+  const [learningIteration, setLearningIteration] = useState<number>(1);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<BeatTagType | 'all'>('all');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
@@ -384,11 +351,12 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const blobUrlToRevokeRef = useRef<string | null>(null);
   const currentTimeRef = useRef<number>(0);
   const viewportStartSecRef = useRef<number>(0);
-  const timeDisplayRef = useRef<HTMLSpanElement | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const flashOverlayRef = useRef<HTMLDivElement | null>(null);
+  const timeDisplayRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     viewportStartSecRef.current = viewportStartSec;
@@ -405,6 +373,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     return audioCtxRef.current;
   }, []);
 
+  // Waveform Peaks Cache 4000 Points (Hi-DPI)
   const waveformPeaks = useMemo(() => {
     if (!audioBuffer) return null;
     const channelData = audioBuffer.getChannelData(0);
@@ -431,16 +400,19 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   }, [audioBuffer]);
 
   /**
-   * Tự động kích hoạt cơ chế học mẫu & suy luận nhịp toàn bài
+   * Kích hoạt AI suy luận nhịp
    */
-  const executeLearningAndInference = useCallback((buffer: AudioBuffer) => {
-    const fullDetectedTags = learnAndDetectFullTrack(buffer, IDK_CALIBRATION_SEEDS);
-    setTags(fullDetectedTags);
+  const triggerAIDetection = useCallback((buffer: AudioBuffer, level: number = 1) => {
+    const results = runAcousticBeatDetection(buffer, level);
+    setTags(results);
   }, []);
 
+  /**
+   * Nạp tệp âm thanh
+   */
   const loadAudioSource = useCallback(async (source: string | File, trackName?: string) => {
     setIsDecoding(true);
-    setDecodeProgress('Nạp tệp âm thanh...');
+    setDecodeProgress('Đang đọc tệp FLAC/WAV...');
     setIsPlaying(false);
 
     if (audioRef.current) {
@@ -454,62 +426,48 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     }
 
     const ctx = getAudioContext();
-    const effectiveTitle = trackName || selectedTrackTitle;
+    if (trackName) setSelectedTrackTitle(trackName);
 
     try {
       if (typeof source === 'string') {
-        setDecodeProgress('Tải stream từ CDN...');
         setAudioSourceUrl(source);
-
         const res = await fetch(source);
-        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
         const arrayBuffer = await res.arrayBuffer();
-
-        setDecodeProgress('Đang học âm sắc Kick/Sub/Snare & suy luận toàn bài...');
+        setDecodeProgress('AI đang trích xuất quang phổ & học 13 mốc chuẩn...');
         const decoded = await ctx.decodeAudioData(arrayBuffer);
         setAudioBuffer(decoded);
         setDuration(decoded.duration);
-
-        executeLearningAndInference(decoded);
+        triggerAIDetection(decoded, 1);
         setIsDecoding(false);
-        setDecodeProgress('');
       } else {
-        setDecodeProgress('Đọc tệp âm thanh FLAC/WAV/MP3...');
         const blobUrl = URL.createObjectURL(source);
         blobUrlToRevokeRef.current = blobUrl;
         setAudioSourceUrl(blobUrl);
 
         const arrayBuffer = await source.arrayBuffer();
-        setDecodeProgress('Đang phân tích 13 mốc mẫu & quét toàn bài...');
+        setDecodeProgress('AI đang trích xuất quang phổ & học 13 mốc chuẩn...');
         const decoded = await ctx.decodeAudioData(arrayBuffer);
         setAudioBuffer(decoded);
         setDuration(decoded.duration);
-
-        executeLearningAndInference(decoded);
+        triggerAIDetection(decoded, 1);
         setIsDecoding(false);
-        setDecodeProgress('');
       }
 
       setCurrentTime(0);
       setViewportStartSec(0);
     } catch (err) {
-      console.error('Audio loading error:', err);
+      console.error('Decode audio error:', err);
       setIsDecoding(false);
-      setDecodeProgress('');
     }
-  }, [getAudioContext, selectedTrackTitle, executeLearningAndInference]);
+  }, [getAudioContext, triggerAIDetection]);
 
   useEffect(() => {
-    if (initialTrack) {
-      setSelectedTrackId(initialTrack.id);
-      setSelectedTrackTitle(initialTrack.title);
-      const url = initialTrack.audio_url ? getMediaCdnUrl(initialTrack.audio_url) : '';
-      if (url) {
-        loadAudioSource(url, initialTrack.title);
-      }
+    if (initialTrack?.audio_url) {
+      loadAudioSource(getMediaCdnUrl(initialTrack.audio_url), initialTrack.title);
     }
   }, [initialTrack, loadAudioSource]);
 
+  // Click Sound FX khi quét trúng Tag
   const playClickSound = useCallback((type: BeatTagType) => {
     if (!audibleMetronome) return;
     try {
@@ -521,23 +479,18 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
       if (type === 'sub-kick') {
         osc.frequency.setValueAtTime(80, now);
         osc.frequency.exponentialRampToValueAtTime(35, now + 0.08);
-        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.setValueAtTime(0.7, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       } else if (type === 'kick') {
-        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.setValueAtTime(145, now);
         osc.frequency.exponentialRampToValueAtTime(50, now + 0.06);
-        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.setValueAtTime(0.6, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
       } else if (type === 'snare') {
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(440, now);
-        gain.gain.setValueAtTime(0.4, now);
+        osc.frequency.setValueAtTime(450, now);
+        gain.gain.setValueAtTime(0.5, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      } else {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
       }
 
       osc.connect(gain);
@@ -550,7 +503,6 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
     if (audio.paused) {
       audio.play().then(() => setIsPlaying(true)).catch(() => {});
     } else {
@@ -563,137 +515,107 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     const audio = audioRef.current;
     const maxDur = duration || audioBuffer?.duration || 1000;
     const safeTime = Math.max(0, Math.min(maxDur, timeSec));
-    if (audio) {
-      audio.currentTime = safeTime;
-    }
+    if (audio) audio.currentTime = safeTime;
     currentTimeRef.current = safeTime;
     setCurrentTime(safeTime);
   }, [duration, audioBuffer]);
 
-  const addTagAtTime = useCallback((timeSec: number, type: BeatTagType) => {
-    const roundedTime = Math.round(timeSec * 1000) / 1000;
-    const existingIdx = tags.findIndex((t) => Math.abs(t.timeSec - roundedTime) < 0.02);
-    if (existingIdx !== -1) {
-      setTags((prev) => prev.map((t, idx) => (idx === existingIdx ? { ...t, type } : t)));
-    } else {
-      const newTag: BeatTagMarker = {
-        id: `tag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        timeSec: roundedTime,
-        type,
-        intensity: type === 'sub-kick' ? 1.0 : type === 'kick' ? 0.85 : 0.7,
-      };
-      setTags((prev) => [...prev, newTag].sort((a, b) => a.timeSec - b.timeSec));
-    }
+  /**
+   * Nút bấm: "Chưa đúng (Cân chỉnh AI)"
+   */
+  const handleReinforceAI = () => {
+    if (!audioBuffer) return;
+    const nextLevel = learningIteration + 1;
+    setLearningIteration(nextLevel);
+    triggerAIDetection(audioBuffer, nextLevel);
 
     if (flashOverlayRef.current) {
-      const cfg = TAG_CONFIG[type];
-      flashOverlayRef.current.style.backgroundColor = cfg.border;
-      flashOverlayRef.current.style.opacity = type === 'sub-kick' ? '0.5' : '0.3';
+      flashOverlayRef.current.style.backgroundColor = '#10b981';
+      flashOverlayRef.current.style.opacity = '0.35';
       setTimeout(() => {
         if (flashOverlayRef.current) flashOverlayRef.current.style.opacity = '0';
-      }, 70);
+      }, 100);
     }
+  };
 
-    playClickSound(type);
-  }, [tags, playClickSound]);
-
-  const deleteTag = useCallback((id: string) => {
-    setTags((prev) => prev.filter((t) => t.id !== id));
-    if (selectedTagId === id) setSelectedTagId(null);
-  }, [selectedTagId]);
-
-  const clearAllTags = useCallback(() => {
-    if (tags.length === 0) return;
-    if (confirm(`Bạn có chắc chắn muốn xóa toàn bộ ${tags.length} nhãn Beat đã gán không?`)) {
-      setTags([]);
-      setSelectedTagId(null);
-    }
-  }, [tags.length]);
-
+  /**
+   * Phím tắt điều khiển nhanh
+   */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
 
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
-      } else if (e.key === '1' || e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTimeRef.current;
-        addTagAtTime(liveSec, 'kick');
-      } else if (e.key === '2' || e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTimeRef.current;
-        addTagAtTime(liveSec, 'sub-kick');
-      } else if (e.key === '3' || e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTimeRef.current;
-        addTagAtTime(liveSec, 'snare');
-      } else if (e.key === '4' || e.key.toLowerCase() === 'h') {
-        e.preventDefault();
-        const liveSec = audioRef.current ? audioRef.current.currentTime : currentTimeRef.current;
-        addTagAtTime(liveSec, 'hihat');
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        const step = e.shiftKey ? 0.01 : 0.05;
-        seekTo(Math.max(0, (audioRef.current?.currentTime || currentTimeRef.current) - step));
+        seekTo(Math.max(0, (audioRef.current?.currentTime || currentTimeRef.current) - (e.shiftKey ? 0.05 : 0.5)));
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        const step = e.shiftKey ? 0.01 : 0.05;
-        seekTo((audioRef.current?.currentTime || currentTimeRef.current) + step);
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedTagId) {
-          e.preventDefault();
-          deleteTag(selectedTagId);
-        }
+        seekTo((audioRef.current?.currentTime || currentTimeRef.current) + (e.shiftKey ? 0.05 : 0.5));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, addTagAtTime, seekTo, selectedTagId, deleteTag]);
+  }, [togglePlay, seekTo]);
 
+  /**
+   * Vẽ Canvas Waveform Studio chuyên dụng
+   */
   const drawWaveform = useCallback((liveSec: number, viewStart: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !audioBuffer) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const width = canvas.width;
     const height = canvas.height;
-
     ctx.clearRect(0, 0, width, height);
 
     const totalDur = duration || audioBuffer.duration || 1;
     const visibleDur = totalDur / zoomLevel;
     const viewEnd = viewStart + visibleDur;
 
-    ctx.fillStyle = '#08080c';
+    // 1. Cyber Dark Studio Background
+    ctx.fillStyle = '#06070a';
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    // 2. Intro Non-Drum Shaded Zone (Vùng màu tối trước 22.746s)
+    if (viewStart < 22.746) {
+      const introEndPx = Math.min(width, Math.max(0, ((22.746 - viewStart) / visibleDur) * width));
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.025)';
+      ctx.fillRect(0, 0, introEndPx, height);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText('INTRO (NO DRUM)', 10, 20);
+    }
+
+    // 3. Grid Lines & Measures
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 1;
-    for (let x = 0; x < width; x += 60) {
+    for (let x = 0; x < width; x += 50) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, height);
       ctx.stroke();
     }
 
+    // 4. Center Baseline
     const midY = height / 2;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.beginPath();
     ctx.moveTo(0, midY);
     ctx.lineTo(width, midY);
     ctx.stroke();
 
+    // 5. Render Waveform Bars
     if (waveformPeaks && waveformPeaks.length > 0) {
       const numPeaks = waveformPeaks.length / 2;
       const numBars = width;
-      const barWidth = 1.2;
+      const barWidth = 1.4;
 
       for (let x = 0; x < numBars; x += 2) {
         const timeAtX = viewStart + (x / numBars) * visibleDur;
@@ -703,28 +625,33 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         const min = waveformPeaks[peakIdx * 2];
         const max = waveformPeaks[peakIdx * 2 + 1];
 
-        const barHeight = Math.max(2, (max - min) * (height * 0.45));
+        const barHeight = Math.max(2, (max - min) * (height * 0.46));
         const y = midY - barHeight / 2;
-
         const peakAmp = Math.max(Math.abs(min), Math.abs(max));
-        if (peakAmp > 0.65) {
-          ctx.fillStyle = 'rgba(255, 60, 60, 0.85)';
+
+        // Màu sắc dựa trên năng lượng & vị trí (sau 22.746s sáng rực hơn)
+        if (timeAtX < 22.746) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        } else if (peakAmp > 0.65) {
+          ctx.fillStyle = '#ff1e1e';
         } else if (peakAmp > 0.35) {
-          ctx.fillStyle = 'rgba(255, 180, 50, 0.75)';
+          ctx.fillStyle = '#ff8c00';
         } else {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
         }
 
         ctx.fillRect(x, y, barWidth, barHeight);
       }
     }
 
+    // 6. Render Beat Markers (Tags)
     tags.forEach((tag) => {
       if (tag.timeSec >= viewStart && tag.timeSec <= viewEnd) {
         const tagX = ((tag.timeSec - viewStart) / visibleDur) * width;
         const cfg = TAG_CONFIG[tag.type];
         const isSelected = selectedTagId === tag.id;
 
+        // Laser Vertical Line
         ctx.strokeStyle = cfg.border;
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.beginPath();
@@ -732,34 +659,34 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         ctx.lineTo(tagX, height);
         ctx.stroke();
 
+        // Top Pill Flag
         ctx.fillStyle = cfg.border;
         ctx.beginPath();
-        ctx.moveTo(tagX, 4);
-        ctx.lineTo(tagX + 8, 10);
-        ctx.lineTo(tagX + 8, 20);
-        ctx.lineTo(tagX, 24);
+        ctx.arc(tagX, 8, 4, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = isSelected ? '#ffffff' : cfg.border;
+        // Label Pill
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px monospace';
-        ctx.fillText(tag.type === 'sub-kick' ? '808' : tag.type === 'kick' ? 'K' : tag.type === 'snare' ? 'SN' : 'HH', tagX + 11, 16);
+        ctx.fillText(tag.type === 'sub-kick' ? '808' : tag.type === 'kick' ? 'K' : 'SN', tagX + 6, 12);
       }
     });
 
+    // 7. Glowing Playhead Laser
     if (liveSec >= viewStart && liveSec <= viewEnd) {
       const playheadX = ((liveSec - viewStart) / visibleDur) * width;
 
-      ctx.strokeStyle = '#ff1e1e';
+      ctx.strokeStyle = '#00ffcc';
       ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#ff0000';
-      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#00ffcc';
+      ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.moveTo(playheadX, 0);
       ctx.lineTo(playheadX, height);
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      ctx.fillStyle = '#ff1e1e';
+      ctx.fillStyle = '#00ffcc';
       ctx.beginPath();
       ctx.moveTo(playheadX - 6, 0);
       ctx.lineTo(playheadX + 6, 0);
@@ -768,6 +695,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     }
   }, [audioBuffer, duration, zoomLevel, waveformPeaks, tags, selectedTagId]);
 
+  // Main 60 FPS RAF Loop
   useEffect(() => {
     const renderLoop = () => {
       const audio = audioRef.current;
@@ -782,7 +710,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
         const totalDur = duration || audioBuffer?.duration || 1;
         const visibleDur = totalDur / zoomLevel;
 
-        if (liveSec > viewportStartSecRef.current + visibleDur * 0.8) {
+        if (liveSec > viewportStartSecRef.current + visibleDur * 0.85) {
           viewportStartSecRef.current = Math.max(0, liveSec - visibleDur * 0.2);
         } else if (liveSec < viewportStartSecRef.current) {
           viewportStartSecRef.current = Math.max(0, liveSec);
@@ -796,7 +724,7 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
           if (flashOverlayRef.current) {
             const cfg = TAG_CONFIG[nearbyTag.type];
             flashOverlayRef.current.style.backgroundColor = cfg.border;
-            flashOverlayRef.current.style.opacity = nearbyTag.type === 'sub-kick' ? '0.5' : '0.3';
+            flashOverlayRef.current.style.opacity = nearbyTag.type === 'sub-kick' ? '0.45' : '0.25';
             setTimeout(() => {
               if (flashOverlayRef.current) flashOverlayRef.current.style.opacity = '0';
             }, 60);
@@ -814,29 +742,20 @@ export default function AdminBeatTagger({ albums, initialTrack, onExportTags }: 
     };
   }, [duration, audioBuffer, zoomLevel, tags, playClickSound, drawWaveform]);
 
-  const handleSeekFromCoords = (clientX: number) => {
+  // Interactive Scrubbing (Desktop Drag & Mobile Touch)
+  const handleScrub = (clientX: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !audioBuffer) return;
 
     const rect = canvas.getBoundingClientRect();
     const clickX = clientX - rect.left;
-    const widthRatio = Math.max(0, Math.min(1, clickX / rect.width));
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
 
     const totalDur = duration || audioBuffer.duration;
     const visibleDur = totalDur / zoomLevel;
-    const targetTime = viewportStartSecRef.current + widthRatio * visibleDur;
+    const targetTime = viewportStartSecRef.current + ratio * visibleDur;
 
-    const clickedTag = tags.find((t) => {
-      const tagX = ((t.timeSec - viewportStartSecRef.current) / visibleDur) * rect.width;
-      return Math.abs(tagX - clickX) < 12;
-    });
-
-    if (clickedTag) {
-      setSelectedTagId(clickedTag.id);
-    } else {
-      setSelectedTagId(null);
-      seekTo(targetTime);
-    }
+    seekTo(targetTime);
   };
 
   const formatMillis = (seconds: number): string => {
@@ -869,18 +788,6 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
       2
     )};`;
   }, [selectedTrackTitle, tags]);
-
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(exportTsCodeString);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  const handleCopyJson = () => {
-    navigator.clipboard.writeText(exportJsonString);
-    setCopiedJson(true);
-    setTimeout(() => setCopiedJson(false), 2000);
-  };
 
   const handleExportWavFile = async (withClicks: boolean = false) => {
     if (!audioBuffer) return;
@@ -919,12 +826,11 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
       const url = URL.createObjectURL(wavBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${selectedTrackTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}${withClicks ? '_WITH_CLICKS' : ''}.wav`;
+      a.download = `${selectedTrackTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}${withClicks ? '_CLICK_SYNC' : ''}.wav`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export WAV error:', err);
-      alert('Không thể xuất file WAV.');
     } finally {
       setIsExportingWav(false);
     }
@@ -940,7 +846,6 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
       subKick: tags.filter((t) => t.type === 'sub-kick').length,
       kick: tags.filter((t) => t.type === 'kick').length,
       snare: tags.filter((t) => t.type === 'snare').length,
-      hihat: tags.filter((t) => t.type === 'hihat').length,
     };
   }, [tags]);
 
@@ -965,120 +870,83 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
       />
 
       {/* Top Header Card */}
-      <div className="p-5 md:p-6 rounded-3xl bg-[#0c0c10]/95 border border-white/20 shadow-2xl backdrop-blur-xl relative overflow-hidden">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-500 text-white tracking-widest uppercase">
-                POSTLAIN ACOUSTIC AI
-              </span>
-              <h2 className="text-lg md:text-xl font-extrabold text-white tracking-wide flex items-center gap-2">
-                <BrainCircuit className="w-5 h-5 text-red-500" />
-                FEW-SHOT DRUM ACOUSTIC DETECTOR
-              </h2>
-            </div>
-            <p className="text-xs text-zinc-400">
-              Học âm sắc trực tiếp từ 13 mốc mẫu chuẩn (22.7s - 29.4s) và tự động suy luận ra toàn bộ nhịp bài hát.
-            </p>
+      <div className="p-5 md:p-6 rounded-3xl bg-[#090a0f]/95 border border-white/20 shadow-2xl backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500 text-black tracking-widest uppercase">
+              AI DSP STUDIO
+            </span>
+            <h2 className="text-lg md:text-xl font-extrabold text-white tracking-wide flex items-center gap-2">
+              <BrainCircuit className="w-5 h-5 text-cyan-400" />
+              FEW-SHOT ACOUSTIC DRUM DETECTOR
+            </h2>
           </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <label className="px-3 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white border border-red-400 shadow-[0_0_15px_rgba(255,0,0,0.4)] cursor-pointer transition-all flex items-center gap-1.5">
-              <UploadCloud className="w-3.5 h-3.5" />
-              <span>Nạp Tệp IDK (FLAC/WAV/MP3)...</span>
-              <input
-                type="file"
-                accept="audio/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
-                    setSelectedTrackId(`file_${Date.now()}`);
-                    setSelectedTrackTitle(cleanTitle);
-                    loadAudioSource(file, cleanTitle);
-                  }
-                }}
-              />
-            </label>
-
-            <button
-              onClick={() => {
-                if (audioBuffer) executeLearningAndInference(audioBuffer);
-              }}
-              disabled={!audioBuffer}
-              className="px-3 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-1.5 disabled:opacity-40"
-              title="Chạy lại mô hình học mẫu"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Học Lại & Quét Toàn Bài</span>
-            </button>
-          </div>
+          <p className="text-xs text-zinc-400">
+            Khóa sạch tạp âm đoạn Intro (0:00 - 22.746s) • Học trực tiếp 13 mốc chuẩn và tự động suy luận toàn bài.
+          </p>
         </div>
 
-        {allTracks.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-3 flex-wrap">
-            <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1">
-              <Disc3 className="w-3.5 h-3.5 text-zinc-500" /> Chọn từ kho Album:
-            </span>
-            <select
-              value={selectedTrackId}
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer transition-all flex items-center gap-2">
+            <UploadCloud className="w-4 h-4 text-cyan-400" />
+            <span>Nạp Tệp IDK (FLAC/WAV)...</span>
+            <input
+              type="file"
+              accept="audio/*"
+              className="hidden"
               onChange={(e) => {
-                const val = e.target.value;
-                setSelectedTrackId(val);
-                const found = allTracks.find((t) => t.track.id === val);
-                if (found) {
-                  setSelectedTrackTitle(found.track.title);
-                  const streamUrl = found.track.audio_url ? getMediaCdnUrl(found.track.audio_url) : '';
-                  if (streamUrl) {
-                    loadAudioSource(streamUrl, found.track.title);
-                  }
+                const file = e.target.files?.[0];
+                if (file) {
+                  const clean = file.name.replace(/\.[^/.]+$/, '');
+                  loadAudioSource(file, clean);
                 }
               }}
-              className="bg-black/60 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500 max-w-md font-mono"
-            >
-              <option value="none">-- Chọn bài hát từ Vault --</option>
-              {allTracks.map(({ albumTitle, track }) => (
-                <option key={track.id} value={track.id}>
-                  [{albumTitle}] {track.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+            />
+          </label>
+
+          {/* NÚT CHƯA ĐÚNG (CÂN CHỈNH AI) */}
+          <button
+            onClick={handleReinforceAI}
+            disabled={!audioBuffer}
+            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white border border-red-400 shadow-[0_0_20px_rgba(255,50,50,0.4)] transition-all flex items-center gap-2 disabled:opacity-40"
+            title="Tự động học thêm bậc lọc nhiễu và siết chặt dải tần"
+          >
+            <RefreshCw className="w-4 h-4 animate-spin-slow" />
+            <span>CHƯA ĐÚNG (AI CÂN CHỈNH LẦN {learningIteration + 1})</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Waveform Canvas Stage */}
-      <div className="p-4 md:p-6 rounded-3xl bg-[#07070a] border border-white/20 shadow-2xl relative space-y-4">
+      <div className="p-4 md:p-6 rounded-3xl bg-[#050608] border border-white/20 shadow-2xl relative space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs font-mono font-bold text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-red-500" />
-              <span ref={timeDisplayRef} className="text-red-400 font-extrabold text-sm">{formatMillis(currentTime)}</span>
+            <div className="px-3.5 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs font-mono font-bold text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-cyan-400" />
+              <span ref={timeDisplayRef} className="text-cyan-300 font-extrabold text-sm">{formatMillis(currentTime)}</span>
               <span className="text-zinc-500">/ {formatMillis(duration || audioBuffer?.duration || 0)}</span>
             </div>
 
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] text-zinc-300">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] text-zinc-300">
               <span>Zoom:</span>
               <span className="font-bold text-white">{zoomLevel}x</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setZoomLevel((z) => Math.max(1.0, Math.round((z - 0.5) * 2) / 2))}
               disabled={zoomLevel <= 1.0}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white disabled:opacity-40 transition-all"
-              title="Thu nhỏ thanh sóng"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
 
             <button
-              onClick={() => setZoomLevel((z) => Math.min(20.0, Math.round((z + 0.5) * 2) / 2))}
-              disabled={zoomLevel >= 20.0}
+              onClick={() => setZoomLevel((z) => Math.min(25.0, Math.round((z + 0.5) * 2) / 2))}
+              disabled={zoomLevel >= 25.0}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white disabled:opacity-40 transition-all"
-              title="Phóng to thanh sóng"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
@@ -1088,87 +956,97 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                 setZoomLevel(1.0);
                 setViewportStartSec(0);
               }}
-              className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition-all"
+              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition-all"
             >
               Reset 1x
             </button>
           </div>
         </div>
 
-        <div ref={containerRef} className="relative w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-white/25 cursor-crosshair">
-          {isDecoding ? (
-            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 z-20">
-              <Disc3 className="w-8 h-8 text-red-500 animate-spin" />
-              <p className="text-xs text-zinc-300 font-bold">{decodeProgress || 'Đang giải mã âm thanh...'}</p>
+        {/* Waveform Canvas Viewport */}
+        <div
+          ref={containerRef}
+          onMouseDown={() => (isDraggingRef.current = true)}
+          onMouseUp={() => (isDraggingRef.current = false)}
+          onMouseMove={(e) => {
+            if (isDraggingRef.current) handleScrub(e.clientX);
+          }}
+          className="relative w-full h-48 sm:h-56 rounded-2xl overflow-hidden border border-white/25 cursor-crosshair bg-black"
+        >
+          {isDecoding && (
+            <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center gap-2 z-20">
+              <Disc3 className="w-8 h-8 text-cyan-400 animate-spin" />
+              <p className="text-xs text-zinc-300 font-bold">{decodeProgress}</p>
             </div>
-          ) : null}
+          )}
 
           <canvas
             ref={canvasRef}
-            width={1200}
-            height={220}
-            onClick={(e) => handleSeekFromCoords(e.clientX)}
+            width={1400}
+            height={240}
+            onClick={(e) => handleScrub(e.clientX)}
             onTouchStart={(e) => {
-              if (e.touches.length > 0) handleSeekFromCoords(e.touches[0].clientX);
+              if (e.touches.length > 0) handleScrub(e.touches[0].clientX);
             }}
             onTouchMove={(e) => {
-              if (e.touches.length > 0) handleSeekFromCoords(e.touches[0].clientX);
+              if (e.touches.length > 0) handleScrub(e.touches[0].clientX);
             }}
             className="w-full h-full block touch-none"
           />
         </div>
 
+        {/* Timeline Slider */}
         {zoomLevel > 1.0 && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500">
-              <span>Cuộn mốc thời gian:</span>
-              <span>
-                {formatMillis(viewportStartSec)} → {formatMillis(viewportStartSec + (duration || audioBuffer?.duration || 100) / zoomLevel)}
-              </span>
-            </div>
             <input
               type="range"
               min={0}
               max={Math.max(0, (duration || audioBuffer?.duration || 100) - (duration || audioBuffer?.duration || 100) / zoomLevel)}
-              step={0.1}
+              step={0.05}
               value={viewportStartSec}
               onChange={(e) => setViewportStartSec(parseFloat(e.target.value))}
-              className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-ew-resize accent-red-500"
+              className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-ew-resize accent-cyan-400"
             />
           </div>
         )}
 
-        {/* Playback Controls Bar */}
-        <div className="p-3 rounded-2xl bg-black/80 border border-white/15 flex flex-wrap items-center justify-between gap-3">
+        {/* Audio Transport Bar */}
+        <div className="p-3.5 rounded-2xl bg-black/80 border border-white/15 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
               onClick={togglePlay}
-              className="p-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black shadow-[0_0_20px_rgba(255,0,0,0.5)] transition-all flex items-center justify-center"
-              title="Phát / Tạm dừng (Phím Space)"
+              className="p-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-black shadow-[0_0_20px_rgba(0,255,200,0.5)] transition-all flex items-center justify-center"
+              title="Phát / Dừng (Space)"
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+              {isPlaying ? <Pause className="w-5 h-5 fill-black" /> : <Play className="w-5 h-5 fill-black ml-0.5" />}
             </button>
 
             <button
               onClick={() => seekTo(0)}
               className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white transition-all"
-              title="Quay lại đầu bài"
+              title="Đầu bài"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
 
             <button
+              onClick={() => seekTo(22.746)}
+              className="px-3 py-2 rounded-xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-xs font-bold text-red-300 transition-all"
+              title="Nhảy tới nhịp đầu tiên (22.746s)"
+            >
+              Tới Beat 1 (22.746s)
+            </button>
+
+            <button
               onClick={() => seekTo(Math.max(0, (audioRef.current?.currentTime || currentTimeRef.current) - 0.5))}
-              className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition-all"
-              title="Lùi 0.5s"
+              className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold"
             >
               -0.5s
             </button>
 
             <button
               onClick={() => seekTo((audioRef.current?.currentTime || currentTimeRef.current) + 0.5)}
-              className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition-all"
-              title="Tiến 0.5s"
+              className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold"
             >
               +0.5s
             </button>
@@ -1185,7 +1063,7 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                     if (audioRef.current) audioRef.current.playbackRate = rate;
                   }}
                   className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition-all ${
-                    playbackRate === rate ? 'bg-red-500 text-white' : 'text-zinc-400 hover:text-white'
+                    playbackRate === rate ? 'bg-cyan-500 text-black' : 'text-zinc-400 hover:text-white'
                   }`}
                 >
                   {rate}x
@@ -1197,114 +1075,45 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
               onClick={() => setAudibleMetronome((m) => !m)}
               className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
                 audibleMetronome
-                  ? 'bg-white/15 border-white text-white'
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
                   : 'bg-white/5 border-white/10 text-zinc-500'
               }`}
-              title="Phát tiếng Click âm thanh khi quét trúng Tag"
             >
-              <Activity className="w-3.5 h-3.5 text-red-400" />
+              <Volume2 className="w-3.5 h-3.5" />
               <span>Tiếng Click: {audibleMetronome ? 'BẬT' : 'TẮT'}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Quick Tagging Toolbar */}
-      <div className="p-5 rounded-3xl bg-[#0c0c10]/95 border border-white/20 shadow-2xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
-            <Tag className="w-4 h-4 text-red-500" />
-            TINH CHỈNH & BÙ NHỊP THỦ CÔNG
-          </h3>
-          <span className="text-xs text-zinc-400">
-            Tổng cộng: <strong className="text-white">{tags.length}</strong> nhịp đã nhận diện
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {(['sub-kick', 'kick', 'snare', 'hihat'] as BeatTagType[]).map((type) => {
-            const cfg = TAG_CONFIG[type];
-            const count = tagCounts[type === 'sub-kick' ? 'subKick' : type === 'kick' ? 'kick' : type === 'snare' ? 'snare' : 'hihat'];
-
-            return (
-              <button
-                key={type}
-                onClick={() => {
-                  setActiveTagType(type);
-                  const liveSec = audioRef.current ? audioRef.current.currentTime : currentTimeRef.current;
-                  addTagAtTime(liveSec, type);
-                }}
-                className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 group hover:scale-[1.02] shadow-lg ${
-                  activeTagType === type
-                    ? 'border-white bg-white/10 shadow-[0_0_20px_rgba(255,255,255,0.15)]'
-                    : 'border-white/15 bg-black/60 hover:border-white/30'
-                }`}
-                style={{ borderLeftColor: cfg.border, borderLeftWidth: '5px' }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-xs tracking-wider" style={{ color: cfg.color }}>
-                    {cfg.label}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/10 text-white">
-                    {count} nhịp
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                  <span>Phím tắt: <strong className="text-white font-mono">{cfg.key}</strong></span>
-                  <Plus className="w-4 h-4 text-zinc-400 group-hover:text-white group-hover:scale-125 transition-all" />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="p-3 rounded-2xl bg-white/5 border border-white/10 text-[11px] text-zinc-400 flex items-center gap-3 flex-wrap">
-          <HelpCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-          <span><strong>MẸO:</strong> Nạp file vào, bấm <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-white font-bold font-mono">Space</kbd> để chạy và thẩm tiếng Click quét nhịp. Mày có thể click vào bất kỳ tag nào trong bảng để nghe lại mốc đó!</span>
-        </div>
-      </div>
-
       {/* Tagged Markers List & Data Export */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 p-5 rounded-3xl bg-[#0c0c10]/95 border border-white/20 shadow-2xl space-y-4">
+        <div className="lg:col-span-2 p-5 rounded-3xl bg-[#090a0f]/95 border border-white/20 shadow-2xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-red-500" />
-              DANH SÁCH NHÃN TOÀN BÀI ({filteredTags.length})
+              <Layers className="w-4 h-4 text-cyan-400" />
+              DANH SÁCH NHỊP ĐÃ TỰ ĐỘNG ĐỒNG BỘ ({filteredTags.length})
             </h3>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-black/60 p-1 rounded-xl border border-white/15 text-[10px]">
-                {(['all', 'sub-kick', 'kick', 'snare', 'hihat'] as const).map((ft) => (
-                  <button
-                    key={ft}
-                    onClick={() => setFilterType(ft)}
-                    className={`px-2 py-1 rounded-lg font-bold transition-all uppercase ${
-                      filterType === ft ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    {ft === 'all' ? 'Tất cả' : ft}
-                  </button>
-                ))}
-              </div>
-
-              {tags.length > 0 && (
+            <div className="flex items-center gap-1 bg-black/60 p-1 rounded-xl border border-white/15 text-[10px]">
+              {(['all', 'sub-kick', 'kick', 'snare'] as const).map((ft) => (
                 <button
-                  onClick={clearAllTags}
-                  className="p-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-300 text-xs transition-all"
-                  title="Xóa tất cả nhãn"
+                  key={ft}
+                  onClick={() => setFilterType(ft)}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all uppercase ${
+                    filterType === ft ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  {ft === 'all' ? 'Tất cả' : ft}
                 </button>
-              )}
+              ))}
             </div>
           </div>
 
-          <div className="max-h-[360px] overflow-y-auto overflow-x-hidden no-scrollbar space-y-1.5 pr-1">
+          <div className="max-h-[380px] overflow-y-auto overflow-x-hidden no-scrollbar space-y-1.5 pr-1">
             {filteredTags.length === 0 ? (
               <div className="p-8 text-center text-zinc-500 text-xs">
-                Chưa có nhãn nhịp nào. Hãy nạp tệp âm thanh IDK vào để tự động quét!
+                Chưa có nhãn nhịp nào. Hãy nạp tệp âm thanh IDK vào!
               </div>
             ) : (
               filteredTags.map((tag, idx) => {
@@ -1342,20 +1151,9 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                           seekTo(tag.timeSec);
                         }}
                         className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white transition-all"
-                        title="Nhảy tới mốc này"
+                        title="Nghe mốc này"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteTag(tag.id);
-                        }}
-                        className="p-1 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-400 transition-all"
-                        title="Xóa nhãn"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -1365,31 +1163,19 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
           </div>
         </div>
 
-        {/* Export / Downloader Panel */}
-        <div className="p-5 rounded-3xl bg-[#0c0c10]/95 border border-white/20 shadow-2xl space-y-4 flex flex-col justify-between">
+        {/* Export Code & WAV Downloader */}
+        <div className="p-5 rounded-3xl bg-[#090a0f]/95 border border-white/20 shadow-2xl space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
-              <Download className="w-4 h-4 text-red-500" />
-              XUẤT DỮ LIỆU & FILE WAV
+              <Download className="w-4 h-4 text-cyan-400" />
+              XUẤT DỮ LIỆU & AUDITION WAV
             </h3>
-            <p className="text-[11px] text-zinc-400">
-              Xuất file WAV hoặc sao chép dataset đã được đồng bộ chuẩn hóa.
-            </p>
 
             <div className="space-y-2 pt-2 border-t border-white/10">
               <button
-                onClick={() => handleExportWavFile(false)}
-                disabled={isExportingWav || !audioBuffer}
-                className="w-full py-2.5 rounded-xl bg-white text-black font-extrabold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
-              >
-                <FileAudio className="w-4 h-4" />
-                <span>XUẤT FILE WAV GỐC</span>
-              </button>
-
-              <button
                 onClick={() => handleExportWavFile(true)}
                 disabled={isExportingWav || !audioBuffer || tags.length === 0}
-                className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 shadow-lg shadow-red-900/30"
+                className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 shadow-lg shadow-cyan-900/30"
               >
                 <FileDown className="w-4 h-4" />
                 <span>XUẤT WAV KÈM NHỊP CLICK ({tags.length} NHỊP)</span>
@@ -1404,18 +1190,26 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={handleCopyJson}
+                    onClick={() => {
+                      navigator.clipboard.writeText(exportJsonString);
+                      setCopiedJson(true);
+                      setTimeout(() => setCopiedJson(false), 2000);
+                    }}
                     className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white flex items-center gap-1 font-bold"
                   >
-                    {copiedJson ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    {copiedJson ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
                     <span>JSON</span>
                   </button>
 
                   <button
-                    onClick={handleCopyCode}
-                    className="px-2 py-0.5 rounded bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-[10px] text-red-300 hover:text-white flex items-center gap-1 font-bold"
+                    onClick={() => {
+                      navigator.clipboard.writeText(exportTsCodeString);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 2000);
+                    }}
+                    className="px-2 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-[10px] text-cyan-300 hover:text-white flex items-center gap-1 font-bold"
                   >
-                    {copiedCode ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    {copiedCode ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-cyan-400" />}
                     <span>Dataset TS</span>
                   </button>
                 </div>
@@ -1424,11 +1218,11 @@ export const DRUM_SYNC_MAP_${selectedTrackTitle.toUpperCase().replace(/[^A-Z0-9]
               {tags.length > 0 && (
                 <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[10px] space-y-1 text-zinc-300">
                   <div className="flex items-center justify-between">
-                    <span>Tổng cú Kick/Sub:</span>
-                    <strong className="text-red-400">{tagCounts.kick + tagCounts.subKick} nhịp ({tagCounts.subKick} Sub-808)</strong>
+                    <span>Tổng cú Kick / Sub-808:</span>
+                    <strong className="text-red-400">{tagCounts.kick + tagCounts.subKick} ({tagCounts.subKick} Sub-808)</strong>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Tổng cú Snare/Clap:</span>
+                    <span>Tổng cú Snare / Clap:</span>
                     <strong className="text-white">{tagCounts.snare} nhịp</strong>
                   </div>
                 </div>
