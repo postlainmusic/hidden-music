@@ -968,6 +968,29 @@
      - `tsc --noEmit`: 0 errors.
      - `npm test`: 25/25 tests PASSED 100%.
 
+---
+
+### Giao dịch 041: Multi-Tier High-Resilience Streaming Architecture & Comprehensive Edge Error Auditing
+* **Thời gian**: 22/08/2026 15:40 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Nâng cấp và tối ưu hóa toàn bộ hệ thống streaming audio/video (Cloudflare R2, Supabase Storage, và YouTube Music Stream Resolver).
+  - Kiểm thử toàn diện tất cả các trường hợp lỗi mạng, IP throttling, timeout failover, xác thực định dạng MIME và Range requests.
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **Nâng Cấp Resolver Đa Tầng (`src/app/api/ytm/resolve/route.ts`)**:
+     - **Tier 1 (InnerTube Multi-Client Engine)**: Tự động xoay vòng qua các client contexts (`ANDROID`, `WEB_REMIX`, `IOS`) với timeout 4s.
+     - **Tier 2 (Piped High-Bandwidth Cluster)**: Danh sách instance Piped mới với lọc codec tối ưu `audio/mp4` $\rightarrow$ `audio/webm`.
+     - **Tier 3 (Invidious Cluster Failover)**: Cụm máy chủ gương Invidious dự phòng.
+     - Xác thực video ID 11 ký tự và chuẩn hóa body lỗi 400/503.
+  2. **Kiểm Thử Khả Năng Hoạt Động & HTTP 206 Partial Content**:
+     - Đã chẩn đoán 30 bài hát lossless FLAC và MKV video từ `media.postlain.com`, xác nhận phản hồi HTTP 206 hỗ trợ tua và tìm kiếm mốc thời gian.
+  3. **Mở Rộng Test Suite (`tests/integration/stream-endpoints.test.mjs`)**:
+     - Thêm kiểm thử tự động cho cơ chế đa tầng `resolveViaInnerTube`, `resolveViaPiped`, `resolveViaInvidious` và ưu tiên `audio/mp4`.
+  4. **Verification**:
+     - `tsc --noEmit`: 0 errors.
+     - `npm test`: 27/27 tests PASSED 100%.
+
+
 
 
 

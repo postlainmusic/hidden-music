@@ -37,4 +37,25 @@ describe('Streaming Engine & Closed-Loop Integration Tests', () => {
     assert.ok(searchContent.includes("gl: 'VN'") || searchContent.includes('gl=VN'), 'Search must specify gl=VN');
     assert.ok(searchContent.includes("hl: 'vi'") || searchContent.includes('hl=vi'), 'Search must specify hl=vi');
   });
+
+  it('Verify /api/ytm/resolve multi-tier fallback architecture (InnerTube, Piped, Invidious)', () => {
+    const resolvePath = path.resolve(process.cwd(), 'src/app/api/ytm/resolve/route.ts');
+    const content = fs.readFileSync(resolvePath, 'utf-8');
+
+    assert.ok(content.includes('resolveViaInnerTube'), 'Must implement InnerTube multi-client resolver');
+    assert.ok(content.includes('resolveViaPiped'), 'Must implement Piped cluster resolver');
+    assert.ok(content.includes('resolveViaInvidious'), 'Must implement Invidious cluster resolver');
+    assert.ok(content.includes('isValidVideoId'), 'Must validate YouTube 11-char video ID');
+  });
+
+  it('Verify Audio MIME priority (audio/mp4 over audio/webm for Safari / iOS compatibility)', () => {
+    const resolvePath = path.resolve(process.cwd(), 'src/app/api/ytm/resolve/route.ts');
+    const content = fs.readFileSync(resolvePath, 'utf-8');
+
+    assert.ok(content.includes('AUDIO_MIME_PRIORITY'), 'Must define AUDIO_MIME_PRIORITY');
+    assert.ok(
+      content.indexOf("'audio/mp4'") < content.indexOf("'audio/webm'"),
+      'audio/mp4 must have higher priority than audio/webm for Safari compatibility'
+    );
+  });
 });
