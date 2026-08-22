@@ -560,33 +560,45 @@ export default function DesktopPlayerBar() {
               : 'h-0 opacity-0'
           }`}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 sm:px-8 py-3.5 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              {expandedMode === 'lyrics' ? (
-                <>
-                  <Mic2 className="w-4 h-4 text-white" />
-                  <span className="text-xs uppercase font-cyber font-black tracking-wider text-white">
-                    LỜI BÀI HÁT
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ListMusic className="w-4 h-4 text-white" />
-                  <span className="text-xs uppercase font-cyber font-black tracking-wider text-white">
-                    HÀNG CHỜ PHÁT
-                  </span>
-                </>
-              )}
+          {/* Header with Segmented Mode Switcher */}
+          <div className="flex items-center justify-between px-6 sm:px-8 py-3 flex-shrink-0 border-b border-white/10">
+            <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-2xl border border-white/15 shadow-inner">
+              <button
+                onClick={() => setExpandedMode('lyrics')}
+                className={`px-3.5 py-1.5 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                  expandedMode === 'lyrics'
+                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+                <span>LỜI BÀI HÁT</span>
+              </button>
+              <button
+                onClick={() => setExpandedMode('queue')}
+                className={`px-3.5 py-1.5 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                  expandedMode === 'queue'
+                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <ListMusic className="w-3.5 h-3.5" />
+                <span>HÀNG CHỜ ({userQueue.length + playlist.length})</span>
+              </button>
             </div>
 
-            <button
-              onClick={() => setExpandedMode('none')}
-              className="p-1.5 rounded-full bg-white/10 hover:bg-white text-zinc-300 hover:text-black transition-all"
-              title="Thu nhỏ (Esc)"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase tracking-widest hidden sm:inline-block">
+                ESC HOẶC NHẤN NGOÀI ĐỂ ĐÓNG
+              </span>
+              <button
+                onClick={() => setExpandedMode('none')}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black transition-all"
+                title="Thu nhỏ (Esc)"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Body */}
@@ -758,12 +770,15 @@ export default function DesktopPlayerBar() {
                 >
                   {currentTrack.title}
                 </span>
-                <span 
-                  ref={artistTextRef}
-                  className="text-[10px] text-zinc-400 font-mono font-bold truncate uppercase mt-0.5 transition-colors"
-                >
-                  {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
-                </span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_5px_#34d399]" />
+                  <span 
+                    ref={artistTextRef}
+                    className="text-[10px] text-zinc-400 font-mono font-bold truncate uppercase transition-colors"
+                  >
+                    {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
+                  </span>
+                </div>
               </div>
             </div>
 

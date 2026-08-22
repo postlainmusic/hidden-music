@@ -941,6 +941,34 @@
      - `tsc --noEmit`: 0 errors.
      - `npm test`: 25/25 unit & integration tests pass 100%.
 
+---
+
+### Giao dịch 040: Left-Aligned Lyrics, Mobile Swipe Isolation & Cyber-Deck Audiophile Playerbar Elevation
+* **Thời gian**: 22/08/2026 14:55 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Chỉnh lại lời bài hát trên mobile: căn lề trái (`text-left`), kích thước cố định không nhảy khung hình hay phóng to khi chạy, chuyển hiệu ứng giữa các dòng lyrics mượt mà.
+  - Cô lập thao tác vuốt xuống trên mobile: chỉ cho phép vuốt xuống đóng trình phát khi chạm vào vùng xung quanh thanh ngang grab bar / tiêu đề "ĐANG PHÁT TỪ ALBUM", giải phóng hoàn toàn vùng cuộn Lời bài hát & Hàng chờ.
+  - Nâng cấp toàn diện giao diện Playbar lên một tầm cao mới theo phong cách Cyber-Deck Audiophile độc bản, không trùng lặp thị trường, không bị AI-hóa.
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **Nâng cấp `SyncedLyricsView.tsx`**:
+     - Chuyển sang bố cục căn lề trái `text-left` với lề thụt `px-6 sm:px-10`.
+     - Cố định kích thước typography cho toàn bộ các dòng `text-lg sm:text-xl md:text-2xl` (loại bỏ 100% layout shift / frame jitter).
+     - Dòng đang hát: màu trắng tinh khiết `text-white font-extrabold`, vầng sáng `drop-shadow-[0_0_16px_rgba(255,255,255,0.45)]`, nền nổi `bg-white/[0.04]` và vạch laser định vị mini.
+     - Dòng đã qua/tương lai: mờ chuyển dần với `transition-all duration-300 ease-out`.
+  2. **Nâng cấp `MobilePlayerBar.tsx`**:
+     - Gỡ touch listeners khỏi root container, cô lập vào vùng **Header Drag Zone**.
+     - Tích hợp **Cyber Segmented Navigation Deck** (`TRÌNH PHÁT` | `LỜI BÀI HÁT` | `HÀNG CHỜ`).
+     - Khung đĩa nhạc 3D Floating với bóng đổ sâu và độ nảy lò xo Hooke theo nhịp kick/sub-bass.
+     - Bánh xe phát trung tâm **Master Concentric Wheel** cơ học với vầng sáng trắng.
+     - Telemetry HUD định dạng âm thanh chuẩn phòng thu (`24-BIT / 96kHz LOSSLESS`).
+  3. **Nâng cấp `DesktopPlayerBar.tsx`**:
+     - Ngăn kéo mở rộng tích hợp bộ chuyển tab Segmented Mode Switcher (`LỜI BÀI HÁT` | `HÀNG CHỜ`) và chỉ báo âm thanh lossless.
+  4. **Verification**:
+     - `tsc --noEmit`: 0 errors.
+     - `npm test`: 25/25 tests PASSED 100%.
+
+
 
 
 

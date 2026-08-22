@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { LyricLine, LrcParser } from '@/lib/lyrics/lrcParser';
 import { usePlayer } from '@/context/PlayerContext';
-import { Mic2, Loader2, RefreshCw } from 'lucide-react';
+import { Mic2, Loader2 } from 'lucide-react';
 
 interface SyncedLyricsViewProps {
   rawLrc?: string;
@@ -80,7 +80,7 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
 
   const activeIndex = LrcParser.findActiveIndex(lyrics, currentTime);
 
-  // Auto-scroll active line to center smoothly without layout shift
+  // Auto-scroll active line to vertical center smoothly without layout shift
   useEffect(() => {
     if (activeIndex >= 0 && lineRefs.current[activeIndex] && containerRef.current) {
       const activeEl = lineRefs.current[activeIndex];
@@ -106,9 +106,9 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
 
   if (lyrics.length === 0 && !plainLyrics) {
     return (
-      <div className={`flex flex-col items-center justify-center p-8 text-zinc-600 gap-2 ${className}`}>
-        <Mic2 className="w-8 h-8 opacity-40" />
-        <p className="text-xs uppercase tracking-wider font-mono">Chưa có lời đồng bộ cho bài hát này</p>
+      <div className={`flex flex-col items-start justify-center px-6 py-12 text-zinc-600 gap-2 ${className}`}>
+        <Mic2 className="w-7 h-7 text-zinc-700 opacity-60" />
+        <p className="text-xs uppercase tracking-wider font-mono text-zinc-500">Chưa có lời đồng bộ cho bài hát này</p>
       </div>
     );
   }
@@ -117,16 +117,18 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
     return (
       <div
         ref={containerRef}
-        className={`overflow-y-auto overflow-x-hidden no-scrollbar px-6 py-8 text-center select-text font-sans space-y-4 ${className}`}
+        className={`overflow-y-auto overflow-x-hidden no-scrollbar px-6 sm:px-8 py-8 text-left select-text font-sans space-y-4 ${className}`}
         style={{
           overscrollBehaviorY: 'contain',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
         }}
       >
-        <p className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">— LỜI BÀI HÁT (STATIC) —</p>
+        <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-4 pb-2 border-b border-white/10">
+          — LỜI BÀI HÁT (STATIC TEXT) —
+        </p>
         {plainLyrics.split('\n').map((line, idx) => (
-          <p key={idx} className="text-sm md:text-base text-zinc-300 font-medium leading-relaxed">
+          <p key={idx} className="text-base sm:text-lg text-zinc-300 font-medium leading-relaxed">
             {line || '...'}
           </p>
         ))}
@@ -137,7 +139,7 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`overflow-y-auto overflow-x-hidden no-scrollbar px-4 sm:px-8 py-12 space-y-6 text-center select-none font-sans scroll-smooth ${className}`}
+      className={`overflow-y-auto overflow-x-hidden no-scrollbar px-6 sm:px-10 py-16 space-y-6 text-left select-none font-sans scroll-smooth ${className}`}
       style={{
         overscrollBehaviorY: 'contain',
         contain: 'layout paint',
@@ -156,18 +158,24 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
               lineRefs.current[idx] = el;
             }}
             onClick={() => seekTo(line.timeSec)}
-            className={`cursor-pointer transition-all duration-300 py-1 rounded-lg ${
+            className={`cursor-pointer transition-all duration-300 ease-out py-1.5 px-3 -mx-3 rounded-xl relative select-none ${
               isActive
-                ? 'text-white font-bold text-base sm:text-lg md:text-xl scale-[1.02] drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]'
+                ? 'text-white font-extrabold text-lg sm:text-xl md:text-2xl leading-snug drop-shadow-[0_0_16px_rgba(255,255,255,0.45)] bg-white/[0.04]'
                 : isPast
-                ? 'text-zinc-500 hover:text-zinc-300 text-sm sm:text-base md:text-lg font-normal opacity-70'
-                : 'text-zinc-600 hover:text-zinc-400 text-sm sm:text-base md:text-lg font-normal opacity-50'
+                ? 'text-zinc-500 hover:text-zinc-300 text-lg sm:text-xl md:text-2xl font-bold leading-snug opacity-60 hover:opacity-90'
+                : 'text-zinc-600 hover:text-zinc-400 text-lg sm:text-xl md:text-2xl font-bold leading-snug opacity-40 hover:opacity-80'
             }`}
             style={{
               contain: 'layout style paint',
             }}
           >
-            {line.text || '♪ ♪ ♪'}
+            {/* Active Left Indicator Bar */}
+            {isActive && (
+              <span className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
+            )}
+            <span className={isActive ? 'pl-2' : 'pl-2'}>
+              {line.text || '♪ ♪ ♪'}
+            </span>
           </div>
         );
       })}

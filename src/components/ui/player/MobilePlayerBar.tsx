@@ -16,11 +16,11 @@ import {
   Loader2,
   Trash2,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { useTelemetry } from '@/hooks/useTelemetry';
 import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
-import { BeatVisualizer } from '@/components/visualizer/BeatVisualizer';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
 
@@ -89,7 +89,6 @@ export default function MobilePlayerBar() {
   const [activeView, setActiveView] = useState<'player' | 'lyrics' | 'queue'>('player');
   const [isLiked, setIsLiked] = useState(false);
 
-  const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
   // Direct DOM Elements for 60FPS Hardware-Accelerated Stage Performance
@@ -111,8 +110,6 @@ export default function MobilePlayerBar() {
   const expandPrevBtnRef = useRef<HTMLButtonElement | null>(null);
   const expandNextBtnRef = useRef<HTMLButtonElement | null>(null);
   const expandRepeatBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandLyricsBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandQueueBtnRef = useRef<HTMLButtonElement | null>(null);
   const miniPrevBtnRef = useRef<HTMLButtonElement | null>(null);
   const miniNextBtnRef = useRef<HTMLButtonElement | null>(null);
 
@@ -195,8 +192,12 @@ export default function MobilePlayerBar() {
       const isDrumming = isDrumActiveAtTime(drumProfile, liveSec);
 
       // Cập nhật Seeker Text 60 FPS
-      if (expandedCurrentTimeTextRef.current) {
+      if (expandedCurrentTimeTextRef.current && !isDraggingSeekerRef.current) {
         expandedCurrentTimeTextRef.current.textContent = formatTime(liveSec);
+      }
+
+      if (expandedSeekerInputRef.current && !isDraggingSeekerRef.current) {
+        expandedSeekerInputRef.current.value = String(liveSec);
       }
 
       let hasRealData = false;
@@ -291,7 +292,6 @@ export default function MobilePlayerBar() {
 
       // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY: REGULAR KICK vs 808/SUB PUNCH vs RAPID ROLLS)
       if (isDrumming) {
-        // Rapid kick intervals: 55ms minimum to allow fast trap rolls and 16th-note double kicks
         const timeSinceLastKick = now - lastKickHitTimeRef.current;
         const isConsecutiveKick = timeSinceLastKick >= 55 && timeSinceLastKick < 240;
         const kickThreshold = isConsecutiveKick
@@ -305,18 +305,13 @@ export default function MobilePlayerBar() {
         if (hasBassTransient || hasWaveformKick) {
           lastKickHitTimeRef.current = now;
 
-          // Phân biệt chính xác giữa:
-          // 1. Kick có Sub / Bass / 808 (Heavy Sub-bass Punch / Drop / 808): Nảy mạnh vượt trội, bùng nổ, đỏ rực sâu
-          // 2. Kick thường / Kick nhỏ / Ghost Kick: Nảy khỏe rõ ràng, chớp đỏ tươi rõ nét
           const isSub808HeavyKick = (currentBass > 135 || bassFlux > 7.0 || (drumProfile.hasKick && currentBass > 115));
 
           if (isSub808HeavyKick) {
-            // 💥 KICK CÓ SUB/BASS/808: Nảy cực mạnh (0.075 - 0.110), bùng nổ xung lực, đỏ rực sâu
             const force = Math.min(0.110, 0.055 + bassFlux / 140);
             targetKickScaleRef.current += force;
             targetKickRedIntensityRef.current = 1.0;
           } else {
-            // 🥁 KICK THƯỜNG / KICK NHỎ: Nảy khỏe (0.035 - 0.058), chớp đỏ tươi rõ nét
             const force = Math.min(0.058, 0.030 + bassFlux / 260);
             targetKickScaleRef.current += force;
             targetKickRedIntensityRef.current = Math.max(targetKickRedIntensityRef.current, 0.88);
@@ -365,7 +360,7 @@ export default function MobilePlayerBar() {
       const redIntensity = Math.min(1.0, Math.max(0, kickRedIntensityRef.current));
       const kickDelta = Math.max(0, k - 1.0);
 
-      // KICK COLOR: Mọi cú kick (cả thường lẫn sub/808) đều chớp đỏ rực rỡ, chỉ trắng khi không có kick
+      // KICK COLOR
       const g = Math.floor(255 - redIntensity * 230);
       const b = Math.floor(255 - redIntensity * 230);
       const kickColor = `255, ${g}, ${b}`;
@@ -373,7 +368,7 @@ export default function MobilePlayerBar() {
       // MINI PLAYER DIRECT DOM MANIPULATION
       if (miniBarRef.current) {
         miniBarRef.current.style.transform = `translateX(${swipeOffsetX}px) scale(${1 + kickDelta * 0.25})`;
-        miniBarRef.current.style.borderColor = `rgba(${kickColor}, ${0.12 + kickDelta * 2.5})`;
+        miniBarRef.current.style.borderColor = `rgba(${kickColor}, ${0.15 + kickDelta * 2.5})`;
       }
 
       if (miniGlowBackdropRef.current) {
@@ -409,7 +404,7 @@ export default function MobilePlayerBar() {
 
       if (expandPlayBtnRef.current) {
         expandPlayBtnRef.current.style.transform = `scale(${1 + kickDelta * 1.2})`;
-        expandPlayBtnRef.current.style.boxShadow = `0 0 ${20 + kickDelta * 300 + s * 30}px rgba(255, 255, 255, ${0.4 + kickDelta * 4.0 + s * 0.3})`;
+        expandPlayBtnRef.current.style.boxShadow = `0 0 ${25 + kickDelta * 300 + s * 30}px rgba(255, 255, 255, ${0.4 + kickDelta * 4.0 + s * 0.3})`;
       }
 
       if (expandRootRef.current) {
@@ -437,7 +432,7 @@ export default function MobilePlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, swipeOffsetX, effectiveDuration, shuffleMode, repeatMode, activeView]);
 
-  // Touch Handlers
+  // Mini bar swipe
   const handleMiniTouchStart = (e: React.TouchEvent) => {
     if (e.touches[0]) {
       touchStartXRef.current = e.touches[0].clientX;
@@ -475,6 +470,7 @@ export default function MobilePlayerBar() {
     }, 50);
   };
 
+  // Sheet swipe handlers — CÔ LẬP CHỈ BẮT ĐẦU KHI CHẠM VÀO VÙNG HEADER DRAG ZONE
   const handleSheetTouchStart = (e: React.TouchEvent) => {
     if (e.touches[0]) {
       sheetTouchStartXRef.current = e.touches[0].clientX;
@@ -497,19 +493,10 @@ export default function MobilePlayerBar() {
   };
 
   const handleSheetTouchEnd = () => {
-    const deltaX = sheetTouchDeltaXRef.current;
     const deltaY = sheetTouchDeltaYRef.current;
-    const absX = Math.abs(deltaX);
-    const absY = Math.abs(deltaY);
-
-    if (deltaY > 60 && absY > absX) {
+    if (deltaY > 50) {
       setIsExpanded(false);
-    } else if (deltaX < -60 && absX > absY && activeView === 'player') {
-      nextTrack();
-    } else if (deltaX > 60 && absX > absY && activeView === 'player') {
-      prevTrack();
     }
-
     setSheetOffsetY(0);
     sheetTouchDeltaXRef.current = 0;
     sheetTouchDeltaYRef.current = 0;
@@ -539,7 +526,7 @@ export default function MobilePlayerBar() {
   return (
     <>
       {/* ========================================================================= */}
-      {/* 1. MINI-PLAYER STAGE PERFORMANCE                                          */}
+      {/* 1. MINI-PLAYER STAGE PERFORMANCE (CYBER FLOATING PILL)                    */}
       {/* ========================================================================= */}
       <div
         className="fixed bottom-4 left-3 right-3 z-40 pointer-events-auto select-none"
@@ -554,22 +541,22 @@ export default function MobilePlayerBar() {
       >
         <div
           ref={miniGlowBackdropRef}
-          className="absolute inset-0 -inset-x-2 -inset-y-1 bg-gradient-to-r from-white/10 via-white/25 to-white/10 rounded-3xl blur-xl pointer-events-none transition-opacity duration-75 will-change-transform"
+          className="absolute inset-0 -inset-x-2 -inset-y-1 bg-gradient-to-r from-white/10 via-white/20 to-white/10 rounded-3xl blur-xl pointer-events-none transition-opacity duration-75 will-change-transform"
         />
 
         <div
           ref={miniBarRef}
-          className="relative w-full backdrop-blur-3xl bg-black/60 rounded-2xl p-2 sm:p-2.5 flex items-center justify-between gap-2 border border-white/15 transition-all duration-75 active:scale-[0.98] cursor-pointer overflow-hidden will-change-transform"
+          className="relative w-full backdrop-blur-2xl bg-zinc-950/85 rounded-2xl p-2 sm:p-2.5 flex items-center justify-between gap-2 border border-white/20 shadow-[0_12px_40px_rgba(0,0,0,0.9)] transition-all duration-75 active:scale-[0.98] cursor-pointer overflow-hidden will-change-transform"
         >
           <div
             ref={miniSheenRef}
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none opacity-0 will-change-transform"
           />
 
-          <div className="flex items-center gap-2.5 min-w-0 flex-1 relative z-10">
+          <div className="flex items-center gap-3 min-w-0 flex-1 relative z-10">
             <div
               ref={miniCoverRef}
-              className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 flex-shrink-0 shadow-sm border border-white/20 will-change-transform"
+              className="relative w-11 h-11 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 shadow-md border border-white/25 will-change-transform"
             >
               {currentAlbum?.cover_url ? (
                 <img
@@ -588,20 +575,23 @@ export default function MobilePlayerBar() {
             <div className="flex flex-col min-w-0">
               <span
                 ref={miniTextRef}
-                className="text-xs font-cyber font-extrabold text-white truncate uppercase tracking-wide transition-all"
+                className="text-xs font-cyber font-extrabold text-white truncate uppercase tracking-wide"
               >
                 {currentTrack.title}
               </span>
-              <span className="text-[10px] text-zinc-400 font-mono font-bold truncate uppercase mt-0.5">
-                {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
-              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_5px_#34d399]" />
+                <span className="text-[10px] text-zinc-400 font-mono font-bold truncate uppercase">
+                  {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0 relative z-10" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleToggleLike}
-              className="p-1.5 rounded-full text-zinc-400 hover:text-white active:scale-90 transition-transform"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white active:scale-90 transition-transform"
               title={isLiked ? 'Đã yêu thích' : 'Yêu thích'}
             >
               <Heart
@@ -617,7 +607,7 @@ export default function MobilePlayerBar() {
                 e.stopPropagation();
                 prevTrack();
               }}
-              className="p-1.5 rounded-full text-zinc-300 hover:text-white active:scale-90 transition-transform will-change-transform"
+              className="p-2 rounded-xl text-zinc-300 hover:text-white active:scale-90 transition-transform will-change-transform"
               title="Bài trước"
             >
               <SkipBack className="w-4 h-4 fill-current" />
@@ -629,7 +619,7 @@ export default function MobilePlayerBar() {
                 e.stopPropagation();
                 togglePlay();
               }}
-              className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-md active:scale-90 flex-shrink-0 mx-0.5 will-change-transform"
+              className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 flex-shrink-0 mx-0.5 will-change-transform"
               title={isPlaying ? 'Tạm dừng' : 'Phát'}
             >
               {isBuffering ? (
@@ -647,7 +637,7 @@ export default function MobilePlayerBar() {
                 e.stopPropagation();
                 nextTrack();
               }}
-              className="p-1.5 rounded-full text-zinc-300 hover:text-white active:scale-90 transition-transform will-change-transform"
+              className="p-2 rounded-xl text-zinc-300 hover:text-white active:scale-90 transition-transform will-change-transform"
               title="Bài kế tiếp"
             >
               <SkipForward className="w-4 h-4 fill-current" />
@@ -657,16 +647,13 @@ export default function MobilePlayerBar() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. EXPANDED FULLSCREEN STAGE PERFORMANCE                                  */}
+      {/* 2. EXPANDED FULLSCREEN CYBER-DECK AUDIOPHILE PERFORMANCE                  */}
       {/* ========================================================================= */}
       {isExpanded && (
         <div
           ref={expandRootRef}
-          onTouchStart={handleSheetTouchStart}
-          onTouchMove={handleSheetTouchMove}
-          onTouchEnd={handleSheetTouchEnd}
           style={{ transform: `translateY(${sheetOffsetY}px)` }}
-          className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-6 pb-10 select-none animate-fadeIn transition-transform duration-75"
+          className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-4 sm:p-6 pb-8 select-none animate-fadeIn transition-transform duration-75 overflow-hidden"
         >
           {/* Top Laser Border */}
           <div
@@ -674,31 +661,97 @@ export default function MobilePlayerBar() {
             className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-20 transition-opacity pointer-events-none"
           />
 
-          {/* Header */}
+          {/* ===================================================================== */}
+          {/* HEADER DRAG ZONE: Chỉ vuốt xuống khi chạm vào vùng này                 */}
+          {/* ===================================================================== */}
           <div
-            onClick={() => setIsExpanded(false)}
-            className="flex flex-col items-center w-full flex-shrink-0 cursor-pointer pt-1 pb-2 relative z-20"
+            onTouchStart={handleSheetTouchStart}
+            onTouchMove={handleSheetTouchMove}
+            onTouchEnd={handleSheetTouchEnd}
+            className="flex items-center justify-between w-full flex-shrink-0 pt-1 pb-2 px-2 relative z-30 touch-none select-none"
           >
-            <div className="w-10 h-1 bg-white/30 rounded-full mb-3 active:bg-white/50 transition-colors" />
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-zinc-300 hover:text-white transition-all active:scale-95"
+              title="Thu nhỏ trình phát"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
 
-            <div className="flex flex-col items-center text-center">
-              <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase">
+            <div 
+              onClick={() => setIsExpanded(false)}
+              className="flex flex-col items-center text-center cursor-pointer flex-1 px-3 py-1"
+            >
+              {/* Grab Bar Pill */}
+              <div className="w-12 h-1.5 bg-white/30 hover:bg-white/60 active:bg-white/90 rounded-full mb-1.5 transition-all shadow-sm" />
+              <span className="text-[9px] font-mono tracking-[0.22em] text-zinc-400 uppercase font-bold">
                 ĐANG PHÁT TỪ ALBUM
               </span>
-              <span className="text-xs font-cyber font-bold text-white truncate max-w-[240px] uppercase mt-0.5">
+              <span className="text-xs font-cyber font-extrabold text-white truncate max-w-[220px] uppercase mt-0.5">
                 {currentAlbum?.title || 'HIDDEN DISC'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className="px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-white/10 text-white/90 border border-white/15">
+                FLAC
               </span>
             </div>
           </div>
 
-          {/* Main Stage Viewport */}
-          <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-visible">
-            {/* PLAYER VIEW */}
+          {/* ===================================================================== */}
+          {/* CYBER SEGMENTED NAVIGATION DECK                                       */}
+          {/* ===================================================================== */}
+          <div className="w-full max-w-sm mx-auto px-2 py-2 relative z-20 flex-shrink-0">
+            <div className="bg-zinc-950/80 border border-white/15 rounded-2xl p-1 flex items-center justify-between shadow-lg backdrop-blur-xl">
+              <button
+                onClick={() => setActiveView('player')}
+                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  activeView === 'player'
+                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Disc3 className={`w-3.5 h-3.5 ${activeView === 'player' && isPlaying ? 'animate-spin' : ''}`} />
+                <span>TRÌNH PHÁT</span>
+              </button>
+
+              <button
+                onClick={() => setActiveView('lyrics')}
+                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  activeView === 'lyrics'
+                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+                <span>LỜI BÀI HÁT</span>
+              </button>
+
+              <button
+                onClick={() => setActiveView('queue')}
+                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  activeView === 'queue'
+                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <ListMusic className="w-3.5 h-3.5" />
+                <span>HÀNG CHỜ</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ===================================================================== */}
+          {/* MAIN STAGE VIEWPORT                                                   */}
+          {/* ===================================================================== */}
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-hidden">
+            {/* VIEW 1: PLAYER VINYL STAGE */}
             {activeView === 'player' && (
-              <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible">
+              <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible px-4">
                 <div
                   ref={expandCoverRef}
-                  className="relative w-[72vw] max-w-[260px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center mb-6 border border-white/20 will-change-transform z-10 flex-shrink-0"
+                  className="relative w-[68vw] max-w-[270px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center mb-6 border border-white/20 will-change-transform z-10 flex-shrink-0 shadow-[0_20px_60px_rgba(0,0,0,0.95)]"
                 >
                   {currentAlbum?.cover_url ? (
                     <img
@@ -711,17 +764,17 @@ export default function MobilePlayerBar() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between w-full max-w-[260px] relative z-10 px-1">
+                <div className="flex items-center justify-between w-full max-w-[280px] relative z-10 px-1">
                   <div className="flex flex-col min-w-0 flex-1 mr-3">
                     <h2
                       ref={expandTitleRef}
-                      className="text-lg font-cyber font-black text-white truncate uppercase tracking-wide transition-all will-change-transform"
+                      className="text-lg sm:text-xl font-cyber font-black text-white truncate uppercase tracking-tight transition-all will-change-transform"
                     >
                       {currentTrack.title}
                     </h2>
                     <p 
                       ref={expandArtistRef}
-                      className="text-xs font-mono text-zinc-400 truncate uppercase mt-0.5 transition-all"
+                      className="text-xs font-mono text-zinc-400 truncate uppercase mt-1 transition-all tracking-wider font-bold"
                     >
                       {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
                     </p>
@@ -730,7 +783,7 @@ export default function MobilePlayerBar() {
                   <button
                     ref={expandLikeBtnRef}
                     onClick={handleToggleLike}
-                    className="p-2 rounded-full active:scale-90 transition-transform will-change-transform"
+                    className="p-2.5 rounded-2xl bg-white/5 border border-white/10 active:scale-90 transition-transform will-change-transform"
                     title={isLiked ? 'Đã yêu thích' : 'Yêu thích'}
                   >
                     <Heart
@@ -740,10 +793,23 @@ export default function MobilePlayerBar() {
                     />
                   </button>
                 </div>
+
+                {/* Audiophile HUD Telemetry Badges */}
+                <div className="flex items-center justify-between w-full max-w-[280px] mt-4 pt-3 border-t border-white/10">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+                    <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
+                      24-BIT / 96kHz LOSSLESS
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase tracking-wider">
+                    STEREO AUDIO
+                  </span>
+                </div>
               </div>
             )}
 
-            {/* LYRICS VIEW — ĐỒNG BỘ MILI-GIÂY TỰ ĐỘNG, ZERO LAYOUT SHIFT */}
+            {/* VIEW 2: LYRICS STAGE — CĂN LỀ TRÁI, ZERO JITTER, CUỘN ĐỘC LẬP */}
             {activeView === 'lyrics' && (
               <div className="w-full h-full overflow-hidden animate-fadeIn relative">
                 <SyncedLyricsView
@@ -756,10 +822,10 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* QUEUE VIEW (ĐÃ BỌC SAFE-ARRAY KHÔNG BAO GIỜ CRASH) */}
+            {/* VIEW 3: QUEUE STAGE — CUỘN ĐỘC LẬP, AN TOÀN */}
             {activeView === 'queue' && (
               <div
-                className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-2 animate-fadeIn"
+                className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-3 animate-fadeIn"
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
@@ -777,7 +843,7 @@ export default function MobilePlayerBar() {
                     {userQueue.length > 0 && (
                       <button
                         onClick={clearQueue}
-                        className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase"
+                        className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase font-bold"
                       >
                         <Trash2 className="w-2.5 h-2.5" />
                         Xóa tất cả
@@ -786,8 +852,8 @@ export default function MobilePlayerBar() {
                   </div>
 
                   {userQueue.length === 0 ? (
-                    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                      <p className="text-[11px] text-zinc-400">Hàng chờ trống</p>
+                    <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 text-center">
+                      <p className="text-xs text-zinc-400 font-bold">Hàng chờ trống</p>
                       <p className="text-[9px] text-zinc-600 mt-0.5">
                         Tự động phát ngẫu nhiên từ thư viện khi hết bài.
                       </p>
@@ -796,7 +862,7 @@ export default function MobilePlayerBar() {
                     userQueue.map((track, idx) => (
                       <div
                         key={`mob_queue_${track?.id || idx}_${idx}`}
-                        className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 active:bg-white/15 transition-all"
+                        className="flex items-center justify-between p-2.5 rounded-2xl bg-white/5 border border-white/10 active:bg-white/15 transition-all"
                       >
                         <div
                           onClick={() => {
@@ -805,12 +871,12 @@ export default function MobilePlayerBar() {
                           }}
                           className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
                         >
-                          <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0">
+                          <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0 font-bold">
                             {idx + 1}
                           </span>
                           <div className="min-w-0">
                             <p className="text-xs truncate font-bold text-white">{track?.title || 'Unknown Track'}</p>
-                            <p className="text-[9px] text-zinc-500 truncate uppercase">{track?.artist || 'Unknown Artist'}</p>
+                            <p className="text-[9px] text-zinc-500 truncate uppercase mt-0.5">{track?.artist || 'Unknown Artist'}</p>
                           </div>
                         </div>
                         <button
@@ -819,7 +885,7 @@ export default function MobilePlayerBar() {
                             if (track?.id) removeFromQueue(track.id);
                           }}
                           title="Xóa khỏi hàng chờ"
-                          className="p-1 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all ml-2 flex-shrink-0"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all ml-2 flex-shrink-0"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -830,13 +896,13 @@ export default function MobilePlayerBar() {
 
                 {/* 2. UPCOMING / PLAYLIST */}
                 {playlist.length > 0 && (
-                  <div className="space-y-1 pt-2 border-t border-white/5">
+                  <div className="space-y-1.5 pt-3 border-t border-white/5">
                     <div className="flex items-center justify-between px-1 mb-1">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
-                        ĐANG PHÁT TỪ ALBUM / THƯ VIỆN ({playlist.length})
+                        ĐANG PHÁT TỪ THƯ VIỆN ({playlist.length})
                       </span>
                       {shuffleMode && (
-                        <span className="text-[8px] font-mono text-zinc-400 bg-white/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[8px] font-mono text-white font-bold bg-white/15 px-2 py-0.5 rounded border border-white/20">
                           SHUFFLE ON
                         </span>
                       )}
@@ -847,22 +913,22 @@ export default function MobilePlayerBar() {
                         <div
                           key={track?.id || idx}
                           onClick={() => playTrack(track, currentAlbum, playlist)}
-                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                          className={`flex items-center justify-between p-2.5 rounded-2xl border transition-all cursor-pointer ${
                             isCur
                               ? 'bg-white/15 border-white text-white font-bold shadow-md'
                               : 'bg-white/[0.02] border-white/5 text-zinc-400 active:bg-white/5'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0">
+                            <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0 font-bold">
                               {idx + 1}
                             </span>
                             <div className="min-w-0">
                               <p className="text-xs truncate font-bold">{track?.title || 'Unknown Track'}</p>
-                              <p className="text-[9px] text-zinc-500 truncate">{track?.artist || currentAlbum?.artist || 'Unknown'}</p>
+                              <p className="text-[9px] text-zinc-500 truncate mt-0.5">{track?.artist || currentAlbum?.artist || 'Unknown'}</p>
                             </div>
                           </div>
-                          {isCur && <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />}
+                          {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
                         </div>
                       );
                     })}
@@ -872,11 +938,13 @@ export default function MobilePlayerBar() {
             )}
           </div>
 
-          {/* Bottom Area */}
-          <div className="w-full flex flex-col gap-4 flex-shrink-0 pt-2 relative z-20">
-            {/* Seekbar */}
-            <div className="flex flex-col gap-1.5 w-full px-2">
-              <div className="relative w-full flex items-center">
+          {/* ===================================================================== */}
+          {/* BOTTOM AUDIOPHILE CONTROL DECK                                        */}
+          {/* ===================================================================== */}
+          <div className="w-full flex flex-col gap-3.5 flex-shrink-0 pt-2 pb-2 relative z-20">
+            {/* Magnetic Seeker Scrubber */}
+            <div className="flex flex-col gap-1.5 w-full px-4">
+              <div className="relative w-full flex items-center group">
                 <input
                   ref={expandedSeekerInputRef}
                   type="range"
@@ -903,25 +971,28 @@ export default function MobilePlayerBar() {
                     isDraggingSeekerRef.current = false;
                     seekTo(parseFloat((e.target as HTMLInputElement).value));
                   }}
-                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/20 bg-zinc-900 transition-all shadow-inner"
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/25 bg-zinc-900 focus:outline-none transition-all shadow-inner"
+                  style={{
+                    accentColor: '#ffffff',
+                  }}
                 />
               </div>
 
-              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 tabular-nums">
+              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 tabular-nums font-bold px-0.5">
                 <span ref={expandedCurrentTimeTextRef}>{formatTime(currentTime)}</span>
                 <span>{formatTime(effectiveDuration)}</span>
               </div>
             </div>
 
-            {/* Master Controls */}
-            <div className="flex items-center justify-between px-2">
+            {/* Master Audiophile Controls Array */}
+            <div className="flex items-center justify-between px-6 max-w-sm mx-auto w-full">
               <button
                 ref={expandShuffleBtnRef}
                 onClick={toggleShuffle}
-                className={`p-2.5 rounded-full border transition-all will-change-transform ${
+                className={`p-3 rounded-2xl border transition-all active:scale-95 will-change-transform ${
                   shuffleMode
-                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
-                    : 'bg-white/5 text-zinc-400 border-white/10'
+                    ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] font-bold'
+                    : 'bg-zinc-900/80 text-zinc-400 border-white/10 hover:text-white'
                 }`}
                 title="Trộn bài"
               >
@@ -931,31 +1002,33 @@ export default function MobilePlayerBar() {
               <button
                 ref={expandPrevBtnRef}
                 onClick={prevTrack}
-                className="p-3 rounded-full bg-white/5 text-white border border-white/10 active:scale-90 transition-transform will-change-transform"
+                className="p-3.5 rounded-2xl bg-zinc-900/80 text-white border border-white/15 active:scale-90 hover:bg-white/10 transition-all will-change-transform shadow-md"
                 title="Bài trước"
               >
                 <SkipBack className="w-5 h-5 fill-current" />
               </button>
 
+              {/* Master Concentric Wheel */}
               <button
                 ref={expandPlayBtnRef}
                 onClick={togglePlay}
-                className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_35px_rgba(255,255,255,0.5)] active:scale-95 will-change-transform"
+                className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_40px_rgba(255,255,255,0.5)] border-2 border-white/40 active:scale-95 will-change-transform transition-transform relative group"
                 title={isPlaying ? 'Tạm dừng' : 'Phát'}
               >
+                <span className="absolute inset-1 rounded-full border border-black/10 pointer-events-none" />
                 {isBuffering ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <Loader2 className="w-7 h-7 animate-spin" />
                 ) : isPlaying ? (
-                  <Pause className="w-6 h-6 fill-current" />
+                  <Pause className="w-7 h-7 fill-current" />
                 ) : (
-                  <Play className="w-6 h-6 fill-current ml-1" />
+                  <Play className="w-7 h-7 fill-current ml-1" />
                 )}
               </button>
 
               <button
                 ref={expandNextBtnRef}
                 onClick={nextTrack}
-                className="p-3 rounded-full bg-white/5 text-white border border-white/10 active:scale-90 transition-transform will-change-transform"
+                className="p-3.5 rounded-2xl bg-zinc-900/80 text-white border border-white/15 active:scale-90 hover:bg-white/10 transition-all will-change-transform shadow-md"
                 title="Bài kế tiếp"
               >
                 <SkipForward className="w-5 h-5 fill-current" />
@@ -964,10 +1037,10 @@ export default function MobilePlayerBar() {
               <button
                 ref={expandRepeatBtnRef}
                 onClick={toggleRepeat}
-                className={`p-2.5 rounded-full border transition-all will-change-transform ${
+                className={`p-3 rounded-2xl border transition-all active:scale-95 will-change-transform ${
                   repeatMode !== 'off'
-                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
-                    : 'bg-white/5 text-zinc-400 border-white/10'
+                    ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] font-bold'
+                    : 'bg-zinc-900/80 text-zinc-400 border-white/10 hover:text-white'
                 }`}
                 title={`Lặp: ${repeatMode}`}
               >
@@ -976,37 +1049,6 @@ export default function MobilePlayerBar() {
                 ) : (
                   <Repeat className="w-4 h-4" />
                 )}
-              </button>
-            </div>
-
-            {/* Bottom Tabs */}
-            <div className="flex items-center justify-between px-4 pt-1">
-              <button
-                ref={expandLyricsBtnRef}
-                onClick={() => setActiveView((prev) => (prev === 'lyrics' ? 'player' : 'lyrics'))}
-                className={`p-2.5 rounded-full border transition-all flex items-center gap-1.5 will-change-transform ${
-                  activeView === 'lyrics'
-                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
-                    : 'bg-white/5 text-zinc-400 border-white/10 hover:text-white'
-                }`}
-                title="Lời bài hát"
-              >
-                <Mic2 className="w-4 h-4" />
-                <span className="text-[10px] font-mono font-bold uppercase">LỜI BÀI HÁT</span>
-              </button>
-
-              <button
-                ref={expandQueueBtnRef}
-                onClick={() => setActiveView((prev) => (prev === 'queue' ? 'player' : 'queue'))}
-                className={`p-2.5 rounded-full border transition-all flex items-center gap-1.5 will-change-transform ${
-                  activeView === 'queue'
-                    ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
-                    : 'bg-white/5 text-zinc-400 border-white/10 hover:text-white'
-                }`}
-                title="Danh sách phát"
-              >
-                <ListMusic className="w-4 h-4" />
-                <span className="text-[10px] font-mono font-bold uppercase">HÀNG CHỜ</span>
               </button>
             </div>
           </div>
