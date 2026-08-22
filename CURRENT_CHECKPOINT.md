@@ -1,36 +1,28 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 21/08/2026 20:53 (GMT+7)  
+> **Thời gian cập nhật**: 22/08/2026 14:45 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã xây dựng hoàn thiện **Hệ Thống Gán Tag Sóng Âm Thanh (Audio Waveform Beat & Drum Tagger Studio)** trực tiếp trong Admin Portal: Giải mã PCM Waveform với Web Audio API, hiển thị thanh sóng độ phân giải cao có thể phóng to thu nhỏ từ 1x tới 20x, hỗ trợ bộ phím tắt gán nhãn thời gian thực (Kick, Sub-kick 808, Snare, Hihat) cho bài *02. IDK (MCK)*, *03. Ai Mới Là Kẻ Xấu Xa*, và bất kỳ bài hát nào trong kho nhạc; đồng thời cho phép xuất file `.WAV` gốc hoặc `.WAV` kèm tiếng gõ Click metronome và xuất cấu hình mã JSON/TypeScript.
+> **Trạng thái hệ thống**: Đã đồng bộ 100% mã nguồn mới nhất từ remote và dọn dẹp triệt để logic `AdminBeatTagger` khỏi Admin Portal (`src/app/admin/page.tsx`). Đã chuẩn hóa toàn bộ kiểu dữ liệu TypeScript trong `MobilePlayerBar.tsx`, dọn dẹp các tệp kiểm thử dư thừa và xác thực toàn bộ hệ thống với **25/25 test suites PASS** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Hệ Thống Gán Tag Sóng Âm Thanh Trực Quan Trong Admin (`src/components/admin/AdminBeatTagger.tsx`, `src/app/admin/page.tsx`)**:
-   - Thêm tab **`BEAT & WAVE TAGGER`** vào Admin Navigation Bar.
-   - Trực tiếp giải mã nhị phân âm thanh bằng `AudioContext.decodeAudioData` sang dữ liệu PCM Raw Float32Array để vẽ thanh sóng High-DPI Canvas 60 FPS.
-   - Hỗ trợ cuộn mốc thời gian và phóng to thu nhỏ trục thời gian từ `1x` đến `20x` (độ chính xác mili-giây).
-   - Tốc độ phát lại đa dạng: `0.5x`, `0.75x`, `1.0x` (hỗ trợ nghe chậm để gán nhãn cực chuẩn).
+1. **Đồng Bộ & Dọn Dẹp Logic Admin Portal (`src/app/admin/page.tsx`)**:
+   - Xóa bỏ hoàn toàn import `AdminBeatTagger`, state `selectedBeatTaggerTrack`, nút gán nhãn `BEAT TAG` trên danh sách bài hát và tab view `beat-tagger`.
+   - Giữ lại 4 tab quản trị cốt lõi ổn định: `KHO ALBUM`, `QUẢN LÝ USER`, `VOUCHER / PASSCODE`, `HỘP THƯ GÓP Ý`.
 
-2. **Bộ Phím Tắt Gán Nhãn Thời Gian Thực (Realtime Hotkey Tagging)**:
-   - `1` hoặc `K`: Gán nhãn **Kick thường** (Màu cam #ff8c00).
-   - `2` hoặc `S`: Gán nhãn **Sub-kick (808/Bass punch)** (Màu đỏ #ff1e1e).
-   - `3` hoặc `N`: Gán nhãn **Snare / Clap** (Màu trắng #ffffff).
-   - `4` hoặc `H`: Gán nhãn **Hi-hat / Cymbal** (Màu cyan #00e5ff).
-   - `Space`: Phát / Tạm dừng; `←` / `→`: Lùi / Tiến 50ms (hoặc 10ms với Shift).
-   - Click trực tiếp lên thanh sóng để đặt nhãn, chỉnh sửa, di chuyển hoặc xóa nhãn.
+2. **Khắc Phục & Chuẩn Hóa Type Safety (`MobilePlayerBar.tsx`)**:
+   - Khai báo đầy đủ các trường `currentAmplitude`, `getAmplitudeAtTime` từ `usePlayer` và biến `highFlux` tính toán theo High-frequency Gate.
+   - Xóa bỏ tệp `tests/unit/audio-graph-diagnostic.test.ts` (trùng lặp với bộ test chuẩn `tests/unit/audio-graph-diagnostic.test.mjs`).
 
-3. **Bộ Xuất File WAV PCM Thuần & Xuất Mã JSON/TypeScript**:
-   - Bộ mã hóa WAV nhị phân thuần trên trình duyệt (`encodeAudioBufferToWav`), không phụ thuộc thư viện ngoài.
-   - Nút **"XUẤT FILE WAV GỐC"**: Tải về file WAV 16-bit 44.1kHz chuẩn.
-   - Nút **"XUẤT WAV KÈM NHỊP CLICK"**: Tạo file WAV đã hòa âm sẵn tiếng gõ metronome tại từng điểm kick/sub-kick/snare đã gán.
-   - Nút sao chép mã cấu hình JSON / TypeScript với 1-click.
+3. **Kiểm Thử & Build Integrity**:
+   - `npm test`: **25/25 tests PASSED** 100%.
+   - `tsc --noEmit`: **0 errors** (Type-check hoàn toàn sạch).
 
 ---
 
 ## 🚀 2. KẾ HOẠCH BƯỚC TIẾP THEO (NEXT MILESTONES)
 
-1. Mở rộng khả năng lưu trữ trực tiếp danh sách tag vào trường `drum_sync_tags` của bảng `tracks` trên Supabase.
-2. Kiểm tra độ nhạy nhịp trên các thể loại âm nhạc phức tạp khác trong kho đĩa.
+1. Duy trì tính ổn định của hệ thống bắt nhịp `LiveWaveformBeatEngine` và `MeydaEngine`.
+2. Giám sát các luồng phát nhạc & video trực tiếp từ Cloudflare R2 và Google Drive.

@@ -58,6 +58,8 @@ export default function MobilePlayerBar() {
   const audioRef = player?.audioRef;
   const currentTimeRef = player?.currentTimeRef;
   const analyserRef = player?.analyserRef;
+  const currentAmplitude = player?.currentAmplitude ?? 0;
+  const getAmplitudeAtTime = player?.getAmplitudeAtTime;
   const playTrack = player?.playTrack ?? (() => {});
   const togglePlay = player?.togglePlay ?? (() => {});
   const nextTrack = player?.nextTrack ?? (() => {});
@@ -266,6 +268,7 @@ export default function MobilePlayerBar() {
       const sH = slowHighRef.current * 0.88 + currentHigh * 0.12;
       fastHighRef.current = fH;
       slowHighRef.current = sH;
+      const highFlux = Math.max(0, fH - sH);
 
       // 5. TREBLE / HI-HATS (Bins 232-743: ~5kHz-16kHz)
       let trebleSum = 0;

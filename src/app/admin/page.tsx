@@ -44,12 +44,10 @@ import {
   Cloud,
   Link2,
   Users,
-  Ticket,
-  Activity
+  Ticket
 } from 'lucide-react';
 import AdminUserManagement from '@/components/admin/AdminUserManagement';
 import AdminVoucherManagement from '@/components/admin/AdminVoucherManagement';
-import AdminBeatTagger from '@/components/admin/AdminBeatTagger';
 import { createClient } from '@/lib/supabase/client';
 import { MediaType, Album, TrackItem, FeedbackItem } from '@/types/database';
 import { readMediaFileMetadata, MediaMetadata, isTitleMatching } from '@/lib/mediaMetadata';
@@ -77,8 +75,7 @@ export default function AdminPage() {
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
 
-  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks' | 'users' | 'vouchers' | 'beat-tagger'>('albums');
-  const [selectedBeatTaggerTrack, setSelectedBeatTaggerTrack] = useState<TrackItem | null>(null);
+  const [adminTab, setAdminTab] = useState<'albums' | 'feedbacks' | 'users' | 'vouchers'>('albums');
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -1649,21 +1646,6 @@ export default function AdminPage() {
 
             <button
               onClick={() => {
-                setAdminTab('beat-tagger');
-                setStatusMsg(null);
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5 transition-all ${
-                adminTab === 'beat-tagger'
-                  ? 'bg-white text-black shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5 text-red-500" />
-              <span>BEAT & WAVE TAGGER</span>
-            </button>
-
-            <button
-              onClick={() => {
                 setAdminTab('feedbacks');
                 setStatusMsg(null);
                 fetchFeedbacks();
@@ -2180,16 +2162,6 @@ export default function AdminPage() {
 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <button
-                          onClick={() => {
-                            setSelectedBeatTaggerTrack(t);
-                            setAdminTab('beat-tagger');
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-600 text-red-300 hover:text-white font-extrabold text-[10px] uppercase transition-all flex items-center gap-1 border border-red-500/40 shadow-sm"
-                          title="Gán nhãn Beat & Sóng âm thanh cho bài hát này"
-                        >
-                          <Activity className="w-3 h-3 text-red-400" /> BEAT TAG
-                        </button>
-                        <button
                           onClick={() => startEditTrack(t)}
                           className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white text-white hover:text-black font-extrabold text-[10px] uppercase transition-all flex items-center gap-1 border border-white/20"
                           title="Sửa bài hát"
@@ -2374,24 +2346,6 @@ export default function AdminPage() {
       {adminTab === 'vouchers' && (
         <div className="max-w-6xl mx-auto relative z-10 animate-fadeIn">
           <AdminVoucherManagement onNotify={setStatusMsg} />
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* VIEW 6: BEAT & WAVEFORM DRUM TAGGER TAB                                    */}
-      {/* ========================================================================= */}
-      {adminTab === 'beat-tagger' && (
-        <div className="max-w-6xl mx-auto relative z-10 animate-fadeIn">
-          <AdminBeatTagger
-            albums={albums}
-            initialTrack={selectedBeatTaggerTrack}
-            onExportTags={(title, exportedTags) => {
-              setStatusMsg({
-                type: 'success',
-                text: `✅ Đã xuất ${exportedTags.length} nhãn nhịp cho bài "${title}" thành công.`,
-              });
-            }}
-          />
         </div>
       )}
 

@@ -921,6 +921,27 @@
      - Nút **"XUẤT FILE WAV GỐC"** & **"XUẤT WAV KÈM NHỊP CLICK"** (giúp người dùng nghe kiểm tra độ chính xác của nhịp gán).
      - Nút sao chép mã cấu hình JSON / TypeScript với 1-click.
 
+---
+
+### Giao dịch 039: Cleanup AdminBeatTagger Logic & Full TypeScript Verification Parity
+* **Thời gian**: 22/08/2026 14:45 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Dọn dẹp triệt để logic `AdminBeatTagger` và các tab/state liên quan khỏi Admin Portal (`src/app/admin/page.tsx`).
+  - Khắc phục các lỗi TypeScript lọt từ đợt merge gần nhất trong `MobilePlayerBar.tsx` (`currentAmplitude`, `getAmplitudeAtTime`, `highFlux`).
+  - Dọn dẹp tệp kiểm thử TypeScript vitest thừa `tests/unit/audio-graph-diagnostic.test.ts` (giữ lại bộ kiểm thử chuẩn `audio-graph-diagnostic.test.mjs`).
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **Dọn dẹp `src/app/admin/page.tsx`**:
+     - Xóa import `AdminBeatTagger`, bỏ state `selectedBeatTaggerTrack` và giá trị `beat-tagger` trong kiểu `adminTab`.
+     - Xóa nút `BEAT TAG` trên danh sách bài hát và tab view `beat-tagger`.
+  2. **Khắc phục `MobilePlayerBar.tsx`**:
+     - Bổ sung `currentAmplitude` và `getAmplitudeAtTime` từ `usePlayer`.
+     - Bổ sung định nghĩa `highFlux = Math.max(0, fH - sH)`.
+  3. **Verification**:
+     - `tsc --noEmit`: 0 errors.
+     - `npm test`: 25/25 unit & integration tests pass 100%.
+
+
 
 
 
