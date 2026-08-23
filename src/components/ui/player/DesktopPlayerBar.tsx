@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
+import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
 import TrackActionMenu from '@/components/ui/TrackActionMenu';
@@ -30,15 +31,6 @@ const formatTime = (secs: number) => {
   const mins = Math.floor(secs / 60);
   const rem = Math.floor(secs % 60);
   return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
-};
-
-const cleanLyrics = (raw?: string) => {
-  if (!raw) return '';
-  return raw
-    .split('\n')
-    .map((line) => line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim())
-    .filter((line) => line.length > 0)
-    .join('\n');
 };
 
 export default function DesktopPlayerBar() {
@@ -130,6 +122,7 @@ export default function DesktopPlayerBar() {
 
   const smoothEnergyRef = useRef<number>(0);
 
+  // Click outside to collapse
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (playerRootRef.current && !playerRootRef.current.contains(e.target as Node)) {
@@ -152,6 +145,7 @@ export default function DesktopPlayerBar() {
     ? audioRef.current.duration
     : 0;
 
+  // High-Performance 60FPS Multi-Band Audio-Reactive Engine (Desktop Bar)
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
@@ -179,6 +173,7 @@ export default function DesktopPlayerBar() {
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
       const isDrumming = isDrumActiveAtTime(drumProfile, liveSec);
 
+      // Cập nhật Seeker Text 60 FPS
       if (!isDraggingSeekerRef.current) {
         if (seekerInputRef.current) {
           seekerInputRef.current.value = String(liveSec);
@@ -224,7 +219,7 @@ export default function DesktopPlayerBar() {
         }
       }
 
-      // 1. SUB-BASS / KICK
+      // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
       let bassSum = 0;
       for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
       const currentBass = bassSum / 5;
@@ -234,13 +229,13 @@ export default function DesktopPlayerBar() {
       slowBassRef.current = sB;
       const bassFlux = Math.max(0, fB - sB);
 
-      // 2. BASSLINE / 808
+      // 2. BASSLINE / 808 (Bins 3-12: 64Hz-258Hz)
       let basslineSum = 0;
       for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
       const currentBassline = basslineSum / 10;
       smoothBasslineRef.current += ((currentBassline / 255) - smoothBasslineRef.current) * 0.22;
 
-      // 3. SNARE DUAL-BAND GATE
+      // 3. SNARE DUAL-BAND GATE (Isolated from Vocal formants)
       let midSum = 0;
       for (let i = 70; i <= 140; i++) midSum += dataArray[i];
       const currentMid = midSum / 71;
@@ -259,7 +254,7 @@ export default function DesktopPlayerBar() {
       slowHighRef.current = sH;
       const highFlux = Math.max(0, fH - sH);
 
-      // 4. VOCAL / LEAD
+      // 4. VOCAL / LEAD (Bins 14-162: ~300Hz-3.5kHz)
       let vocalSum = 0;
       for (let i = 14; i <= 162; i++) vocalSum += dataArray[i];
       const currentVocal = vocalSum / 148;
@@ -269,7 +264,7 @@ export default function DesktopPlayerBar() {
       slowVocalRef.current = sV;
       smoothVocalRef.current += ((currentVocal / 255) - smoothVocalRef.current) * 0.20;
 
-      // 5. TREBLE / HI-HATS
+      // 5. TREBLE / HI-HATS (Bins 232-743: ~5kHz-16kHz)
       let trebleSum = 0;
       for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
       const currentTreble = trebleSum / 512;
@@ -285,8 +280,10 @@ export default function DesktopPlayerBar() {
       const currentEnergy = totalSum / 1024;
       smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
 
+      // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
+      // TRIGGERS
       if (isDrumming) {
         const timeSinceLastKick = now - lastKickHitTimeRef.current;
         const isConsecutiveKick = timeSinceLastKick >= 55 && timeSinceLastKick < 240;
@@ -531,7 +528,6 @@ export default function DesktopPlayerBar() {
   if (!currentTrack) return null;
 
   const isDrawerOpen = expandedMode !== 'none';
-  const displayLyrics = cleanLyrics(currentTrack?.lyrics);
 
   return (
     <div
@@ -593,32 +589,27 @@ export default function DesktopPlayerBar() {
 
           {/* Body */}
           <div className="flex-1 min-h-0 px-6 sm:px-8 pb-3 overflow-hidden relative">
-            {/* Lyrics View */}
             {expandedMode === 'lyrics' && (
-              <div 
-                className="w-full h-full overflow-y-auto no-scrollbar py-6 text-center select-text font-cyber"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {displayLyrics ? (
-                  <p className="text-base sm:text-lg font-bold text-zinc-200 leading-relaxed whitespace-pre-line tracking-wide drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
-                    {displayLyrics}
-                  </p>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-500">
-                    <Mic2 className="w-8 h-8 text-zinc-600 mb-2 opacity-50" />
-                    <p className="text-xs uppercase tracking-widest font-mono">Chưa có lời bài hát cho ca khúc này</p>
-                  </div>
-                )}
+              <div className="w-full h-full overflow-hidden">
+                <SyncedLyricsView
+                  rawLrc={currentTrack?.lyrics}
+                  trackTitle={currentTrack?.title}
+                  artistName={currentTrack?.artist || currentAlbum?.artist}
+                  duration={effectiveDuration}
+                  className="w-full h-full"
+                />
               </div>
             )}
 
-            {/* Queue Mode */}
             {expandedMode === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono pr-1"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                }}
               >
-                {/* USER QUEUE */}
+                {/* 1. USER QUEUE */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1 mb-1">
                     <div className="flex items-center gap-2">
@@ -685,7 +676,7 @@ export default function DesktopPlayerBar() {
                   )}
                 </div>
 
-                {/* PLAYLIST */}
+                {/* 2. UPCOMING / PLAYLIST */}
                 {playlist.length > 0 && (
                   <div className="space-y-1 pt-2 border-t border-white/5">
                     <div className="flex items-center justify-between px-1 mb-1">
@@ -733,7 +724,7 @@ export default function DesktopPlayerBar() {
         {/* BOTTOM PLAYBAR ROW */}
         <div className="w-full px-4 sm:px-6 py-3 flex flex-col gap-1 flex-shrink-0">
           <div className="flex items-center justify-between gap-4 w-full">
-            {/* Track Info */}
+            {/* Left: Track Information & Cover */}
             <div
               onClick={() => setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'))}
               className="flex items-center gap-3 min-w-0 max-w-[240px] flex-shrink-0 cursor-pointer group/trackinfo"
@@ -775,7 +766,7 @@ export default function DesktopPlayerBar() {
               </div>
             </div>
 
-            {/* Controls + Timeline */}
+            {/* Center: Controls + Inline Timeline */}
             <div className="flex items-center justify-start gap-3 flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
@@ -878,7 +869,7 @@ export default function DesktopPlayerBar() {
               </span>
             </div>
 
-            {/* Right Buttons */}
+            {/* Right: Drawer Triggers & Volume Slider */}
             <div className="flex items-center gap-2 justify-end flex-shrink-0">
               <button
                 ref={lyricsBtnRef}
@@ -906,8 +897,10 @@ export default function DesktopPlayerBar() {
                 <ListMusic className="w-3.5 h-3.5" />
               </button>
 
+              {/* Context Menu '...' */}
               <TrackActionMenu track={currentTrack} album={currentAlbum} />
 
+              {/* Volume Slider */}
               <div
                 className="relative"
                 onMouseEnter={handleVolumeMouseEnter}
