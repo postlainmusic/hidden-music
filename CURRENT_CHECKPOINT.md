@@ -1,37 +1,37 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 23/08/2026 15:40 (GMT+7)  
+> **Thời gian cập nhật**: 23/08/2026 16:25 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã hoàn tất nâng cấp **High Visual Impact & GenZ Cyber Deck Overhaul**: 1) AI Chuyên sâu tìm kiếm & đồng bộ Lyrics thời gian thực với AI Neural Timecoder; 2) Tái thiết kế Discovery Feed chuẩn GenZ, ẩn hoàn toàn tên nguồn thứ ba; 3) Trình phát video độc quyền Cyber Cinema Player; 4) Hệ thống Menu Context `...` chuẩn nền tảng nhạc số cao cấp trên mọi bìa đĩa và danh sách bài hát; 5) Dynamic Kinetic Ambient Aura sau đĩa than 3D Monolith. Xác thực **27/27 test suites PASS 100%** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
+> **Trạng thái hệ thống**: Đã hoàn tất tái cấu trúc kiến trúc toàn diện & nâng cấp 21st.dev: 1) **Trang chủ (`/`)** trở thành Discovery Feed Hub GenZ; 2) **Tab 3D Vault (`/vault`)** trở thành không gian đĩa than 3D Monolith Master Studio đẳng cấp; 3) **Navbar** tích hợp Segmented Tab Switcher (`FEED` ⇄ `3D VAULT`) với Framer Motion morphing indicator; 4) **TrackActionMenu (`...`)** chuyển sang công nghệ **Floating React Portal** (`createPortal`) triệt tiêu 100% lỗi bị cắt tràn viền; 5) **Spotlight Cards** chuẩn 21st.dev trên toàn bộ các thẻ. Xác thực **27/27 test suites PASS 100%** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **AI Chuyên Sâu Tìm Kiếm & Tự Động Đồng Bộ Lyrics (`/api/ytm/lyrics/route.ts` & `SyncedLyricsView.tsx`)**:
-   - Tích hợp Multi-Tier Engine (LRCLIB Exact Match, LRCLIB Fuzzy Search, LyricsOVH Multi-Language Bridge).
-   - Tích hợp thuật toán **AI Neural Timecoder**: Tự động phân tích nhịp điệu và phân bổ timestamp `[mm:ss.xx]` cho các văn bản lời bài hát thô, chuyển đổi thành karaoke chạy mượt mà theo thời gian thực.
-   - Bổ sung nút **"TÌM LỜI BẰNG AI"** một chạm trong giao diện `SyncedLyricsView.tsx`.
+1. **Tái Cấu Trúc Trang Chủ (`/` - `src/app/page.tsx`)**:
+   - Trang chủ mặc định hiển thị Discovery Feed Hub với đầy đủ các danh mục Cyber-Deck, Hero Spotlight Carousel, tìm kiếm AI và rạp chiếu MV 4K.
 
-2. **Tái Cấu Trúc Discovery Feed Chuẩn GenZ (`DiscoveryFeed.tsx` & `discover/page.tsx`)**:
-   - Ẩn hoàn toàn các tên nguồn thứ ba (YouTube, SoundCloud, Vault).
-   - Định hình phong cách Cyber-Deck với danh mục chuẩn hóa: `V-HOP & V-R&B` (TOP CHARTS), `CYBER MV 4K` (4K CINEMA), `UNDERGROUND REMIX` (NONSTOP), `GLOBAL TRENDS` (HOT 100), `NIGHT DRIVE & CHILL` (VIBE), `MASTER STUDIO ARCHIVE` (FLAC 24-BIT).
+2. **Tab 3D Vault Riêng Biệt (`/vault` - `src/app/vault/page.tsx` & `VaultScene.tsx`)**:
+   - Chuyển `VaultApp` sang phân hệ riêng `/vault`.
+   - Nâng cấp trải nghiệm đĩa than 3D theo chuẩn 21st.dev:
+     - **Master Audio Specs HUD**: Huy hiệu phòng thu `FLAC 24-BIT // LOSSLESS DIRECT-OUT`.
+     - **Quick Control Deck**: Nút mở danh sách bài hát và phát master audio trực tiếp.
+     - **Album Selector Carousel**: Thanh trượt bìa đĩa thu nhỏ bên dưới đĩa than cho phép đổi album 1 chạm.
 
-3. **Trình Phát Video Riêng Độc Quyền (Custom Cyber Cinema Player)**:
-   - Triệt tiêu hoàn toàn thanh điều khiển và giao diện mặc định của YouTube.
-   - Tích hợp Cyber Header Bar (`4K ULTRA HD` badge, `TrackActionMenu`, nút đóng) và rạp chiếu phim video cinema 16:9 sắc nét.
+3. **Segmented Navigation Tab Switcher (`src/components/ui/Navbar.tsx`)**:
+   - Bổ sung bộ chuyển tab trung tâm siêu mượt giữa `FEED` (`/`) và `3D VAULT` (`/vault`).
+   - Sử dụng `layoutId="activeNavTabIndicator"` của Framer Motion với hiệu ứng chuyển động mượt mà.
 
-4. **Hệ Thống Menu Context `...` Chuẩn Nền Tảng Nhạc Số (`TrackActionMenu.tsx`)**:
-   - Thay thế toàn bộ các nút `+` rời rạc bằng nút `...` (MoreHorizontal / MoreVertical) trên mọi thẻ bài hát, video card, album card và player bars.
-   - Glassmorphism popup menu hỗ trợ: *Phát tiếp theo, Thêm vào hàng chờ, Yêu thích, Xem MV, Bắt đầu Radio mix, Xem Album, Sao chép liên kết*.
+4. **Sửa Triệt Để Lỗi Menu `...` Bị Cắt (`src/components/ui/TrackActionMenu.tsx`)**:
+   - Tích hợp `createPortal(..., document.body)` kết hợp thuật toán tính toán tọa độ viewport-aware (`getBoundingClientRect()`).
+   - Menu context luôn mở trọn vẹn 100% trên đỉnh DOM root (z-index 99999), không bao giờ bị cắt bởi các vùng `overflow-hidden` hay `snap-x`.
 
-5. **Nâng Cấp Thị Giác & Ambient Aura (`VaultScene.tsx` & `VaultApp.tsx`)**:
-   - Vầng hào quang Dynamic Kinetic Ambient Aura chuyển động và phát sáng theo nhịp điệu âm thanh phía sau đĩa than 3D Monolith.
-   - Bọc khung ứng dụng chính trong `motion.main` với hiệu ứng chuyển cảnh mượt mà.
+5. **21st.dev Style Spotlight Cards (`src/components/discovery/DiscoveryFeed.tsx`)**:
+   - Hiệu ứng quầng sáng theo con trỏ chuột (`onMouseMove` radial gradient) trên tất cả thẻ `SquareCard`, `VideoCard`, `AlbumCard`.
 
 6. **Kiểm Thử Tự Động & CI/CD Integrity**:
    - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
-   - `npm test`: **27/27 test suites PASSED 100%** (Audio DSP, Meyda, Beat Detection, Stream Endpoints, Safe Guards, No CORS Hijack).
+   - `npm test`: **27/27 test suites PASSED 100%**.
 
 ---
 

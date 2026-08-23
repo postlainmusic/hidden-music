@@ -264,19 +264,37 @@ interface SquareCardProps {
 }
 
 function SquareCard({ track, isCurrent, isPlaying, onPlay, onWatchVideo }: SquareCardProps) {
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
+
   return (
     <motion.div
       id={`card-${track.ytmId}`}
       onClick={onPlay}
-      whileHover={{ y: -3, scale: 1.02 }}
+      onMouseMove={handleMouseMove}
+      whileHover={{ y: -4, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       transition={springSnappy}
       className={`group relative flex-shrink-0 snap-start w-44 sm:w-52 rounded-2xl overflow-hidden border transition-colors cursor-pointer text-left ${
         isCurrent
-          ? 'border-white ring-1 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.10)]'
+          ? 'border-white ring-1 ring-white/40 shadow-[0_0_24px_rgba(255,255,255,0.12)]'
           : 'border-white/10 hover:border-white/30'
       }`}
     >
+      {/* 21st.dev Spotlight Glow Effect */}
+      <div
+        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 z-10"
+        style={{
+          background: `radial-gradient(280px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255,255,255,0.12), transparent 75%)`,
+        }}
+      />
       <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden">
         {track.coverUrl ? (
           <img src={track.coverUrl} alt={track.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
@@ -328,14 +346,32 @@ interface VideoCardProps {
 }
 
 function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: VideoCardProps) {
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
+
   return (
     <motion.div
       id={`video-card-${track.ytmId}`}
-      whileHover={{ y: -3, scale: 1.015 }}
+      onMouseMove={handleMouseMove}
+      whileHover={{ y: -4, scale: 1.015 }}
       whileTap={{ scale: 0.98 }}
       transition={springSnappy}
       className="group relative flex-shrink-0 snap-start w-64 sm:w-72 rounded-2xl overflow-hidden border border-white/10 hover:border-white/30 transition-colors bg-zinc-950 shadow-lg text-left"
     >
+      {/* 21st.dev Spotlight Glow Effect */}
+      <div
+        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 z-10"
+        style={{
+          background: `radial-gradient(320px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255,255,255,0.12), transparent 75%)`,
+        }}
+      />
       <div className="relative w-full aspect-video bg-zinc-900 overflow-hidden cursor-pointer" onClick={onWatchVideo}>
         {track.coverUrl ? (
           <img src={track.coverUrl} alt={track.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />

@@ -36,6 +36,7 @@
 - [Giao dịch 042: Comprehensive UI-UX Pro Max & Motion Animation Engine Overhaul](#giao-dịch-042-comprehensive-ui-ux-pro-max--motion-animation-engine-overhaul)
 - [Giao dịch 043: Client-Side YouTube Audio Streaming Bridge & Navbar Responsive Fix](#giao-dịch-043-client-side-youtube-audio-streaming-bridge--navbar-responsive-fix)
 - [Giao dịch 044: AI Deep Search Lyrics Engine, GenZ Cyber Feed, Custom Cinema Player & Universal Action Menu](#giao-dịch-044-ai-deep-search-lyrics-engine-genz-cyber-feed-custom-cinema-player--universal-action-menu)
+- [Giao dịch 045: Home Page Feed Restructure, Dedicated 3D Vault Tab, Floating Portal Menu & 21st.dev Spotlight Cards](#giao-dịch-045-home-page-feed-restructure-dedicated-3d-vault-tab-floating-portal-menu--21stdev-spotlight-cards)
 
 ---
 
@@ -1072,6 +1073,33 @@
   5. **Dynamic Kinetic Ambient Aura & Stage Transitions (`VaultScene.tsx` & `VaultApp.tsx`)**:
      - Vầng sáng hào quang chuyển động mượt mà theo nhịp nhạc phía sau đĩa than 3D Monolith.
      - Bọc ứng dụng trong `motion.main` với hiệu ứng chuyển cảnh mượt mà.
+  6. **Verification**:
+     - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
+     - `npm test`: **27/27 test suites PASSED 100%**.
+
+---
+
+### Giao dịch 045: Home Page Feed Restructure, Dedicated 3D Vault Tab, Floating Portal Menu & 21st.dev Spotlight Cards
+* **Thời gian**: 23/08/2026 16:25 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Tái cấu trúc kiến trúc routing: Biến Discovery Feed thành Trang Chủ chính (`/`), chuyển 3D Vault thành Tab / Phân hệ riêng (`/vault`).
+  - Tích hợp thanh điều hướng trung tâm Segmented Tab Switcher (`FEED` ⇄ `3D VAULT`) với Framer Motion `layoutId="activeNavTabIndicator"`.
+  - Sửa triệt để lỗi Menu Context `...` (TrackActionMenu) bị cắt tràn viền do container `overflow-hidden` bằng công nghệ **React Floating Portal (`createPortal`)**.
+  - Nâng cấp 3D Vault Stage theo phong cách **21st.dev**: Master Audio Specs HUD, Album Thumbnail Selector Carousel, Quick Play/Tracklist controls.
+  - Thêm hiệu ứng **Spotlight Cards 21st.dev** trên toàn bộ các thẻ bài hát và video card trong Discovery Feed.
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **Home Page as Discovery Feed (`src/app/page.tsx`)**:
+     - Trang chủ mặc định hiển thị toàn bộ Feed âm nhạc GenZ, Hero Carousel, Cyber Cinema và tìm kiếm AI.
+  2. **Dedicated 3D Vault Page (`src/app/vault/page.tsx` & `src/components/3d/VaultScene.tsx`)**:
+     - Tạo route `/vault` cho trải nghiệm đĩa than 3D Monolith.
+     - Bổ sung thanh thông số phòng thu **Master Studio Specs HUD** (`FLAC 24-BIT // LOSSLESS DIRECT-OUT`), nút `XEM BÀI HÁT` / `PHÁT`, và bộ chọn album thumbnail carousel.
+  3. **Segmented Tab Switcher trong Navbar (`src/components/ui/Navbar.tsx`)**:
+     - Tab kép trung tâm `FEED` ⇄ `3D VAULT` với hiệu ứng chuyển động mượt mà bằng Framer Motion.
+  4. **Floating React Portal Menu (`src/components/ui/TrackActionMenu.tsx`)**:
+     - Render menu qua `createPortal(..., document.body)` với tọa độ viewport-aware (`getBoundingClientRect()`), loại bỏ 100% hiện tượng bị cắt bởi viền container.
+  5. **21st.dev Spotlight Cards (`src/components/discovery/DiscoveryFeed.tsx`)**:
+     - Bổ sung hiệu ứng quầng sáng gradient theo con trỏ chuột (`onMouseMove` radial gradient).
   6. **Verification**:
      - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
      - `npm test`: **27/27 test suites PASSED 100%**.

@@ -139,28 +139,47 @@ export default function Navbar({
           </Link>
         </div>
 
-        {/* Center: Title or Discover Link */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {!isDiscoverPage && (
-            <motion.div {...subtleButtonTapMotion}>
-              <Link
-                href="/discover"
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider transition-colors shadow-sm"
-                title="AI Multimedia Discovery Feed"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">DISCOVERY FEED</span>
-                <span className="sm:hidden">FEED</span>
-              </Link>
-            </motion.div>
-          )}
+        {/* Center: Segmented Navigation Switcher (FEED ⇄ 3D VAULT) */}
+        <div className="flex items-center gap-1 bg-zinc-950/80 border border-white/15 rounded-full p-1 shadow-lg backdrop-blur-xl">
+          <Link
+            href="/"
+            className={`relative px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer z-10 ${
+              pathname === '/' || pathname.startsWith('/discover')
+                ? 'text-black font-extrabold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            {(pathname === '/' || pathname.startsWith('/discover')) && (
+              <motion.div
+                layoutId="activeNavTabIndicator"
+                transition={springSnappy}
+                className="absolute inset-0 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] z-[-1]"
+              />
+            )}
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden xs:inline">FEED</span>
+            <span className="xs:hidden">FEED</span>
+          </Link>
 
-          {title && (
-            <div className="hidden md:flex items-center gap-2 text-slate-300 font-mono text-xs max-w-xs truncate">
-              {!isDiscoverPage && <span className="text-white/30">•</span>}
-              <span className="uppercase tracking-widest font-extrabold truncate text-white">{title}</span>
-            </div>
-          )}
+          <Link
+            href="/vault"
+            className={`relative px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer z-10 ${
+              pathname === '/vault' || pathname.startsWith('/vault') || pathname.startsWith('/album')
+                ? 'text-black font-extrabold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            {(pathname === '/vault' || pathname.startsWith('/vault') || pathname.startsWith('/album')) && (
+              <motion.div
+                layoutId="activeNavTabIndicator"
+                transition={springSnappy}
+                className="absolute inset-0 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] z-[-1]"
+              />
+            )}
+            <Disc3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden xs:inline">3D VAULT</span>
+            <span className="xs:hidden">VAULT</span>
+          </Link>
         </div>
 
         {/* Right: User Display Name Badge & Settings Button */}

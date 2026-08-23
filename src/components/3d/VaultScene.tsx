@@ -1040,12 +1040,12 @@ export default function VaultScene({
             </div>
           </div>
 
-          {/* Action Buttons Deck */}
+          {/* Action Buttons Deck in Detail Mode */}
           <div
             className={`w-full max-w-[340px] flex flex-col items-center gap-2 mt-1 transition-all duration-500 ease-out ${
               isDetail
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
-                : 'opacity-0 translate-y-4 pointer-events-none'
+                : 'opacity-0 translate-y-4 pointer-events-none hidden'
             }`}
           >
             <div className="w-full flex items-center gap-2">
@@ -1122,22 +1122,57 @@ export default function VaultScene({
             </div>
           </div>
 
-          {albums.length > 1 && (
-            <div
-              className={`flex items-center gap-2 mt-4 transition-all duration-500 ${
-                !isDetail ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-              }`}
-            >
-              {albums.map((_, idx) => (
+          {/* 21st.dev Style Master Specs HUD & Quick Controls in Root Vault View */}
+          {!isDetail && (
+            <div className="w-full max-w-[340px] flex flex-col items-center gap-3 mt-3 animate-fadeIn">
+              {/* Studio Master Specs Pill */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-950/80 border border-white/15 backdrop-blur-xl shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
+                  FLAC 24-BIT // LOSSLESS DIRECT-OUT
+                </span>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="flex items-center gap-2 w-full">
                 <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    idx === currentIndex ? 'w-6 bg-white' : 'w-2 bg-white/30 hover:bg-white/60'
-                  }`}
-                  title={`Album ${idx + 1}`}
-                />
-              ))}
+                  onClick={() => onSelectAlbum(activeAlbum)}
+                  className="flex-1 py-2.5 px-4 rounded-2xl bg-white text-black font-cyber font-black text-xs uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-[0_0_25px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ListMusic className="w-3.5 h-3.5" />
+                  <span>XEM BÀI HÁT</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (handlePlayAlbum) handlePlayAlbum();
+                  }}
+                  className="py-2.5 px-4 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs uppercase tracking-wider transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>PHÁT</span>
+                </button>
+              </div>
+
+              {/* Album Thumbnail Selector Deck */}
+              {albums.length > 1 && (
+                <div className="flex items-center gap-2 mt-1 px-2 py-1.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                  {albums.map((alb, idx) => (
+                    <button
+                      key={alb.id || idx}
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`relative w-8 h-8 rounded-lg overflow-hidden border transition-all ${
+                        idx === currentIndex
+                          ? 'border-white scale-110 shadow-[0_0_12px_rgba(255,255,255,0.5)]'
+                          : 'border-white/20 opacity-50 hover:opacity-100'
+                      }`}
+                      title={alb.title}
+                    >
+                      <img src={getCoverCdnUrl(alb.cover_url)} alt={alb.title} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
