@@ -1,31 +1,23 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 23/08/2026 14:50 (GMT+7)  
+> **Thời gian cập nhật**: 23/08/2026 15:05 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã hoàn tất nâng cấp toàn diện **Motion Animation Engine** kết hợp bộ quy chuẩn **UI-UX Pro Max** (Spring Physics Presets, Asymmetric Timing, Modal & Drawer AnimatePresence transitions, Discovery Feed layout morphing, tactile micro-interactions). Xác thực **27/27 test suites PASS 100%** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
+> **Trạng thái hệ thống**: Đã nâng cấp **Dual-Engine Streaming Architecture** (tích hợp **YouTube Audio Streaming Bridge** trực tiếp từ trình duyệt kết hợp **Vault Lossless Audio Controller** cho Cloudflare R2 / Supabase Storage). Khắc phục triệt để lỗi 503 resolver và 404 URL fallback. Đã sửa lỗi chồng lấn thanh điều hướng Navbar trên trang `/discover`. Xác thực **27/27 test suites PASS 100%** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Motion Design Tokens & Spring Physics System (`src/lib/motionVariants.ts` & `src/app/globals.css`)**:
-   - Định nghĩa các hằng số Spring (`springSnappy`, `springBouncy`, `springSmooth`, `springGentle`).
-   - Chuẩn hóa Asymmetric Timing (Exit 150-180ms nhanh hơn Enter 250-350ms).
-   - Tích hợp chuẩn trợ năng `@media (prefers-reduced-motion: reduce)`.
+1. **Dual-Engine Streaming Architecture (`src/context/PlayerContext.tsx`)**:
+   - **Engine A (Vault Lossless)**: Thẻ `<audio>` với `crossOrigin="anonymous"` chịu trách nhiệm phát các bản thu Master FLAC/Lossless từ Cloudflare R2 và Supabase Storage với byte-range seeking chính xác.
+   - **Engine B (Global YouTube Audio Bridge)**: Tích hợp trình phát YouTube IFrame Engine ẩn bên trong ứng dụng, giải mã luồng âm thanh YouTube Music trực tiếp trên trình duyệt của người dùng, loại bỏ 100% lỗi `503 Service Unavailable` do cơ chế chặn bot của YouTube.
+   - **Đồng Bộ Hoá 120 FPS**: Vòng lặp cập nhật thời gian liên tục (`getCurrentTime`) và thời lượng (`getDuration`) đồng bộ hoàn toàn với thanh tua nhạc, hệ thống Visualizer và lời bài hát.
 
-2. **Nâng Cấp Modals, Gates & Overlays**:
-   - `VaultGate.tsx`: Spring entrance, accordion Admin Passkey với `AnimatePresence`, tactile Google & Submit button feedback.
-   - `Navbar.tsx`: Bọc các modal con trong `AnimatePresence` loại bỏ unmount giật cục, micro-interactions trên action icons và brand logo.
-   - `ProfileModal.tsx`: Modal backdrop blur fade, active tab pill sliding (`layoutId="profileTabActivePill"`), tactile form submit.
-   - `SettingsModal.tsx`: Modal spring entrance, animated toggle switch knobs trượt mượt mà.
-   - `VideoPaywallModal.tsx`: Modal spring backdrop, plan selection cards micro-lift, VietQR transitions.
-   - `ShortcutsDrawer.tsx`: Floating shortcut palette spring pop-in/out, staggered list items reveal.
-   - `AuthModal.tsx`: Spring modal entrance & exit, accordion admin access.
-   - `AlbumComments.tsx`: Comments staggered reveal, optimistic new comment entrance, heart like button pop animation.
+2. **Khắc Phục Lỗi 404 URL Fallback (`src/lib/r2Storage.ts`)**:
+   - `normalizeMediaUrl`: Loại bỏ tiền tố `yt:` khỏi việc chuyển đổi sang miền CDN `media.postlain.com/yt:...`, ngăn chặn các yêu cầu mạng 404 không hợp lệ.
 
-3. **Discovery Feed & 3D Stage Micro-Interactions**:
-   - `DiscoveryFeed.tsx`: Thẻ TrackRow, SquareCard, VideoCard, AlbumCard, MoodPlaylistCard tích hợp `motion.div` hover lift & click punch; Filter Pills sử dụng `layoutId="activeDiscoveryFilterPill"` trượt mượt mà; Cinema Video Modal bọc trong `AnimatePresence`.
-   - `VaultScene.tsx`: `TrackItemRow` tích hợp `motion.div` micro-interaction (`whileHover={{ x: 3 }}`).
+3. **Sửa Lỗi Chồng Lấn Thanh Điều Hướng (`src/components/ui/Navbar.tsx`)**:
+   - Tự động ẩn nút `DISCOVERY FEED` khi người dùng đang ở đường dẫn `/discover`, tránh việc hiển thị thừa và gây chồng lấn tiêu đề trên thiết bị di động & máy tính bảng.
 
 4. **Kiểm Thử Tự Động & CI/CD Integrity**:
    - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).

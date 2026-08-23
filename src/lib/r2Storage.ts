@@ -72,6 +72,11 @@ export function normalizeMediaUrl(urlOrKey: string): string {
   if (!urlOrKey) return '';
   const trimmed = urlOrKey.trim();
 
+  // If YouTube reference, return empty (handled by YouTube player engine)
+  if (trimmed.startsWith('yt:')) {
+    return '';
+  }
+
   // If already an external third-party stream not hosted on R2 (e.g. YouTube, external CDN)
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     if (

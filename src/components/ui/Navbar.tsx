@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogIn, UserCheck, LogOut, Disc3, ArrowLeft, Settings, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -34,6 +35,9 @@ export default function Navbar({
   onBackClick,
   title,
 }: NavbarProps) {
+  const pathname = usePathname();
+  const isDiscoverPage = pathname === '/discover' || pathname.startsWith('/discover');
+
   const [mounted, setMounted] = useState(false);
   const [internalEmail, setInternalEmail] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -136,22 +140,24 @@ export default function Navbar({
         </div>
 
         {/* Center: Title or Discover Link */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <motion.div {...subtleButtonTapMotion}>
-            <Link
-              href="/discover"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider transition-colors shadow-sm"
-              title="AI Multimedia Discovery Feed"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">DISCOVERY FEED</span>
-              <span className="sm:hidden">FEED</span>
-            </Link>
-          </motion.div>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {!isDiscoverPage && (
+            <motion.div {...subtleButtonTapMotion}>
+              <Link
+                href="/discover"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider transition-colors shadow-sm"
+                title="AI Multimedia Discovery Feed"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">DISCOVERY FEED</span>
+                <span className="sm:hidden">FEED</span>
+              </Link>
+            </motion.div>
+          )}
 
           {title && (
             <div className="hidden md:flex items-center gap-2 text-slate-300 font-mono text-xs max-w-xs truncate">
-              <span className="text-white/30">•</span>
+              {!isDiscoverPage && <span className="text-white/30">•</span>}
               <span className="uppercase tracking-widest font-extrabold truncate text-white">{title}</span>
             </div>
           )}

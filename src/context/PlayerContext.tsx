@@ -7,6 +7,13 @@ import { hasActiveSession, hasVideoSubscription, activateVideoSubscription } fro
 import { getMediaCdnUrl } from '@/lib/r2Storage';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 
+declare global {
+  interface Window {
+    YT?: any;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
 export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface PlayerContextType {
@@ -194,6 +201,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+
+  // YouTube Audio Bridge References
+  const ytPlayerRef = useRef<any>(null);
+  const ytPlayerReadyRef = useRef<boolean>(false);
 
   const initAudioGraph = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -384,51 +395,31 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [currentTrack, currentAlbum, currentVideo, activeZone, playlist, userQueue, volume, shuffleMode, repeatMode]);
 
-  const [resolvedTrackUrl, setResolvedTrackUrl] = useState<string>('');
+  // ── Track Source Resolution (Lossless Vault vs YouTube Bridge) ─────────────
   const rawTrackUrl = currentTrack?.audio_url || '';
+  const isCurrentTrackYouTube = Boolean(
+    currentTrack &&
+      (currentTrack.youtube_id ||
+        rawTrackUrl.startsWith('yt:') ||
+        currentTrack.id?.startsWith('yt:') ||
+        currentTrack.id?.startsWith('yt_'))
+  );
 
-  useEffect(() => {
-    if (!currentTrack) {
-      setResolvedTrackUrl('');
-      return;
-    }
+  const currentYouTubeId = useMemo(() => {
+    if (!currentTrack) return '';
+    if (currentTrack.youtube_id) return currentTrack.youtube_id.replace(/^yt:/, '');
+    if (rawTrackUrl.startsWith('yt:')) return rawTrackUrl.replace(/^yt:/, '');
+    if (currentTrack.id?.startsWith('yt:')) return currentTrack.id.replace(/^yt:/, '');
+    if (currentTrack.id?.startsWith('yt_')) return currentTrack.id.replace(/^yt_/, '');
+    return '';
+  }, [currentTrack, rawTrackUrl]);
 
-    const rawUrl = currentTrack.audio_url || '';
-    const ytmId = currentTrack.youtube_id || (rawUrl.startsWith('yt:') ? rawUrl.replace(/^yt:/, '') : '');
-
-    if (ytmId && (rawUrl.startsWith('yt:') || !rawUrl.startsWith('http'))) {
-      let isCancelled = false;
-      setIsBuffering(true);
-
-      fetch(`/api/ytm/resolve?id=${encodeURIComponent(ytmId)}`)
-        .then((res) => {
-          if (!res.ok) throw new Error(`Resolve HTTP ${res.status}`);
-          return res.json();
-        })
-        .then((data) => {
-          if (!isCancelled && data?.audioUrl) {
-            setResolvedTrackUrl(data.audioUrl);
-            if (data.duration && (!duration || duration === 0)) {
-              setDuration(data.duration);
-            }
-          }
-        })
-        .catch((err) => {
-          console.warn('[PlayerContext] Stream resolve warning:', err);
-        })
-        .finally(() => {
-          if (!isCancelled) setIsBuffering(false);
-        });
-
-      return () => {
-        isCancelled = true;
-      };
-    } else {
-      setResolvedTrackUrl(rawUrl ? getMediaCdnUrl(rawUrl) : '');
-    }
-  }, [currentTrack]);
-
-  const trackUrl = resolvedTrackUrl || (rawTrackUrl ? getMediaCdnUrl(rawTrackUrl) : '');
+  // For Vault FLAC/Lossless tracks only (zero 404 for YouTube tracks)
+  const trackUrl = isCurrentTrackYouTube
+    ? ''
+    : rawTrackUrl
+    ? getMediaCdnUrl(rawTrackUrl)
+    : '';
 
   const nextTrackItem = useMemo(() => {
     if (userQueue && userQueue.length > 0) {
@@ -468,6 +459,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         audioRef.current.load();
       } catch {}
     }
+    if (ytPlayerRef.current?.pauseVideo) {
+      try { ytPlayerRef.current.pauseVideo(); } catch {}
+    }
     setIsPlaying(false);
     setIsBuffering(false);
     if (track) {
@@ -488,6 +482,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         try {
           audioRef.current.load();
         } catch {}
+      }
+      if (ytPlayerRef.current?.pauseVideo) {
+        try { ytPlayerRef.current.pauseVideo(); } catch {}
       }
 
       setCurrentVideo(track);
@@ -613,10 +610,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
     if (videoRef.current) videoRef.current.volume = volume;
+    if (ytPlayerRef.current?.setVolume) {
+      try {
+        ytPlayerRef.current.setVolume(Math.round(volume * 100));
+      } catch {}
+    }
   }, [volume]);
 
+  // ── HTML5 Audio Player Controller (for Vault Lossless) ───────────────────────
   useEffect(() => {
-    if (activeZone === 'video') {
+    if (activeZone === 'video' || isCurrentTrackYouTube) {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
@@ -647,31 +650,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } else {
       audioRef.current.pause();
     }
-
-    if ('mediaSession' in navigator && currentTrack) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title,
-        artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
-        album: currentAlbum?.title || 'Hidden Music Vault',
-        artwork: currentAlbum?.cover_url
-          ? [{ src: currentAlbum.cover_url, sizes: '512x512', type: 'image/jpeg' }]
-          : [],
-      });
-
-      navigator.mediaSession.setActionHandler('play', () => {
-        setIsPlaying(true);
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        setIsPlaying(false);
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        prevTrack();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        nextTrack();
-      });
-    }
-  }, [isPlaying, trackUrl, currentTrack, currentAlbum, activeZone]);
+  }, [isPlaying, trackUrl, isCurrentTrackYouTube, activeZone, initAudioGraph]);
 
   const playTrack = useCallback((track: TrackItem, album?: Album | Partial<Album> | null, newPlaylist?: TrackItem[]) => {
     if (!track) return;
@@ -688,40 +667,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     currentTimeRef.current = 0;
   }, [initAudioGraph]);
 
-  const togglePlay = useCallback(() => {
-    initAudioGraph();
-    if (activeZone === 'video') {
-      if (!videoRef.current) return;
-      if (isPlaying) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        videoRef.current.play().catch(() => {});
-        setIsPlaying(true);
-      }
-      return;
-    }
-
-    if (!currentTrack || !audioRef.current) return;
-    if (isPlaying) {
-      setIsPlaying(false);
-    } else {
-      setActiveZone('audio');
-      setIsPlaying(true);
-    }
-  }, [activeZone, currentTrack, isPlaying]);
-
   const seekTo = useCallback(
     (time: number) => {
       currentTimeRef.current = time;
       setCurrentTime(time);
       if (activeZone === 'video' && videoRef.current) {
         videoRef.current.currentTime = time;
+      } else if (isCurrentTrackYouTube && ytPlayerRef.current?.seekTo) {
+        try {
+          ytPlayerRef.current.seekTo(time, true);
+        } catch {}
       } else if (audioRef.current) {
         audioRef.current.currentTime = time;
       }
     },
-    [activeZone]
+    [activeZone, isCurrentTrackYouTube]
   );
 
   const nextTrack = useCallback(() => {
@@ -761,42 +721,284 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const safePlaylist = playlist || [];
     if (safePlaylist.length === 0 || !currentTrack) return;
 
-    const currentIndex = safePlaylist.findIndex((t) => t.id === currentTrack.id);
-    const prevIndex = (currentIndex - 1 + safePlaylist.length) % safePlaylist.length;
+    if (currentTimeRef.current > 3) {
+      seekTo(0);
+      return;
+    }
+
+    let prevIndex = 0;
+    if (shuffleMode) {
+      prevIndex = Math.floor(Math.random() * safePlaylist.length);
+    } else {
+      const currentIndex = safePlaylist.findIndex((t) => t.id === currentTrack.id);
+      prevIndex = (currentIndex - 1 + safePlaylist.length) % safePlaylist.length;
+    }
+
     const targetTrack = safePlaylist[prevIndex];
     if (targetTrack) {
       playTrack(targetTrack, currentAlbum, safePlaylist);
     }
-  }, [playlist, currentTrack, currentAlbum, playTrack]);
+  }, [playlist, currentTrack, shuffleMode, currentAlbum, seekTo, playTrack]);
 
-  const addToQueue = useCallback((track: TrackItem) => {
-    if (!track) return;
-    setPlaylist((prev) => {
-      const safe = prev || [];
-      if (safe.some((t) => t.id === track.id)) return safe;
-      return [...safe, track];
-    });
-  }, []);
+  const togglePlay = useCallback(() => {
+    initAudioGraph();
+    if (activeZone === 'video') {
+      if (!videoRef.current) return;
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+      return;
+    }
 
-  const addToUserQueue = useCallback((track: TrackItem) => {
-    if (!track) return;
-    setUserQueue((prev) => {
-      const safe = prev || [];
-      if (safe.some((t) => t.id === track.id)) return safe;
-      return [...safe, track];
-    });
-  }, []);
+    if (!currentTrack) return;
 
-  const removeFromUserQueue = useCallback((trackId: string) => {
-    setUserQueue((prev) => (prev || []).filter((t) => t.id !== trackId));
-  }, []);
+    if (isCurrentTrackYouTube) {
+      if (isPlaying) {
+        try {
+          ytPlayerRef.current?.pauseVideo();
+        } catch {}
+        setIsPlaying(false);
+      } else {
+        setActiveZone('audio');
+        try {
+          ytPlayerRef.current?.playVideo();
+        } catch {}
+        setIsPlaying(true);
+      }
+      return;
+    }
 
-  const clearUserQueue = useCallback(() => {
-    setUserQueue([]);
-  }, []);
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      setIsPlaying(false);
+    } else {
+      setActiveZone('audio');
+      setIsPlaying(true);
+    }
+  }, [activeZone, currentTrack, isPlaying, isCurrentTrackYouTube, initAudioGraph]);
+
+  const pause = useCallback(() => {
+    if (isCurrentTrackYouTube) {
+      try { ytPlayerRef.current?.pauseVideo(); } catch {}
+    } else if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    setIsPlaying(false);
+  }, [isCurrentTrackYouTube]);
+
+  const resume = useCallback(() => {
+    initAudioGraph();
+    if (isCurrentTrackYouTube) {
+      try { ytPlayerRef.current?.playVideo(); } catch {}
+    } else if (audioRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
+    setIsPlaying(true);
+  }, [isCurrentTrackYouTube, initAudioGraph]);
+
+  // ── YouTube Audio Bridge Lifecycle ──────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const initYT = () => {
+      if (!window.YT || !window.YT.Player) return;
+      if (ytPlayerRef.current) return;
+
+      try {
+        ytPlayerRef.current = new window.YT.Player('vault-yt-audio-bridge-target', {
+          height: '1',
+          width: '1',
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            rel: 0,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: (event: any) => {
+              ytPlayerReadyRef.current = true;
+              try {
+                event.target.setVolume(Math.round(volume * 100));
+              } catch {}
+            },
+            onStateChange: (event: any) => {
+              // 0 = ENDED, 1 = PLAYING, 2 = PAUSED, 3 = BUFFERING, 5 = CUED
+              if (event.data === 0) {
+                nextTrack();
+              } else if (event.data === 1) {
+                setIsPlaying(true);
+                setIsBuffering(false);
+              } else if (event.data === 2) {
+                setIsPlaying(false);
+              } else if (event.data === 3) {
+                setIsBuffering(true);
+              }
+            },
+            onError: (event: any) => {
+              console.warn('[YouTube Audio Bridge] Player error:', event.data);
+              setIsBuffering(false);
+            },
+          },
+        });
+      } catch (e) {
+        console.warn('[YouTube Audio Bridge] Init error:', e);
+      }
+    };
+
+    if (window.YT && window.YT.Player) {
+      initYT();
+    } else {
+      const existingScript = document.getElementById('yt-iframe-api-script');
+      if (!existingScript) {
+        const prevHandler = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+          if (typeof prevHandler === 'function') prevHandler();
+          initYT();
+        };
+        const tag = document.createElement('script');
+        tag.id = 'yt-iframe-api-script';
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.body.appendChild(tag);
+      } else {
+        const timer = setInterval(() => {
+          if (window.YT && window.YT.Player) {
+            clearInterval(timer);
+            initYT();
+          }
+        }, 200);
+        return () => clearInterval(timer);
+      }
+    }
+  }, [volume, nextTrack]);
+
+  // Switch/Load YouTube Track
+  useEffect(() => {
+    if (activeZone === 'video') {
+      if (ytPlayerRef.current?.pauseVideo) {
+        try { ytPlayerRef.current.pauseVideo(); } catch {}
+      }
+      return;
+    }
+
+    if (!isCurrentTrackYouTube || !currentYouTubeId) {
+      if (ytPlayerRef.current?.pauseVideo) {
+        try { ytPlayerRef.current.pauseVideo(); } catch {}
+      }
+      return;
+    }
+
+    // Stop HTML5 audio immediately
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+
+    if (ytPlayerReadyRef.current && ytPlayerRef.current) {
+      try {
+        if (isPlaying) {
+          ytPlayerRef.current.loadVideoById(currentYouTubeId, 0);
+        } else {
+          ytPlayerRef.current.cueVideoById(currentYouTubeId);
+        }
+      } catch (e) {
+        console.warn('[YouTube Audio Bridge] Load track error:', e);
+      }
+    }
+  }, [isCurrentTrackYouTube, currentYouTubeId, isPlaying, activeZone]);
+
+  // YouTube Audio Bridge Continuous Time Synchronizer (60/120 FPS)
+  useEffect(() => {
+    if (!isCurrentTrackYouTube || !isPlaying || activeZone === 'video') return;
+
+    const interval = setInterval(() => {
+      if (!ytPlayerRef.current || typeof ytPlayerRef.current.getCurrentTime !== 'function') return;
+      try {
+        const cur = ytPlayerRef.current.getCurrentTime();
+        if (typeof cur === 'number' && !isNaN(cur)) {
+          currentTimeRef.current = cur;
+
+          timeSubscribersRef.current.forEach((cb) => {
+            try { cb(cur); } catch {}
+          });
+
+          if (waveformBuckets.length > 0) {
+            const bIdx = Math.max(0, Math.min(waveformBuckets.length - 1, Math.floor(cur * 20)));
+            setCurrentAmplitude(waveformBuckets[bIdx] ?? 0);
+          }
+
+          const now = performance.now();
+          if (now - lastStateUpdateTimeRef.current > 350) {
+            lastStateUpdateTimeRef.current = now;
+            setCurrentTime(cur);
+          }
+        }
+
+        const dur = ytPlayerRef.current.getDuration();
+        if (typeof dur === 'number' && dur > 0 && Math.abs(dur - (duration || 0)) > 2) {
+          const trueDuration = Math.round(dur);
+          setDuration(trueDuration);
+          setCurrentTrack((prev) => (prev ? { ...prev, duration: trueDuration } : prev));
+          setPlaylist((prev) =>
+            prev.map((t) => (t.id === currentTrack?.id ? { ...t, duration: trueDuration } : t))
+          );
+        }
+      } catch {}
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isCurrentTrackYouTube, isPlaying, activeZone, waveformBuckets, duration, currentTrack?.id]);
+
+  // MediaSession Metadata & Actions Synchronizer
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
+        album: currentAlbum?.title || 'Hidden Music Vault',
+        artwork: currentTrack.cover_url || currentAlbum?.cover_url
+          ? [{ src: currentTrack.cover_url || currentAlbum?.cover_url || '', sizes: '512x512', type: 'image/jpeg' }]
+          : [],
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (isCurrentTrackYouTube) {
+          try { ytPlayerRef.current?.playVideo(); } catch {}
+        }
+        setIsPlaying(true);
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (isCurrentTrackYouTube) {
+          try { ytPlayerRef.current?.pauseVideo(); } catch {}
+        }
+        setIsPlaying(false);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        prevTrack();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        nextTrack();
+      });
+    }
+  }, [currentTrack, currentAlbum, isCurrentTrackYouTube, prevTrack, nextTrack]);
 
   const setVolume = useCallback((vol: number) => {
-    setVolumeState(vol);
+    const clamped = Math.max(0, Math.min(1, vol));
+    setVolumeState(clamped);
+    if (audioRef.current) audioRef.current.volume = clamped;
+    if (videoRef.current) videoRef.current.volume = clamped;
+    if (ytPlayerRef.current?.setVolume) {
+      try {
+        ytPlayerRef.current.setVolume(Math.round(clamped * 100));
+      } catch {}
+    }
   }, []);
 
   const toggleShuffle = useCallback(() => {
@@ -811,12 +1013,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const contextValue = useMemo(
+  const addToQueue = useCallback((track: TrackItem) => {
+    setUserQueue((prev) => [...prev, track]);
+  }, []);
+
+  const addToUserQueue = useCallback((track: TrackItem) => {
+    setUserQueue((prev) => [...prev, track]);
+  }, []);
+
+  const removeFromUserQueue = useCallback((trackId: string) => {
+    setUserQueue((prev) => prev.filter((t) => t.id !== trackId));
+  }, []);
+
+  const removeFromQueue = useCallback((trackId: string) => {
+    setUserQueue((prev) => prev.filter((t) => t.id !== trackId));
+  }, []);
+
+  const clearUserQueue = useCallback(() => {
+    setUserQueue([]);
+  }, []);
+
+  const clearQueue = useCallback(() => {
+    setUserQueue([]);
+  }, []);
+
+  const contextValue: PlayerContextType = useMemo(
     () => ({
       currentTrack,
       currentAlbum,
-      playlist: playlist || [],
-      userQueue: userQueue || [],
+      playlist,
+      userQueue,
       isPlaying,
       isBuffering,
       currentTime,
@@ -842,12 +1068,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       addToQueue,
       addToUserQueue,
       removeFromUserQueue,
-      removeFromQueue: removeFromUserQueue,
+      removeFromQueue,
       clearUserQueue,
-      clearQueue: clearUserQueue,
+      clearQueue,
       togglePlay,
-      pause: () => setIsPlaying(false),
-      resume: () => setIsPlaying(true),
+      pause,
+      resume,
       nextTrack,
       prevTrack,
       seekTo,
@@ -889,7 +1115,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       shuffleMode,
       repeatMode,
       isCinematicFxEnabled,
-      isHapticEnabled,
       activeZone,
       waveformBuckets,
       currentAmplitude,
@@ -904,8 +1129,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       addToQueue,
       addToUserQueue,
       removeFromUserQueue,
+      removeFromQueue,
       clearUserQueue,
+      clearQueue,
       togglePlay,
+      pause,
+      resume,
       nextTrack,
       prevTrack,
       seekTo,
@@ -913,6 +1142,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleShuffle,
       toggleRepeat,
       toggleCinematicFx,
+      isHapticEnabled,
       toggleHaptic,
       subscribeToTimeUpdate,
       switchToAudioZone,
@@ -932,21 +1162,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider value={contextValue}>
       {children}
 
+      {/* Hidden YouTube Audio Bridge Element */}
+      <div
+        id="vault-yt-audio-bridge"
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          top: -9999,
+          left: -9999,
+          width: 1,
+          height: 1,
+          opacity: 0.001,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
+      >
+        <div id="vault-yt-audio-bridge-target" />
+      </div>
+
+      {/* Primary HTML5 Audio Element for Vault Lossless Tracks */}
       <audio
         ref={audioRef}
-        src={activeZone === 'audio' && currentTrack ? trackUrl : undefined}
-        crossOrigin="anonymous"
-        playsInline
+        src={trackUrl || undefined}
         preload="auto"
+        playsInline
+        crossOrigin="anonymous"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => {
           setIsBuffering(false);
           initAudioGraph();
         }}
-        onCanPlay={() => {
-          setIsBuffering(false);
-          initAudioGraph();
-        }}
+        onCanPlay={() => setIsBuffering(false)}
         onCanPlayThrough={() => {
           setIsBuffering(false);
           initAudioGraph();
@@ -956,7 +1204,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           const cur = audioRef.current.currentTime;
           currentTimeRef.current = cur;
 
-          // Dispatch to 120 FPS high-frequency subscribers without React re-render
           timeSubscribersRef.current.forEach((cb) => {
             try {
               cb(cur);
@@ -1011,7 +1258,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       />
 
       {activeZone === 'audio' && nextTrackUrl && (
-        <audio src={nextTrackUrl} preload="auto" className="hidden" />
+        <audio src={nextTrackUrl} preload="auto" crossOrigin="anonymous" className="hidden" />
       )}
     </PlayerContext.Provider>
   );
