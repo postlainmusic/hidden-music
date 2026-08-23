@@ -14,6 +14,7 @@ import {
   VolumeX,
   ListMusic,
   Disc3,
+  Mic2,
   ChevronDown,
   Loader2,
   Trash2,
@@ -29,6 +30,15 @@ const formatTime = (secs: number) => {
   const mins = Math.floor(secs / 60);
   const rem = Math.floor(secs % 60);
   return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
+};
+
+const cleanLyrics = (raw?: string) => {
+  if (!raw) return '';
+  return raw
+    .split('\n')
+    .map((line) => line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim())
+    .filter((line) => line.length > 0)
+    .join('\n');
 };
 
 export default function DesktopPlayerBar() {
@@ -64,7 +74,7 @@ export default function DesktopPlayerBar() {
 
   const drumProfile = useMemo(() => getTrackDrumProfile(currentTrack?.title || currentTrack?.id), [currentTrack?.title, currentTrack?.id]);
 
-  const [expandedMode, setExpandedMode] = useState<'none' | 'queue'>('none');
+  const [expandedMode, setExpandedMode] = useState<'none' | 'lyrics' | 'queue'>('none');
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   const playerRootRef = useRef<HTMLDivElement | null>(null);
@@ -86,6 +96,7 @@ export default function DesktopPlayerBar() {
   const nextBtnRef = useRef<HTMLButtonElement | null>(null);
   const shuffleBtnRef = useRef<HTMLButtonElement | null>(null);
   const repeatBtnRef = useRef<HTMLButtonElement | null>(null);
+  const lyricsBtnRef = useRef<HTMLButtonElement | null>(null);
   const queueBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Multi-Band Audio Analyzer State
@@ -119,7 +130,6 @@ export default function DesktopPlayerBar() {
 
   const smoothEnergyRef = useRef<number>(0);
 
-  // Click outside to collapse
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (playerRootRef.current && !playerRootRef.current.contains(e.target as Node)) {
@@ -142,7 +152,6 @@ export default function DesktopPlayerBar() {
     ? audioRef.current.duration
     : 0;
 
-  // High-Performance 60FPS Multi-Band Audio-Reactive Engine (Desktop Bar)
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (timelineRafIdRef.current) cancelAnimationFrame(timelineRafIdRef.current);
@@ -170,7 +179,6 @@ export default function DesktopPlayerBar() {
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
       const isDrumming = isDrumActiveAtTime(drumProfile, liveSec);
 
-      // Cập nhật Seeker Text 60 FPS
       if (!isDraggingSeekerRef.current) {
         if (seekerInputRef.current) {
           seekerInputRef.current.value = String(liveSec);
@@ -216,7 +224,7 @@ export default function DesktopPlayerBar() {
         }
       }
 
-      // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
+      // 1. SUB-BASS / KICK
       let bassSum = 0;
       for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
       const currentBass = bassSum / 5;
@@ -226,7 +234,7 @@ export default function DesktopPlayerBar() {
       slowBassRef.current = sB;
       const bassFlux = Math.max(0, fB - sB);
 
-      // 2. BASSLINE / 808 (Bins 3-12: 64Hz-258Hz)
+      // 2. BASSLINE / 808
       let basslineSum = 0;
       for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
       const currentBassline = basslineSum / 10;
@@ -277,10 +285,8 @@ export default function DesktopPlayerBar() {
       const currentEnergy = totalSum / 1024;
       smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
 
-      // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
-      // TRIGGERS
       if (isDrumming) {
         const timeSinceLastKick = now - lastKickHitTimeRef.current;
         const isConsecutiveKick = timeSinceLastKick >= 55 && timeSinceLastKick < 240;
@@ -409,6 +415,12 @@ export default function DesktopPlayerBar() {
           : (repeatMode !== 'off' ? '0 0 10px rgba(255,255,255,0.3)' : 'none');
       }
 
+      if (lyricsBtnRef.current) {
+        lyricsBtnRef.current.style.boxShadow = expandedMode === 'lyrics' 
+          ? '0 0 12px rgba(255,255,255,0.4)' 
+          : `0 0 ${4 + nrg * 14}px rgba(255, 255, 255, ${0.1 + nrg * 0.45})`;
+      }
+
       if (queueBtnRef.current) {
         queueBtnRef.current.style.boxShadow = expandedMode === 'queue' 
           ? '0 0 12px rgba(255,255,255,0.4)' 
@@ -445,6 +457,9 @@ export default function DesktopPlayerBar() {
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'));
       } else if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault();
         setExpandedMode((prev) => (prev === 'queue' ? 'none' : 'queue'));
@@ -466,7 +481,6 @@ export default function DesktopPlayerBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeZone, togglePlay, seekTo, currentTime, duration, currentTimeRef]);
 
-  // iOS Vertical Capsule Volume Slider
   const calculateVolumeFromClientY = useCallback(
     (clientY: number) => {
       if (!volumeSliderRef.current) return;
@@ -516,7 +530,8 @@ export default function DesktopPlayerBar() {
 
   if (!currentTrack) return null;
 
-  const isDrawerOpen = expandedMode === 'queue';
+  const isDrawerOpen = expandedMode !== 'none';
+  const displayLyrics = cleanLyrics(currentTrack?.lyrics);
 
   return (
     <div
@@ -527,7 +542,7 @@ export default function DesktopPlayerBar() {
         ref={playerCardRef}
         className="w-full bg-zinc-950/70 backdrop-blur-2xl border border-white/15 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] pointer-events-auto overflow-hidden flex flex-col transition-[all] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform"
       >
-        {/* TOP EXPANDABLE SECTION (Queue Mode) */}
+        {/* TOP EXPANDABLE SECTION */}
         <div
           className={`w-full overflow-hidden transition-[height,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col ${
             isDrawerOpen
@@ -537,11 +552,29 @@ export default function DesktopPlayerBar() {
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 sm:px-8 py-3 flex-shrink-0 border-b border-white/10">
-            <div className="flex items-center gap-2 bg-zinc-900/90 px-3 py-1.5 rounded-2xl border border-white/15 shadow-inner">
-              <ListMusic className="w-3.5 h-3.5 text-white" />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white">
-                HÀNG CHỜ PHÁT ({userQueue.length + playlist.length})
-              </span>
+            <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-2xl border border-white/15 shadow-inner">
+              <button
+                onClick={() => setExpandedMode('lyrics')}
+                className={`px-3.5 py-1.5 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                  expandedMode === 'lyrics'
+                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+                <span>LỜI BÀI HÁT</span>
+              </button>
+              <button
+                onClick={() => setExpandedMode('queue')}
+                className={`px-3.5 py-1.5 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                  expandedMode === 'queue'
+                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <ListMusic className="w-3.5 h-3.5" />
+                <span>HÀNG CHỜ ({userQueue.length + playlist.length})</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-3">
@@ -560,130 +593,149 @@ export default function DesktopPlayerBar() {
 
           {/* Body */}
           <div className="flex-1 min-h-0 px-6 sm:px-8 pb-3 overflow-hidden relative">
-            <div
-              className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono pr-1"
-              style={{
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-              }}
-            >
-              {/* 1. USER QUEUE */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between px-1 mb-1">
-                  <div className="flex items-center gap-2">
-                    <ListMusic className="w-3.5 h-3.5 text-zinc-400" />
-                    <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
-                      ƯU TIÊN PHÁT ({userQueue.length})
-                    </span>
-                  </div>
-                  {userQueue.length > 0 && (
-                    <button
-                      onClick={clearQueue}
-                      className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                      Xóa tất cả
-                    </button>
-                  )}
-                </div>
-
-                {userQueue.length === 0 ? (
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                    <p className="text-[11px] text-zinc-400">Hàng chờ trống</p>
-                    <p className="text-[9px] text-zinc-600 mt-0.5">
-                      Tự động phát ngẫu nhiên từ thư viện khi hết bài.
-                    </p>
-                  </div>
+            {/* Lyrics View */}
+            {expandedMode === 'lyrics' && (
+              <div 
+                className="w-full h-full overflow-y-auto no-scrollbar py-6 text-center select-text font-cyber"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {displayLyrics ? (
+                  <p className="text-base sm:text-lg font-bold text-zinc-200 leading-relaxed whitespace-pre-line tracking-wide drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
+                    {displayLyrics}
+                  </p>
                 ) : (
-                  userQueue.map((track, idx) => (
-                    <div
-                      key={`queue_${track.id}_${idx}`}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group"
-                    >
-                      <div
-                        onClick={() => {
-                          removeFromQueue(track.id);
-                          playTrack(track, currentAlbum, playlist);
-                        }}
-                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                      >
-                        <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0">
-                          {idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs truncate font-bold text-white group-hover:text-zinc-200">
-                            {track.title}
-                          </p>
-                          <p className="text-[9px] text-zinc-500 truncate uppercase">
-                            {track.artist || 'Unknown Artist'}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFromQueue(track.id);
-                        }}
-                        title="Xóa khỏi hàng chờ"
-                        className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-all ml-2 flex-shrink-0"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-500">
+                    <Mic2 className="w-8 h-8 text-zinc-600 mb-2 opacity-50" />
+                    <p className="text-xs uppercase tracking-widest font-mono">Chưa có lời bài hát cho ca khúc này</p>
+                  </div>
                 )}
               </div>
+            )}
 
-              {/* 2. UPCOMING / PLAYLIST */}
-              {playlist.length > 0 && (
-                <div className="space-y-1 pt-2 border-t border-white/5">
+            {/* Queue Mode */}
+            {expandedMode === 'queue' && (
+              <div
+                className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono pr-1"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {/* USER QUEUE */}
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1 mb-1">
-                    <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
-                      ĐANG PHÁT TỪ ALBUM / THƯ VIỆN ({playlist.length})
-                    </span>
-                    {shuffleMode && (
-                      <span className="text-[8px] font-mono text-zinc-400 bg-white/10 px-1.5 py-0.5 rounded">
-                        SHUFFLE ON
+                    <div className="flex items-center gap-2">
+                      <ListMusic className="w-3.5 h-3.5 text-zinc-400" />
+                      <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
+                        HÀNG CHỜ PHÁT ({userQueue.length})
                       </span>
+                    </div>
+                    {userQueue.length > 0 && (
+                      <button
+                        onClick={clearQueue}
+                        className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                        Xóa tất cả
+                      </button>
                     )}
                   </div>
-                  {playlist.map((track, idx) => {
-                    const isCur = track.id === currentTrack?.id;
-                    return (
+
+                  {userQueue.length === 0 ? (
+                    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
+                      <p className="text-[11px] text-zinc-400">Hàng chờ trống</p>
+                      <p className="text-[9px] text-zinc-600 mt-0.5">
+                        Tự động phát ngẫu nhiên từ thư viện khi hết bài.
+                      </p>
+                    </div>
+                  ) : (
+                    userQueue.map((track, idx) => (
                       <div
-                        key={track.id || idx}
-                        onClick={() => playTrack(track, currentAlbum, playlist)}
-                        className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                          isCur
-                            ? 'bg-white/15 border-white text-white font-bold shadow-md'
-                            : 'bg-white/[0.02] border-white/5 text-zinc-400 hover:bg-white/5 hover:text-white'
-                        }`}
+                        key={`queue_${track.id}_${idx}`}
+                        className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          onClick={() => {
+                            removeFromQueue(track.id);
+                            playTrack(track, currentAlbum, playlist);
+                          }}
+                          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                        >
                           <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0">
                             {idx + 1}
                           </span>
                           <div className="min-w-0">
-                            <p className="text-xs truncate font-bold">{track.title}</p>
-                            <p className="text-[9px] text-zinc-500 truncate">{track.artist || currentAlbum?.artist}</p>
+                            <p className="text-xs truncate font-bold text-white group-hover:text-zinc-200">
+                              {track.title}
+                            </p>
+                            <p className="text-[9px] text-zinc-500 truncate uppercase">
+                              {track.artist || 'Unknown Artist'}
+                            </p>
                           </div>
                         </div>
-                        {isCur && <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromQueue(track.id);
+                          }}
+                          title="Xóa khỏi hàng chờ"
+                          className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-all ml-2 flex-shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    );
-                  })}
+                    ))
+                  )}
                 </div>
-              )}
-            </div>
+
+                {/* PLAYLIST */}
+                {playlist.length > 0 && (
+                  <div className="space-y-1 pt-2 border-t border-white/5">
+                    <div className="flex items-center justify-between px-1 mb-1">
+                      <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
+                        ĐANG PHÁT TỪ ALBUM / THƯ VIỆN ({playlist.length})
+                      </span>
+                      {shuffleMode && (
+                        <span className="text-[8px] font-mono text-zinc-400 bg-white/10 px-1.5 py-0.5 rounded">
+                          SHUFFLE ON
+                        </span>
+                      )}
+                    </div>
+                    {playlist.map((track, idx) => {
+                      const isCur = track.id === currentTrack?.id;
+                      return (
+                        <div
+                          key={track.id || idx}
+                          onClick={() => playTrack(track, currentAlbum, playlist)}
+                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                            isCur
+                              ? 'bg-white/15 border-white text-white font-bold shadow-md'
+                              : 'bg-white/[0.02] border-white/5 text-zinc-400 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs truncate font-bold">{track.title}</p>
+                              <p className="text-[9px] text-zinc-500 truncate">{track.artist || currentAlbum?.artist}</p>
+                            </div>
+                          </div>
+                          {isCur && <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* BOTTOM PLAYBAR ROW */}
         <div className="w-full px-4 sm:px-6 py-3 flex flex-col gap-1 flex-shrink-0">
           <div className="flex items-center justify-between gap-4 w-full">
-            {/* Left: Track Information & Cover */}
+            {/* Track Info */}
             <div
-              onClick={() => setExpandedMode((prev) => (prev === 'queue' ? 'none' : 'queue'))}
+              onClick={() => setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'))}
               className="flex items-center gap-3 min-w-0 max-w-[240px] flex-shrink-0 cursor-pointer group/trackinfo"
             >
               <div
@@ -723,7 +775,7 @@ export default function DesktopPlayerBar() {
               </div>
             </div>
 
-            {/* Center: Controls + Inline Timeline */}
+            {/* Controls + Timeline */}
             <div className="flex items-center justify-start gap-3 flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
@@ -826,8 +878,21 @@ export default function DesktopPlayerBar() {
               </span>
             </div>
 
-            {/* Right: Drawer Triggers & Volume Slider */}
+            {/* Right Buttons */}
             <div className="flex items-center gap-2 justify-end flex-shrink-0">
+              <button
+                ref={lyricsBtnRef}
+                onClick={() => setExpandedMode((prev) => (prev === 'lyrics' ? 'none' : 'lyrics'))}
+                title="Lời bài hát (L)"
+                className={`p-2 rounded-full border transition-all will-change-transform ${
+                  expandedMode === 'lyrics'
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/5 text-zinc-300 border-white/10 hover:text-white hover:bg-white/15'
+                }`}
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+              </button>
+
               <button
                 ref={queueBtnRef}
                 onClick={() => setExpandedMode((prev) => (prev === 'queue' ? 'none' : 'queue'))}
@@ -841,10 +906,8 @@ export default function DesktopPlayerBar() {
                 <ListMusic className="w-3.5 h-3.5" />
               </button>
 
-              {/* Context Menu '...' */}
               <TrackActionMenu track={currentTrack} album={currentAlbum} />
 
-              {/* Volume Slider */}
               <div
                 className="relative"
                 onMouseEnter={handleVolumeMouseEnter}
