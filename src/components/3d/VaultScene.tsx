@@ -26,6 +26,7 @@ import AlbumComments from '@/components/ui/AlbumComments';
 import { hasVideoSubscription, refreshUserProfile } from '@/lib/authSession';
 import { getMediaCdnUrl, getCoverCdnUrl } from '@/lib/r2Storage';
 import { springSnappy } from '@/lib/motionVariants';
+import TrackActionMenu from '@/components/ui/TrackActionMenu';
 
 interface VaultSceneProps {
   albums: Album[];
@@ -117,19 +118,23 @@ const TrackItemRow = memo(function TrackItemRow({
               onRequestVideo(track);
             }}
             title="Xem Video MV"
-            className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 flex items-center gap-1 flex-shrink-0 transition-all"
+            className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 flex items-center gap-1 flex-shrink-0 transition-all cursor-pointer"
           >
             <Film className="w-2.5 h-2.5" /> MV
           </button>
         )}
       </div>
 
-      <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+      <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
         <span className={`text-[11px] sm:text-xs font-mono tabular-nums ${
           isCurrentPlaying ? 'text-white font-bold' : 'text-slate-500 group-hover:text-slate-400'
         }`}>
           {formatDuration(track.duration)}
         </span>
+        <TrackActionMenu
+          track={track}
+          onWatchVideo={track.video_url ? () => onRequestVideo(track) : undefined}
+        />
       </div>
     </motion.div>
   );
@@ -531,13 +536,17 @@ export default function VaultScene({
         />
       </div>
 
-      {/* 1B. DEDICATED AMBIENT GLOW */}
+      {/* 1B. DEDICATED DYNAMIC AMBIENT AURA & AUDIOPHILE HALO */}
       <div
-        className={`absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[550px] sm:w-[700px] h-[550px] sm:h-[700px] rounded-full pointer-events-none blur-[130px] transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] z-0 ${
-          isDetail || isVideoZone ? 'opacity-25 sm:opacity-30 scale-100' : 'opacity-0 scale-75'
+        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] sm:w-[800px] h-[550px] sm:h-[800px] rounded-full pointer-events-none blur-[140px] transition-all duration-[750ms] ease-[cubic-bezier(0.16,1,0.3,1)] z-0 ${
+          isPlaying
+            ? 'opacity-35 scale-105 animate-pulse'
+            : isDetail || isVideoZone
+            ? 'opacity-25 scale-100'
+            : 'opacity-15 scale-90'
         }`}
         style={{
-          backgroundImage: `radial-gradient(circle, #ffffff 0%, #3b82f6 40%, #7c3aed 70%, transparent 100%)`,
+          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(140,140,180,0.12) 35%, rgba(60,60,90,0.06) 65%, transparent 100%)`,
         }}
         aria-hidden="true"
       />

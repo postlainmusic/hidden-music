@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Disc3, ShieldAlert } from 'lucide-react';
 import VaultScene from '@/components/3d/VaultScene';
 import Navbar from '@/components/ui/Navbar';
@@ -19,6 +20,7 @@ import {
   performLogout,
   activateVideoSubscription
 } from '@/lib/authSession';
+import { springSmooth } from '@/lib/motionVariants';
 
 interface VaultAppProps {
   initialAlbumId?: string;
@@ -457,7 +459,12 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
   // 2. Continuous Stage
   return (
-    <main className="relative h-[100dvh] w-full bg-[#090a0f] overflow-hidden select-none">
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={springSmooth}
+      className="relative h-[100dvh] w-full bg-[#090a0f] overflow-hidden select-none"
+    >
       
       {/* Unified Continuous Stage with 3D Vault & Video Zone */}
       {albums.length > 0 && (
@@ -544,6 +551,6 @@ export default function VaultApp({ initialAlbumId }: VaultAppProps) {
 
       {/* Footer (Visible only in 3D Vault root, hidden in Audio Zone / Album player & Video Zone) */}
       {viewMode === 'vault' && activeZone !== 'video' && <Footer isFixed={true} />}
-    </main>
+    </motion.main>
   );
 }

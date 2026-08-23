@@ -1,25 +1,35 @@
 # 📌 CURRENT CHECKPOINT - HIDDEN MUSIC VAULT
 
-> **Thời gian cập nhật**: 23/08/2026 15:05 (GMT+7)  
+> **Thời gian cập nhật**: 23/08/2026 15:40 (GMT+7)  
 > **Nhánh hoạt động**: `main`  
-> **Trạng thái hệ thống**: Đã nâng cấp **Dual-Engine Streaming Architecture** (tích hợp **YouTube Audio Streaming Bridge** trực tiếp từ trình duyệt kết hợp **Vault Lossless Audio Controller** cho Cloudflare R2 / Supabase Storage). Khắc phục triệt để lỗi 503 resolver và 404 URL fallback. Đã sửa lỗi chồng lấn thanh điều hướng Navbar trên trang `/discover`. Xác thực **27/27 test suites PASS 100%** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
+> **Trạng thái hệ thống**: Đã hoàn tất nâng cấp **High Visual Impact & GenZ Cyber Deck Overhaul**: 1) AI Chuyên sâu tìm kiếm & đồng bộ Lyrics thời gian thực với AI Neural Timecoder; 2) Tái thiết kế Discovery Feed chuẩn GenZ, ẩn hoàn toàn tên nguồn thứ ba; 3) Trình phát video độc quyền Cyber Cinema Player; 4) Hệ thống Menu Context `...` chuẩn nền tảng nhạc số cao cấp trên mọi bìa đĩa và danh sách bài hát; 5) Dynamic Kinetic Ambient Aura sau đĩa than 3D Monolith. Xác thực **27/27 test suites PASS 100%** và `tsc --noEmit` đạt mã thoát 0 (zero errors).
 
 ---
 
 ## 🎯 1. CÁC HẠNG MỤC ĐÃ HOÀN TẤT & ĐÃ XÁC THỰC
 
-1. **Dual-Engine Streaming Architecture (`src/context/PlayerContext.tsx`)**:
-   - **Engine A (Vault Lossless)**: Thẻ `<audio>` với `crossOrigin="anonymous"` chịu trách nhiệm phát các bản thu Master FLAC/Lossless từ Cloudflare R2 và Supabase Storage với byte-range seeking chính xác.
-   - **Engine B (Global YouTube Audio Bridge)**: Tích hợp trình phát YouTube IFrame Engine ẩn bên trong ứng dụng, giải mã luồng âm thanh YouTube Music trực tiếp trên trình duyệt của người dùng, loại bỏ 100% lỗi `503 Service Unavailable` do cơ chế chặn bot của YouTube.
-   - **Đồng Bộ Hoá 120 FPS**: Vòng lặp cập nhật thời gian liên tục (`getCurrentTime`) và thời lượng (`getDuration`) đồng bộ hoàn toàn với thanh tua nhạc, hệ thống Visualizer và lời bài hát.
+1. **AI Chuyên Sâu Tìm Kiếm & Tự Động Đồng Bộ Lyrics (`/api/ytm/lyrics/route.ts` & `SyncedLyricsView.tsx`)**:
+   - Tích hợp Multi-Tier Engine (LRCLIB Exact Match, LRCLIB Fuzzy Search, LyricsOVH Multi-Language Bridge).
+   - Tích hợp thuật toán **AI Neural Timecoder**: Tự động phân tích nhịp điệu và phân bổ timestamp `[mm:ss.xx]` cho các văn bản lời bài hát thô, chuyển đổi thành karaoke chạy mượt mà theo thời gian thực.
+   - Bổ sung nút **"TÌM LỜI BẰNG AI"** một chạm trong giao diện `SyncedLyricsView.tsx`.
 
-2. **Khắc Phục Lỗi 404 URL Fallback (`src/lib/r2Storage.ts`)**:
-   - `normalizeMediaUrl`: Loại bỏ tiền tố `yt:` khỏi việc chuyển đổi sang miền CDN `media.postlain.com/yt:...`, ngăn chặn các yêu cầu mạng 404 không hợp lệ.
+2. **Tái Cấu Trúc Discovery Feed Chuẩn GenZ (`DiscoveryFeed.tsx` & `discover/page.tsx`)**:
+   - Ẩn hoàn toàn các tên nguồn thứ ba (YouTube, SoundCloud, Vault).
+   - Định hình phong cách Cyber-Deck với danh mục chuẩn hóa: `V-HOP & V-R&B` (TOP CHARTS), `CYBER MV 4K` (4K CINEMA), `UNDERGROUND REMIX` (NONSTOP), `GLOBAL TRENDS` (HOT 100), `NIGHT DRIVE & CHILL` (VIBE), `MASTER STUDIO ARCHIVE` (FLAC 24-BIT).
 
-3. **Sửa Lỗi Chồng Lấn Thanh Điều Hướng (`src/components/ui/Navbar.tsx`)**:
-   - Tự động ẩn nút `DISCOVERY FEED` khi người dùng đang ở đường dẫn `/discover`, tránh việc hiển thị thừa và gây chồng lấn tiêu đề trên thiết bị di động & máy tính bảng.
+3. **Trình Phát Video Riêng Độc Quyền (Custom Cyber Cinema Player)**:
+   - Triệt tiêu hoàn toàn thanh điều khiển và giao diện mặc định của YouTube.
+   - Tích hợp Cyber Header Bar (`4K ULTRA HD` badge, `TrackActionMenu`, nút đóng) và rạp chiếu phim video cinema 16:9 sắc nét.
 
-4. **Kiểm Thử Tự Động & CI/CD Integrity**:
+4. **Hệ Thống Menu Context `...` Chuẩn Nền Tảng Nhạc Số (`TrackActionMenu.tsx`)**:
+   - Thay thế toàn bộ các nút `+` rời rạc bằng nút `...` (MoreHorizontal / MoreVertical) trên mọi thẻ bài hát, video card, album card và player bars.
+   - Glassmorphism popup menu hỗ trợ: *Phát tiếp theo, Thêm vào hàng chờ, Yêu thích, Xem MV, Bắt đầu Radio mix, Xem Album, Sao chép liên kết*.
+
+5. **Nâng Cấp Thị Giác & Ambient Aura (`VaultScene.tsx` & `VaultApp.tsx`)**:
+   - Vầng hào quang Dynamic Kinetic Ambient Aura chuyển động và phát sáng theo nhịp điệu âm thanh phía sau đĩa than 3D Monolith.
+   - Bọc khung ứng dụng chính trong `motion.main` với hiệu ứng chuyển cảnh mượt mà.
+
+6. **Kiểm Thử Tự Động & CI/CD Integrity**:
    - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
    - `npm test`: **27/27 test suites PASSED 100%** (Audio DSP, Meyda, Beat Detection, Stream Endpoints, Safe Guards, No CORS Hijack).
 

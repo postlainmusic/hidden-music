@@ -126,22 +126,22 @@ export default function DiscoverPage() {
               {/* Eyebrow badge */}
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[10px] font-mono tracking-widest text-zinc-300 mb-3">
                 <Zap className="w-3 h-3 text-white" />
-                <span>POWERED BY YOUTUBE MUSIC + VAULT</span>
+                <span>POSTLAIN AUDIO ENGINE // CYBER DECK</span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-black uppercase font-cyber tracking-tight text-white mb-2 leading-none">
-                STREAMING HUB
+                DISCOVERY FEED
               </h1>
               <p className="text-[11px] sm:text-xs text-zinc-500 font-mono max-w-lg leading-relaxed">
-                Real-time music discovery — trending charts, new releases, mood playlists and exclusive vault recordings.
+                Không gian khám phá âm nhạc không giới hạn — bảng xếp hạng thịnh hành, bản phát hành mới, MV 4K và các bản thu phòng thu độc quyền.
               </p>
             </div>
 
             {/* Live status chip */}
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 flex-shrink-0 self-start sm:self-auto">
               <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
-              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
-                {ytmLoading ? 'LOADING...' : ytmFeed?.source === 'live' ? 'LIVE DATA' : ytmFeed ? 'CACHED DATA' : 'VAULT ONLY'}
+              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
+                {ytmLoading ? 'ĐANG TẢI...' : 'CYBER STREAM 120 FPS'}
               </span>
             </div>
           </div>

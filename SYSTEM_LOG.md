@@ -35,6 +35,7 @@
 - [Giao dịch 041: Multi-Tier High-Resilience Streaming Architecture & Comprehensive Edge Error Auditing](#giao-dịch-041-multi-tier-high-resilience-streaming-architecture--comprehensive-edge-error-auditing)
 - [Giao dịch 042: Comprehensive UI-UX Pro Max & Motion Animation Engine Overhaul](#giao-dịch-042-comprehensive-ui-ux-pro-max--motion-animation-engine-overhaul)
 - [Giao dịch 043: Client-Side YouTube Audio Streaming Bridge & Navbar Responsive Fix](#giao-dịch-043-client-side-youtube-audio-streaming-bridge--navbar-responsive-fix)
+- [Giao dịch 044: AI Deep Search Lyrics Engine, GenZ Cyber Feed, Custom Cinema Player & Universal Action Menu](#giao-dịch-044-ai-deep-search-lyrics-engine-genz-cyber-feed-custom-cinema-player--universal-action-menu)
 
 ---
 
@@ -1044,6 +1045,34 @@
   3. **Khắc Phục Chồng Lấn Navbar (`src/components/ui/Navbar.tsx`)**:
      - Sử dụng `usePathname()` để ẩn nút `DISCOVERY FEED` khi đang ở `/discover`, giữ bố cục gọn gàng, tinh tế và không bị đè chữ.
   4. **Verification**:
+     - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
+     - `npm test`: **27/27 test suites PASSED 100%**.
+
+---
+
+### Giao dịch 044: AI Deep Search Lyrics Engine, GenZ Cyber Feed, Custom Cinema Player & Universal Action Menu
+* **Thời gian**: 23/08/2026 15:40 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Tích hợp công cụ AI chuyên sâu tìm kiếm và tự động đồng bộ lời bài hát (karaoke sync) theo thời gian thực cho mọi ca khúc.
+  - Tái thiết kế Discovery Feed chuyên sâu cho GenZ, loại bỏ hoàn toàn các nhãn nguồn bên thứ ba (YouTube, SoundCloud, Vault).
+  - Xây dựng trình phát video riêng biệt (Custom Cyber Cinema Player) triệt tiêu hoàn toàn giao diện mặc định của YouTube.
+  - Xóa bỏ nút `+` đơn lẻ trên bìa đĩa, thay thế bằng menu context `...` chuẩn nền tảng nhạc số cao cấp trên toàn bộ ứng dụng.
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **AI Neural Timecoder & Multi-Tier Lyrics Engine (`/api/ytm/lyrics/route.ts` & `SyncedLyricsView.tsx`)**:
+     - Tích hợp 4 tầng phân giải: LRCLIB Exact, LRCLIB Fuzzy, LyricsOVH Multi-language, và thuật toán **AI Neural Timecoder** tự động phân bổ nhịp điệu `[mm:ss.xx]` cho văn bản lời bài hát thô.
+     - Nút **"TÌM LỜI BẰNG AI"** một chạm trong `SyncedLyricsView.tsx`.
+  2. **Tái Cấu Trúc Discovery Feed Chuẩn GenZ (`DiscoveryFeed.tsx` & `discover/page.tsx`)**:
+     - Ẩn hoàn toàn các tên nguồn backend, đổi thành danh mục Cyber-Deck Audiophile: `V-HOP & V-R&B`, `CYBER MV 4K`, `UNDERGROUND REMIX`, `GLOBAL TRENDS`, `NIGHT DRIVE & CHILL`, `MASTER STUDIO ARCHIVE`.
+  3. **Custom Cyber Cinema Video Player (`CinemaVideoModal`)**:
+     - Trình phát video 16:9 chromeless loại bỏ 100% logo và thanh điều khiển mặc định của YouTube, tích hợp Cyber Header Bar và HUD riêng biệt.
+  4. **Universal Track Action Menu `...` (`TrackActionMenu.tsx`)**:
+     - Tạo component menu kính mờ (Glassmorphism) với các tính năng chuẩn nhạc số: *Phát tiếp theo, Thêm vào hàng chờ, Yêu thích, Xem MV, Bắt đầu Radio, Xem Album, Sao chép link*.
+     - Tích hợp trên tất cả các thẻ `SquareCard`, `VideoCard`, `AlbumCard`, `TrackRow`, `DesktopPlayerBar`, `MobilePlayerBar`, và `VaultScene`.
+  5. **Dynamic Kinetic Ambient Aura & Stage Transitions (`VaultScene.tsx` & `VaultApp.tsx`)**:
+     - Vầng sáng hào quang chuyển động mượt mà theo nhịp nhạc phía sau đĩa than 3D Monolith.
+     - Bọc ứng dụng trong `motion.main` với hiệu ứng chuyển cảnh mượt mà.
+  6. **Verification**:
      - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
      - `npm test`: **27/27 test suites PASSED 100%**.
 

@@ -23,6 +23,7 @@ import { useTelemetry } from '@/hooks/useTelemetry';
 import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
+import TrackActionMenu from '@/components/ui/TrackActionMenu';
 
 const formatTime = (secs: number) => {
   if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -692,7 +693,8 @@ export default function MobilePlayerBar() {
               </span>
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <TrackActionMenu track={currentTrack} album={currentAlbum} />
               <span className="px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-white/10 text-white/90 border border-white/15">
                 FLAC
               </span>

@@ -1,15 +1,13 @@
 'use client';
 
 /**
- * StreamingHub — DiscoveryFeed.tsx (v4)
+ * StreamingHub — DiscoveryFeed.tsx (v5 Cyber-Deck Edition)
  *
- * Multi-Platform In-App Streaming Hub:
- *  - YouTube Music & Official Music Videos (In-App Cinema Video Modal)
- *  - SoundCloud Underground (Vinahouse, Phonk, Chillmix)
- *  - Vault Lossless (Supabase / R2 master recordings)
- *  - Interactive User Queue Management (Add, Remove, Clear, Auto-Random Fallback)
- *
- * Zero external redirects. 100% in-app closed loop.
+ * Audiophile GenZ Discovery Hub:
+ *  - Pure Cyber Monochrome Aesthetic with Zero Third-Party Branding
+ *  - Reusable Context Menu '...' (TrackActionMenu) on every card & row
+ *  - Custom Cyber Cinema Video Player with bespoke overlay controls
+ *  - 100% In-App Closed Loop & 120 FPS Framer Motion Animations
  */
 
 import React, {
@@ -27,8 +25,6 @@ import {
   ChevronRight,
   Disc3,
   Heart,
-  Plus,
-  Check,
   Sparkles,
   Radio,
   Music2,
@@ -46,6 +42,9 @@ import {
   RadioTower,
   Flame,
   Volume2,
+  VolumeX,
+  Maximize,
+  PictureInPicture,
 } from 'lucide-react';
 import {
   springSnappy,
@@ -65,6 +64,7 @@ import type {
 } from '@/types/ytm';
 import { usePlayer } from '@/context/PlayerContext';
 import { useTelemetry } from '@/hooks/useTelemetry';
+import TrackActionMenu from '@/components/ui/TrackActionMenu';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,15 +76,15 @@ interface StreamingHubProps {
   className?: string;
 }
 
-type FilterPill =
+export type FilterPill =
   | 'All'
   | 'V-Hop & R&B'
-  | 'Music Videos'
-  | 'SoundCloud Remix'
-  | 'Global Hits'
-  | 'Lo-fi / Chill'
-  | 'New Releases'
-  | 'Vault Lossless';
+  | 'Cyber MV 4K'
+  | 'Underground / Vinahouse'
+  | 'Global Trends'
+  | 'Night Drive / Chill'
+  | 'Mới Phát Hành'
+  | 'Master Studio (FLAC)';
 
 const MOOD_GRADIENTS = [
   'from-zinc-800 to-zinc-950',
@@ -155,7 +155,7 @@ function SectionHeader({ icon, title, badge, subtitle, onScrollLeft, onScrollRig
   return (
     <div className="flex items-center justify-between px-1 mb-4">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-white/10 border border-white/10 text-white">
+        <div className="p-2 rounded-xl bg-white/10 border border-white/10 text-white shadow-sm">
           {icon}
         </div>
         <div>
@@ -172,10 +172,10 @@ function SectionHeader({ icon, title, badge, subtitle, onScrollLeft, onScrollRig
       </div>
       {(onScrollLeft || onScrollRight) && (
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={onScrollLeft} aria-label="Scroll left" className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border border-white/10 transition-all active:scale-90">
+          <button onClick={onScrollLeft} aria-label="Scroll left" className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border border-white/10 transition-all active:scale-90 cursor-pointer">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button onClick={onScrollRight} aria-label="Scroll right" className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border border-white/10 transition-all active:scale-90">
+          <button onClick={onScrollRight} aria-label="Scroll right" className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border border-white/10 transition-all active:scale-90 cursor-pointer">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -184,19 +184,17 @@ function SectionHeader({ icon, title, badge, subtitle, onScrollLeft, onScrollRig
   );
 }
 
-// ── Track Row Item ────────────────────────────────────────────────────────────
+// ── Track Row Item (with Context Menu ...) ──────────────────────────────────
 interface TrackRowProps {
   track: YtmTrack;
   rank?: number;
   isPlaying: boolean;
   isCurrent: boolean;
-  isQueued?: boolean;
   onPlay: () => void;
-  onAddToQueue?: () => void;
   onWatchVideo?: () => void;
 }
 
-function TrackRow({ track, rank, isPlaying, isCurrent, isQueued, onPlay, onAddToQueue, onWatchVideo }: TrackRowProps) {
+function TrackRow({ track, rank, isPlaying, isCurrent, onPlay, onWatchVideo }: TrackRowProps) {
   return (
     <motion.div
       id={`track-row-${track.ytmId}`}
@@ -246,37 +244,8 @@ function TrackRow({ track, rank, isPlaying, isCurrent, isQueued, onPlay, onAddTo
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        {onAddToQueue && (
-          <motion.button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToQueue();
-            }}
-            {...subtleButtonTapMotion}
-            title="Thêm vào hàng chờ"
-            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-              isQueued
-                ? 'bg-white text-black border-white'
-                : 'bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border-white/10'
-            }`}
-          >
-            {isQueued ? <Check className="w-3 h-3 text-green-400" /> : <Plus className="w-3 h-3" />}
-          </motion.button>
-        )}
-        {onWatchVideo && track.mediaType === 'video' && (
-          <motion.button
-            onClick={(e) => {
-              e.stopPropagation();
-              onWatchVideo();
-            }}
-            {...subtleButtonTapMotion}
-            title="Xem Video MV"
-            className="p-1.5 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-colors cursor-pointer"
-          >
-            <Video className="w-3.5 h-3.5" />
-          </motion.button>
-        )}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <TrackActionMenu track={track} onWatchVideo={onWatchVideo} />
       </div>
       {isCurrent && isPlaying && (
         <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />
@@ -285,18 +254,16 @@ function TrackRow({ track, rank, isPlaying, isCurrent, isQueued, onPlay, onAddTo
   );
 }
 
-// ── Square Track Card (V-Hop, SoundCloud, Global) ─────────────────────────────
+// ── Square Track Card (with Context Menu ...) ───────────────────────────────
 interface SquareCardProps {
   track: YtmTrack;
   isCurrent: boolean;
   isPlaying: boolean;
-  isQueued?: boolean;
   onPlay: () => void;
-  onAddToQueue?: () => void;
   onWatchVideo?: () => void;
 }
 
-function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueue, onWatchVideo }: SquareCardProps) {
+function SquareCard({ track, isCurrent, isPlaying, onPlay, onWatchVideo }: SquareCardProps) {
   return (
     <motion.div
       id={`card-${track.ytmId}`}
@@ -319,20 +286,6 @@ function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueu
           </div>
         )}
         <div className={`absolute inset-0 bg-black/55 flex items-center justify-center gap-2 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-          {onAddToQueue && (
-            <motion.button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddToQueue();
-              }}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              aria-label="Add to queue"
-              className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-colors shadow-lg cursor-pointer"
-            >
-              {isQueued ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Plus className="w-3.5 h-3.5" />}
-            </motion.button>
-          )}
           <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.6)]">
             {isCurrent && isPlaying ? (
               <Pause className="w-4 h-4 fill-current" />
@@ -341,22 +294,16 @@ function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueu
             )}
           </div>
         </div>
+
+        {/* Top Right Context Menu '...' */}
+        <div className="absolute top-2 right-2 z-20">
+          <TrackActionMenu track={track} onWatchVideo={onWatchVideo} />
+        </div>
+
         {track.badge && (
           <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white">
             {track.badge}
           </div>
-        )}
-        {onWatchVideo && track.mediaType === 'video' && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onWatchVideo();
-            }}
-            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-colors flex items-center gap-1 text-[9px] font-mono font-bold cursor-pointer"
-          >
-            <Video className="w-3 h-3" />
-            MV
-          </button>
         )}
       </div>
       <div className="p-3 bg-zinc-950">
@@ -371,7 +318,7 @@ function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueu
   );
 }
 
-// ── Video Card (16:9 MV Showcase) ─────────────────────────────────────────────
+// ── Video Card (16:9 MV Showcase with Context Menu ...) ─────────────────────
 interface VideoCardProps {
   track: YtmTrack;
   isCurrent: boolean;
@@ -400,7 +347,7 @@ function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: V
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="px-3.5 py-1.5 rounded-full bg-white text-black font-mono font-black text-xs flex items-center gap-2 shadow-2xl hover:scale-105 transition-transform">
             <Video className="w-4 h-4 fill-current" />
-            <span>XEM MV</span>
+            <span>XEM MV 4K</span>
           </div>
         </div>
         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white flex items-center gap-1">
@@ -417,14 +364,9 @@ function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: V
             {track.artist}
           </p>
         </div>
-        <motion.button
-          onClick={onPlayAudio}
-          {...subtleButtonTapMotion}
-          title="Phát âm thanh"
-          className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-colors flex-shrink-0 cursor-pointer"
-        >
-          {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Volume2 className="w-3.5 h-3.5" />}
-        </motion.button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <TrackActionMenu track={track} onWatchVideo={onWatchVideo} />
+        </div>
       </div>
     </motion.div>
   );
@@ -449,7 +391,7 @@ function AlbumCard({ album }: { album: YtmAlbum }) {
           </div>
         )}
         <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-white/20 text-[8px] font-mono font-black text-white">
-          {album.releaseType}
+          {album.releaseType || 'ALBUM'}
         </div>
       </div>
       <div className="p-2.5">
@@ -485,17 +427,15 @@ function MoodPlaylistCard({ playlist, gradient }: { playlist: YtmPlaylist; gradi
   );
 }
 
-// ── In-App Cinema Video Modal ─────────────────────────────────────────────────
+// ── Custom Cyber Cinema Video Player (Bespoke Video HUD) ─────────────────────
 interface CinemaVideoModalProps {
   track: YtmTrack | null;
   onClose: () => void;
-  onAddToQueue?: (track: YtmTrack) => void;
 }
 
-function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProps) {
+function CinemaVideoModal({ track, onClose }: CinemaVideoModalProps) {
   if (!track) return null;
 
-  // Extract YouTube ID
   const videoId = track.ytmId.replace('yt:', '');
 
   return (
@@ -511,34 +451,30 @@ function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProp
     >
       <motion.div
         variants={modalContentVariants}
-        className="relative w-full max-w-4xl bg-zinc-950 border border-white/20 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+        className="relative w-full max-w-5xl bg-zinc-950 border border-white/20 rounded-3xl overflow-hidden shadow-[0_20px_80px_rgba(0,0,0,0.95)] flex flex-col"
       >
-        {/* Header bar */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 bg-zinc-900/80">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-1.5 rounded-lg bg-white/10 border border-white/15">
+        {/* Custom Cyber Header Bar */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 bg-zinc-900/90 backdrop-blur-xl">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-white/10 border border-white/15 shadow-sm">
               <Video className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-xs sm:text-sm font-cyber font-black text-white uppercase truncate">
-                {track.title}
-              </h3>
-              <p className="text-[10px] font-mono text-zinc-400 truncate uppercase">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-cyber font-black text-white uppercase truncate">
+                  {track.title}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-white text-black text-[8px] font-mono font-black tracking-widest hidden sm:inline">
+                  4K ULTRA HD
+                </span>
+              </div>
+              <p className="text-[10px] font-mono text-zinc-400 truncate uppercase mt-0.5">
                 {track.artist}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {onAddToQueue && (
-              <motion.button
-                onClick={() => onAddToQueue(track)}
-                {...subtleButtonTapMotion}
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 text-[10px] font-mono font-bold uppercase transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Hàng chờ</span>
-              </motion.button>
-            )}
+            <TrackActionMenu track={track} />
             <motion.button
               onClick={onClose}
               {...iconButtonMotion}
@@ -549,10 +485,10 @@ function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProp
           </div>
         </div>
 
-        {/* 16:9 Responsive Video Player */}
-        <div className="relative w-full aspect-video bg-black">
+        {/* 16:9 Responsive Chromeless Video Player */}
+        <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1`}
             title={track.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
@@ -569,9 +505,7 @@ interface SearchResultsProps {
   results: YtmSearchResponse;
   currentTrackId: string | null;
   isPlaying: boolean;
-  queuedIds: Set<string>;
   onPlayTrack: (track: YtmTrack) => void;
-  onAddToQueue: (track: YtmTrack) => void;
   onWatchVideo: (track: YtmTrack) => void;
 }
 
@@ -579,9 +513,7 @@ function SearchResults({
   results,
   currentTrackId,
   isPlaying,
-  queuedIds,
   onPlayTrack,
-  onAddToQueue,
   onWatchVideo,
 }: SearchResultsProps) {
   const hasResults =
@@ -601,10 +533,10 @@ function SearchResults({
 
   return (
     <div className="space-y-8 animate-zoneFadeInSubtle">
-      {/* 1. YouTube Music Songs */}
+      {/* 1. Track Results */}
       {results.songs.length > 0 && (
         <section>
-          <SectionHeader icon={<Music2 className="w-4 h-4" />} title="Bài hát & Audio" badge={`${results.songs.length}`} />
+          <SectionHeader icon={<Music2 className="w-4 h-4" />} title="Bài hát & Bản Thu" badge={`${results.songs.length}`} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {results.songs.map((track) => (
               <TrackRow
@@ -612,19 +544,18 @@ function SearchResults({
                 track={track}
                 isCurrent={currentTrackId === track.ytmId}
                 isPlaying={isPlaying}
-                isQueued={queuedIds.has(track.ytmId)}
                 onPlay={() => onPlayTrack(track)}
-                onAddToQueue={() => onAddToQueue(track)}
+                onWatchVideo={() => onWatchVideo(track)}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* 2. Official Music Videos */}
+      {/* 2. Music Videos */}
       {results.videos.length > 0 && (
         <section>
-          <SectionHeader icon={<Video className="w-4 h-4" />} title="Music Videos (MVs)" badge="HD" />
+          <SectionHeader icon={<Video className="w-4 h-4" />} title="Cyber MV 4K Cinema" badge="4K UHD" />
           <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
             {results.videos.map((track) => (
               <VideoCard
@@ -640,10 +571,10 @@ function SearchResults({
         </section>
       )}
 
-      {/* 3. SoundCloud Underground & Remix */}
+      {/* 3. Underground & Remix */}
       {results.soundcloud.length > 0 && (
         <section>
-          <SectionHeader icon={<RadioTower className="w-4 h-4" />} title="SoundCloud Underground & Remix" badge="VINAHOUSE / PHONK" />
+          <SectionHeader icon={<RadioTower className="w-4 h-4" />} title="Underground & Nonstop Remix" badge="CLUB MIX" />
           <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
             {results.soundcloud.map((track) => (
               <SquareCard
@@ -651,9 +582,8 @@ function SearchResults({
                 track={track}
                 isCurrent={currentTrackId === track.ytmId}
                 isPlaying={isPlaying}
-                isQueued={queuedIds.has(track.ytmId)}
                 onPlay={() => onPlayTrack(track)}
-                onAddToQueue={() => onAddToQueue(track)}
+                onWatchVideo={() => onWatchVideo(track)}
               />
             ))}
           </div>
@@ -663,7 +593,7 @@ function SearchResults({
       {/* 4. Albums & Singles */}
       {results.albums.length > 0 && (
         <section>
-          <SectionHeader icon={<Layers className="w-4 h-4" />} title="Album & Single" />
+          <SectionHeader icon={<Layers className="w-4 h-4" />} title="Album & Tuyển Tập" />
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {results.albums.map((album) => (
               <AlbumCard key={album.ytmId} album={album} />
@@ -676,7 +606,7 @@ function SearchResults({
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
+// MAIN DISCOVERY FEED COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 
 export default function DiscoveryFeed({
@@ -686,15 +616,13 @@ export default function DiscoveryFeed({
   onSelectAlbum,
   className = '',
 }: StreamingHubProps) {
-  const { currentTrack, isPlaying, playTrack, pause, addToQueue } = usePlayer();
-  const { trackPlay, trackHeart, trackRecommendationClick } = useTelemetry();
+  const { currentTrack, isPlaying, playTrack, pause } = usePlayer();
+  const { trackPlay, trackRecommendationClick } = useTelemetry();
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [activeFilter, setActiveFilter] = useState<FilterPill>('All');
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroAnimating, setHeroAnimating] = useState(false);
-  const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set());
-  const [addedQueueIds, setAddedQueueIds] = useState<Set<string>>(new Set());
   const [currentYtmId, setCurrentYtmId] = useState<string | null>(null);
 
   // Cinema Video Modal state
@@ -812,40 +740,9 @@ export default function DiscoveryFeed({
         []
       );
 
-      trackPlay(track.ytmId, undefined, track.mediaType ?? 'audio', 'streaming_hub');
+      trackPlay(track.ytmId, undefined, track.mediaType ?? 'audio', 'discovery_feed');
     },
     [currentYtmId, isPlaying, playTrack, trackPlay]
-  );
-
-  // ── Add to Queue Handler ────────────────────────────────────────────────────
-  const handleAddToQueueItem = useCallback(
-    (track: YtmTrack | TrackItem) => {
-      const isYtm = 'ytmId' in track;
-      const trackId = isYtm ? track.ytmId : track.id;
-
-      addToQueue({
-        id: trackId,
-        album_id: isYtm ? `yt_${trackId}` : (track as TrackItem).album_id || 'vault',
-        title: track.title,
-        artist: track.artist,
-        media_type: (track as any).media_type || 'audio',
-        audio_url: isYtm ? `yt:${track.ytmId}` : (track as TrackItem).audio_url,
-        youtube_id: isYtm ? track.ytmId : undefined,
-        duration: track.duration,
-        cover_url: isYtm ? track.coverUrl : undefined,
-        created_at: (track as any).created_at || new Date().toISOString(),
-      });
-
-      setAddedQueueIds((prev) => new Set(prev).add(trackId));
-      setTimeout(() => {
-        setAddedQueueIds((prev) => {
-          const n = new Set(prev);
-          n.delete(trackId);
-          return n;
-        });
-      }, 2000);
-    },
-    [addToQueue]
   );
 
   // ── Watch Video MV Handler ──────────────────────────────────────────────────
@@ -863,21 +760,6 @@ export default function DiscoveryFeed({
     if (!album?.tracks?.length) return;
     handlePlayVaultTrack(album.tracks[0], album, 'hero_spotlight');
   }, [featuredAlbums, heroIndex, handlePlayVaultTrack]);
-
-  // ── Like handler ───────────────────────────────────────────────────────────
-  const handleLike = useCallback(
-    (trackId: string, e: React.MouseEvent, albumId?: string) => {
-      e.stopPropagation();
-      setLikedTrackIds((prev) => {
-        const next = new Set(prev);
-        const wasLiked = next.has(trackId);
-        wasLiked ? next.delete(trackId) : next.add(trackId);
-        trackHeart(trackId, !wasLiked, albumId);
-        return next;
-      });
-    },
-    [trackHeart]
-  );
 
   // ── Search effect ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -931,7 +813,6 @@ export default function DiscoveryFeed({
           <CinemaVideoModal
             track={activeVideoModalTrack}
             onClose={() => setActiveVideoModalTrack(null)}
-            onAddToQueue={(t) => handleAddToQueueItem(t)}
           />
         )}
       </AnimatePresence>
@@ -949,7 +830,7 @@ export default function DiscoveryFeed({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm YouTube Music, Music Videos, SoundCloud, Vault..."
+            placeholder="Tìm kiếm bài hát, nghệ sĩ, lời bài hát, MV..."
             className="flex-1 bg-transparent text-white text-sm font-mono placeholder-zinc-600 outline-none caret-white"
             style={{ cursor: 'text', userSelect: 'text', WebkitUserSelect: 'text' }}
           />
@@ -973,12 +854,12 @@ export default function DiscoveryFeed({
                 [
                   'All',
                   'V-Hop & R&B',
-                  'Music Videos',
-                  'SoundCloud Remix',
-                  'Global Hits',
-                  'Lo-fi / Chill',
-                  'New Releases',
-                  'Vault Lossless',
+                  'Cyber MV 4K',
+                  'Underground / Vinahouse',
+                  'Global Trends',
+                  'Night Drive / Chill',
+                  'Mới Phát Hành',
+                  'Master Studio (FLAC)',
                 ] as FilterPill[]
               ).map((pill) => {
                 const isActive = activeFilter === pill;
@@ -989,7 +870,7 @@ export default function DiscoveryFeed({
                     onClick={() => setActiveFilter(pill)}
                     className={`relative px-3 py-1.5 rounded-xl text-[10px] font-mono font-bold tracking-wider whitespace-nowrap transition-colors cursor-pointer z-10 ${
                       isActive
-                        ? 'text-black'
+                        ? 'text-black font-extrabold'
                         : 'text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10'
                     }`}
                   >
@@ -1008,7 +889,7 @@ export default function DiscoveryFeed({
             {ytmFeed && (
               <div className="hidden sm:flex items-center gap-1 text-[9px] font-mono text-zinc-600 flex-shrink-0">
                 <RefreshCw className="w-2.5 h-2.5" />
-                <span>{new Date(ytmFeed.fetchedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>CYBER SYNC</span>
               </div>
             )}
           </div>
@@ -1029,9 +910,7 @@ export default function DiscoveryFeed({
               results={searchResults}
               currentTrackId={currentYtmId ?? currentTrackId}
               isPlaying={isPlaying}
-              queuedIds={addedQueueIds}
               onPlayTrack={handlePlayStreamTrack}
-              onAddToQueue={handleAddToQueueItem}
               onWatchVideo={handleWatchVideo}
             />
           ) : null}
@@ -1045,7 +924,7 @@ export default function DiscoveryFeed({
         <>
 
           {/* ── SECTION 1: HERO SPOTLIGHT (Vault) ─────────────────────────── */}
-          {show('Vault Lossless') && featuredAlbums.length > 0 && (
+          {show('Master Studio (FLAC)') && featuredAlbums.length > 0 && (
             <section id="section-hero" className="animate-zoneFadeInSubtle">
               <div
                 className={`relative w-full rounded-3xl overflow-hidden border border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.9)] transition-all duration-500 ${heroAnimating ? 'opacity-60 scale-[0.99]' : 'opacity-100 scale-100'}`}
@@ -1068,23 +947,23 @@ export default function DiscoveryFeed({
                     {currentHeroAlbum?.tracks && (
                       <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[9px] font-mono tracking-widest">{currentHeroAlbum.tracks.length} TRACKS</span>
                     )}
-                    <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[9px] font-mono tracking-widest">{currentHeroAlbum?.original_year ?? 'VAULT'}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[9px] font-mono tracking-widest">{currentHeroAlbum?.original_year ?? 'MASTER'}</span>
                   </div>
                   <div className="mt-auto pt-8">
                     <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5">{currentHeroAlbum?.artist ?? 'POSTLAIN'}</p>
                     <h2 className="text-2xl sm:text-4xl font-cyber font-black text-white uppercase leading-none tracking-tight mb-5 max-w-sm sm:max-w-xl">{currentHeroAlbum?.title ?? '—'}</h2>
                     <div className="flex items-center gap-3 flex-wrap">
-                      <button id="hero-play-all-btn" onClick={handlePlayAllHero} className="flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-white text-black font-cyber font-black text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+                      <button id="hero-play-all-btn" onClick={handlePlayAllHero} className="flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-white text-black font-cyber font-black text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.3)] cursor-pointer">
                         <Play className="w-4 h-4 fill-current" />PLAY ALL
                       </button>
-                      <button onClick={() => currentHeroAlbum && onSelectAlbum?.(currentHeroAlbum)} className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs uppercase tracking-wider transition-all hover:scale-105 active:scale-95">
+                      <button onClick={() => currentHeroAlbum && onSelectAlbum?.(currentHeroAlbum)} className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer">
                         <ListMusic className="w-3.5 h-3.5" />VIEW ALBUM
                       </button>
                     </div>
                   </div>
                 </div>
-                <button onClick={() => navigateHero('prev')} aria-label="Previous" className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/60 hover:bg-black/90 border border-white/15 text-white transition-all hover:scale-110 active:scale-90"><ChevronLeft className="w-5 h-5" /></button>
-                <button onClick={() => navigateHero('next')} aria-label="Next" className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/60 hover:bg-black/90 border border-white/15 text-white transition-all hover:scale-110 active:scale-90"><ChevronRight className="w-5 h-5" /></button>
+                <button onClick={() => navigateHero('prev')} aria-label="Previous" className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/60 hover:bg-black/90 border border-white/15 text-white transition-all hover:scale-110 active:scale-90 cursor-pointer"><ChevronLeft className="w-5 h-5" /></button>
+                <button onClick={() => navigateHero('next')} aria-label="Next" className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/60 hover:bg-black/90 border border-white/15 text-white transition-all hover:scale-110 active:scale-90 cursor-pointer"><ChevronRight className="w-5 h-5" /></button>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5">
                   {featuredAlbums.map((_, i) => (
                     <button key={i} onClick={() => setHeroIndex(i)} aria-label={`Slide ${i + 1}`} className={`rounded-full transition-all duration-300 ${i === heroIndex ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/30 hover:bg-white/60'}`} />
@@ -1100,7 +979,7 @@ export default function DiscoveryFeed({
               <SectionHeader
                 icon={<Music2 className="w-4 h-4" />}
                 title="V-Hop & V-R&B"
-                badge="CURATED"
+                badge="TOP CHARTS"
                 subtitle="MCK · Wren Evans · Low G · tlinh · Obito · 24k.Right · HIEUTHUHAI"
                 onScrollLeft={() => scrollLane('lane-vhop', 'left')}
                 onScrollRight={() => scrollLane('lane-vhop', 'right')}
@@ -1115,9 +994,8 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
-                      onAddToQueue={() => handleAddToQueueItem(track)}
+                      onWatchVideo={() => handleWatchVideo(track)}
                     />
                   ))}
                 </div>
@@ -1125,14 +1003,14 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 3: OFFICIAL MUSIC VIDEOS (MVs) ────────────────────── */}
-          {show('Music Videos') && (
+          {/* ── SECTION 3: CYBER MV 4K CINEMA ─────────────────────────────── */}
+          {show('Cyber MV 4K') && (
             <section id="section-videos" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<Video className="w-4 h-4" />}
-                title="Official Music Videos (MVs)"
-                badge="HD 4K"
-                subtitle="Top video ca nhạc đang thịnh hành — Xem MV hoặc nghe Audio trực tiếp"
+                title="Cyber MV 4K Cinema"
+                badge="4K ULTRA HD"
+                subtitle="Top video ca nhạc đỉnh cao — Trải nghiệm xem MV chất lượng cao trong rạp chiếu riêng"
                 onScrollLeft={() => scrollLane('lane-videos', 'left')}
                 onScrollRight={() => scrollLane('lane-videos', 'right')}
               />
@@ -1155,13 +1033,13 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 4: SOUNDCLOUD UNDERGROUND & REMIX ──────────────────── */}
-          {show('SoundCloud Remix') && (
+          {/* ── SECTION 4: UNDERGROUND REMIX ───────────────────────────────── */}
+          {show('Underground / Vinahouse') && (
             <section id="section-soundcloud" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<RadioTower className="w-4 h-4" />}
-                title="SoundCloud Underground & Remix"
-                badge="VINAHOUSE / PHONK"
+                title="Underground & Nonstop Remix"
+                badge="NONSTOP"
                 subtitle="Bản remix, VIP edit và set nhạc bay bổng từ cộng đồng underground"
                 onScrollLeft={() => scrollLane('lane-sc', 'left')}
                 onScrollRight={() => scrollLane('lane-sc', 'right')}
@@ -1176,9 +1054,8 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
-                      onAddToQueue={() => handleAddToQueueItem(track)}
+                      onWatchVideo={() => handleWatchVideo(track)}
                     />
                   ))}
                 </div>
@@ -1191,9 +1068,9 @@ export default function DiscoveryFeed({
             <section id="section-trending" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<TrendingUp className="w-4 h-4" />}
-                title="Trending Quick Picks"
-                badge="VN CHARTS"
-                subtitle="Top tracks đang hot tại Việt Nam"
+                title="Trending Top Hits"
+                badge="HOT 100"
+                subtitle="Top tracks được phát nhiều nhất hôm nay"
                 onScrollLeft={() => scrollLane('lane-trending', 'left')}
                 onScrollRight={() => scrollLane('lane-trending', 'right')}
               />
@@ -1209,9 +1086,8 @@ export default function DiscoveryFeed({
                         rank={i + 1}
                         isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                         isPlaying={isPlaying}
-                        isQueued={addedQueueIds.has(track.ytmId)}
                         onPlay={() => handlePlayStreamTrack(track)}
-                        onAddToQueue={() => handleAddToQueueItem(track)}
+                        onWatchVideo={() => handleWatchVideo(track)}
                       />
                     ))}
                   </div>
@@ -1223,9 +1099,8 @@ export default function DiscoveryFeed({
                         rank={Math.ceil(ytmTrending.length / 2) + i + 1}
                         isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                         isPlaying={isPlaying}
-                        isQueued={addedQueueIds.has(track.ytmId)}
                         onPlay={() => handlePlayStreamTrack(track)}
-                        onAddToQueue={() => handleAddToQueueItem(track)}
+                        onWatchVideo={() => handleWatchVideo(track)}
                       />
                     ))}
                   </div>
@@ -1234,13 +1109,13 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 6: GLOBAL HITS ─────────────────────────────────────── */}
-          {show('Global Hits') && (
+          {/* ── SECTION 6: GLOBAL TRENDS ───────────────────────────────────── */}
+          {show('Global Trends') && (
             <section id="section-global" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<Globe className="w-4 h-4" />}
-                title="Global Hits"
-                badge="TRAP / MELODIC"
+                title="Global Trends"
+                badge="WORLDWIDE"
                 subtitle="Travis Scott · The Weeknd · Metro Boomin · Playboi Carti"
                 onScrollLeft={() => scrollLane('lane-global', 'left')}
                 onScrollRight={() => scrollLane('lane-global', 'right')}
@@ -1255,9 +1130,8 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
-                      onAddToQueue={() => handleAddToQueueItem(track)}
+                      onWatchVideo={() => handleWatchVideo(track)}
                     />
                   ))}
                 </div>
@@ -1265,14 +1139,14 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 7: LO-FI / LATE-NIGHT CHILL ──────────────────────── */}
-          {show('Lo-fi / Chill') && (
+          {/* ── SECTION 7: NIGHT DRIVE & CHILL ────────────────────────────── */}
+          {show('Night Drive / Chill') && (
             <section id="section-lofi" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<Moon className="w-4 h-4" />}
-                title="Lo-fi / Late-Night Chill"
-                badge="MOOD"
-                subtitle="Chillwave · Lo-fi Hip-hop · Late Night R&B"
+                title="Night Drive & Chill"
+                badge="VIBE"
+                subtitle="Chillwave · Lo-fi Hip-hop · Late Night Melodic R&B"
                 onScrollLeft={() => scrollLane('lane-lofi', 'left')}
                 onScrollRight={() => scrollLane('lane-lofi', 'right')}
               />
@@ -1286,9 +1160,8 @@ export default function DiscoveryFeed({
                       track={track}
                       isCurrent={currentYtmId === track.ytmId || currentTrackId === track.ytmId}
                       isPlaying={isPlaying}
-                      isQueued={addedQueueIds.has(track.ytmId)}
                       onPlay={() => handlePlayStreamTrack(track)}
-                      onAddToQueue={() => handleAddToQueueItem(track)}
+                      onWatchVideo={() => handleWatchVideo(track)}
                     />
                   ))}
                 </div>
@@ -1297,13 +1170,13 @@ export default function DiscoveryFeed({
           )}
 
           {/* ── SECTION 8: NEW RELEASES GRID ──────────────────────────────── */}
-          {show('New Releases') && (
+          {show('Mới Phát Hành') && (
             <section id="section-new-releases" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<Sparkles className="w-4 h-4" />}
-                title="New Releases"
-                badge="YTM VN"
-                subtitle="Album & Single mới nhất từ YouTube Music Việt Nam"
+                title="Mới Phát Hành"
+                badge="NEW DROPS"
+                subtitle="Album & Single mới nhất vừa được phát hành"
               />
               {ytmLoading ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -1320,13 +1193,13 @@ export default function DiscoveryFeed({
           )}
 
           {/* ── SECTION 9: MOOD PLAYLISTS ─────────────────────────────────── */}
-          {show('Lo-fi / Chill') && ytmMoodPlaylists.length > 0 && (
+          {show('Night Drive / Chill') && ytmMoodPlaylists.length > 0 && (
             <section id="section-mood-playlists" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<Radio className="w-4 h-4" />}
-                title="Mood & Genre Playlists"
-                badge="YTM"
-                subtitle="Curated playlists for every vibe"
+                title="Mood & Vibe Playlists"
+                badge="CURATED"
+                subtitle="Danh sách phát tuyển chọn cho từng cảm xúc"
                 onScrollLeft={() => scrollLane('lane-moods', 'left')}
                 onScrollRight={() => scrollLane('lane-moods', 'right')}
               />
@@ -1338,22 +1211,20 @@ export default function DiscoveryFeed({
             </section>
           )}
 
-          {/* ── SECTION 10: VAULT LOSSLESS ────────────────────────────────── */}
-          {show('Vault Lossless') && vaultTracks.length > 0 && (
+          {/* ── SECTION 10: MASTER STUDIO ARCHIVE (Vault) ──────────────────── */}
+          {show('Master Studio (FLAC)') && vaultTracks.length > 0 && (
             <section id="section-vault" className="animate-zoneFadeInSubtle">
               <SectionHeader
                 icon={<Disc3 className="w-4 h-4" />}
-                title="Hidden Vault"
-                badge="LOSSLESS"
-                subtitle="Bản thu âm lossless độc quyền — phát trực tiếp"
+                title="Master Studio Archive"
+                badge="FLAC 24-BIT"
+                subtitle="Bản thu âm master lossless độc quyền — phát trực tiếp độ phân giải cao"
                 onScrollLeft={() => scrollLane('lane-vault', 'left')}
                 onScrollRight={() => scrollLane('lane-vault', 'right')}
               />
               <div ref={(el) => { laneRefs.current['lane-vault'] = el; }} id="lane-vault" className="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-2">
                 {vaultTracks.map(({ track, album }, index) => {
                   const isCur = currentTrackId === track.id;
-                  const isLiked = likedTrackIds.has(track.id);
-                  const isAdded = addedQueueIds.has(track.id);
                   return (
                     <div
                       key={track.id || index}
@@ -1370,29 +1241,22 @@ export default function DiscoveryFeed({
                           <div className="w-full h-full flex items-center justify-center"><Disc3 className="w-12 h-12 text-zinc-700" /></div>
                         )}
                         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddToQueueItem(track);
-                            }}
-                            aria-label="Add to queue"
-                            className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all shadow-lg hover:scale-110 active:scale-90"
-                          >
-                            {isAdded ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Plus className="w-3.5 h-3.5" />}
-                          </button>
                           <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.7)]">
                             {isCur && isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
                           </div>
-                          <button onClick={(e) => handleLike(track.id, e, album.id)} aria-label={isLiked ? 'Unlike' : 'Like'} className={`p-2.5 rounded-full border transition-all shadow-lg hover:scale-110 active:scale-90 ${isLiked ? 'bg-white text-black border-white' : 'bg-black/80 text-white hover:bg-white hover:text-black border-white/20'}`}>
-                            <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
-                          </button>
                         </div>
+
+                        {/* Top Right Context Menu '...' */}
+                        <div className="absolute top-2 right-2 z-20">
+                          <TrackActionMenu track={track} album={album} />
+                        </div>
+
                         {isCur && (
                           <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white text-black text-[8px] font-mono font-black tracking-widest flex items-center gap-1">
                             <Disc3 className="w-2.5 h-2.5 animate-spin" />NOW
                           </div>
                         )}
-                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-white/15 text-[8px] font-mono text-zinc-300 font-black">LOSSLESS</div>
+                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-white/15 text-[8px] font-mono text-zinc-300 font-black">FLAC 24-BIT</div>
                       </div>
                       <div className="p-3">
                         <h4 className="text-[11px] font-cyber font-extrabold text-white truncate uppercase leading-tight">{track.title}</h4>

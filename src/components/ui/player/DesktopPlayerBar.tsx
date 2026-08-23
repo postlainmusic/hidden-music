@@ -26,6 +26,7 @@ import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { BeatVisualizer } from '@/components/visualizer/BeatVisualizer';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
+import TrackActionMenu from '@/components/ui/TrackActionMenu';
 
 const formatTime = (secs: number) => {
   if (isNaN(secs) || !isFinite(secs) || secs < 0) return '0:00';
@@ -912,6 +913,9 @@ export default function DesktopPlayerBar() {
               >
                 <ListMusic className="w-3.5 h-3.5" />
               </button>
+
+              {/* Context Menu '...' */}
+              <TrackActionMenu track={currentTrack} album={currentAlbum} />
 
               {/* Volume Slider */}
               <div
