@@ -18,8 +18,6 @@ import {
   SkipForward,
   Headphones,
   Loader2,
-  Smartphone,
-  Download,
 } from 'lucide-react';
 import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
@@ -170,7 +168,6 @@ export default function VaultScene({
   const [isHovered, setIsHovered] = useState(false);
   const [albumTab, setAlbumTab] = useState<'tracks' | 'comments'>('tracks');
   const [commentsCount, setCommentsCount] = useState(0);
-  const [isStandaloneApp, setIsStandaloneApp] = useState(true);
 
   // Video Zone States
   const [selectedVideoTrack, setSelectedVideoTrack] = useState<TrackItem | null>(null);
@@ -191,18 +188,6 @@ export default function VaultScene({
 
   const isDetail = viewMode === 'album';
   const isVideoZone = activeZone === 'video';
-
-  // Kiểm tra môi trường để chỉ hiện nút Tải APK trên Web trình duyệt
-  useEffect(() => {
-    const isApp =
-      typeof window !== 'undefined' &&
-      (window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone ||
-        document.referrer.includes('android-app://') ||
-        (window as any).Capacitor !== undefined);
-
-    setIsStandaloneApp(Boolean(isApp));
-  }, []);
 
   const videoStreamUrl = useMemo(() => {
     if (!selectedVideoTrack?.video_url) return '';
@@ -582,18 +567,6 @@ export default function VaultScene({
 
             {/* ACTION CONTROLS */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {!isStandaloneApp && (
-                <a
-                  href="https://github.com/postlainmusic/hidden-music/releases/latest/download/hidden-music.apk"
-                  download="HiddenMusic.apk"
-                  title="Tải ứng dụng Android Native (.APK)"
-                  className="hidden xs:flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 font-mono text-[9px] uppercase tracking-wider font-bold transition-all"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>APK APP</span>
-                </a>
-              )}
-
               {/* AUDIO ZONE RETURN BUTTON */}
               <button
                 onClick={() => {
@@ -1106,26 +1079,12 @@ export default function VaultScene({
               >
                 <Shuffle className="w-4 h-4" />
               </button>
-
-              {/* NÚT TẢI APP ANDROID NATIVE APK */}
-              {!isStandaloneApp && (
-                <a
-                  href="https://github.com/postlainmusic/hidden-music/releases/latest/download/hidden-music.apk"
-                  download="HiddenMusic.apk"
-                  title="Tải ứng dụng Android Native (.APK)"
-                  className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 hover:border-white transition-all hover:scale-105 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-lg group"
-                >
-                  <Smartphone className="w-4 h-4 group-hover:hidden" />
-                  <Download className="w-4 h-4 hidden group-hover:block" />
-                </a>
-              )}
             </div>
           </div>
 
-          {/* 21st.dev Style Master Specs HUD & Quick Controls in Root Vault View */}
+          {/* Master Specs HUD & Quick Controls in Root Vault View */}
           {!isDetail && (
             <div className="w-full max-w-[340px] flex flex-col items-center gap-3 mt-3 animate-fadeIn">
-              {/* Studio Master Specs Pill */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-950/80 border border-white/15 backdrop-blur-xl shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
                 <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
@@ -1133,7 +1092,6 @@ export default function VaultScene({
                 </span>
               </div>
 
-              {/* Quick Actions */}
               <div className="flex items-center gap-2 w-full">
                 <button
                   onClick={() => onSelectAlbum(activeAlbum)}
@@ -1154,7 +1112,6 @@ export default function VaultScene({
                 </button>
               </div>
 
-              {/* Album Thumbnail Selector Deck */}
               {albums.length > 1 && (
                 <div className="flex items-center gap-2 mt-1 px-2 py-1.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
                   {albums.map((alb, idx) => (
