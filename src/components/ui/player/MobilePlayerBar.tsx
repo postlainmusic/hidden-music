@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { useTelemetry } from '@/hooks/useTelemetry';
+import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
 import TrackActionMenu from '@/components/ui/TrackActionMenu';
@@ -29,15 +30,6 @@ const formatTime = (secs: number) => {
   const mins = Math.floor(secs / 60);
   const rem = Math.floor(secs % 60);
   return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
-};
-
-const cleanLyrics = (raw?: string) => {
-  if (!raw) return '';
-  return raw
-    .split('\n')
-    .map((line) => line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim())
-    .filter((line) => line.length > 0)
-    .join('\n');
 };
 
 export default function MobilePlayerBar() {
@@ -521,8 +513,6 @@ export default function MobilePlayerBar() {
 
   if (!isMounted || !currentTrack) return null;
 
-  const displayLyrics = cleanLyrics(currentTrack?.lyrics);
-
   return (
     <>
       {/* MINI-PLAYER */}
@@ -799,20 +789,14 @@ export default function MobilePlayerBar() {
 
             {/* VIEW 2: LYRICS */}
             {activeView === 'lyrics' && (
-              <div 
-                className="w-full h-full overflow-y-auto no-scrollbar py-6 px-4 text-center select-text font-cyber animate-fadeIn"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {displayLyrics ? (
-                  <p className="text-base sm:text-lg font-bold text-zinc-200 leading-relaxed whitespace-pre-line tracking-wide drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
-                    {displayLyrics}
-                  </p>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-500">
-                    <Mic2 className="w-8 h-8 text-zinc-600 mb-2 opacity-50" />
-                    <p className="text-xs uppercase tracking-widest font-mono">Chưa có lời bài hát cho ca khúc này</p>
-                  </div>
-                )}
+              <div className="w-full h-full overflow-hidden animate-fadeIn relative">
+                <SyncedLyricsView
+                  rawLrc={currentTrack?.lyrics}
+                  trackTitle={currentTrack?.title}
+                  artistName={currentTrack?.artist || currentAlbum?.artist}
+                  duration={effectiveDuration}
+                  className="w-full h-full"
+                />
               </div>
             )}
 
@@ -820,7 +804,10 @@ export default function MobilePlayerBar() {
             {activeView === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-3 animate-fadeIn"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                }}
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1 mb-1">
