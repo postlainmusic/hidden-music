@@ -11,7 +11,6 @@ import {
   Repeat1,
   ListMusic,
   Disc3,
-  Mic2,
   Heart,
   Loader2,
   Trash2,
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { useTelemetry } from '@/hooks/useTelemetry';
-import { SyncedLyricsView } from '@/components/ui/player/SyncedLyricsView';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
 import { LiveWaveformBeatEngine } from '@/lib/dsp/liveWaveformBeat';
 import TrackActionMenu from '@/components/ui/TrackActionMenu';
@@ -33,7 +31,6 @@ const formatTime = (secs: number) => {
 };
 
 export default function MobilePlayerBar() {
-  // 1. Chống lỗi lệch Hydration SSR
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -41,7 +38,6 @@ export default function MobilePlayerBar() {
 
   const player = usePlayer();
 
-  // 2. Safe Fallback Guard: Đảm bảo không biến nào bị undefined gây sập React
   const currentTrack = player?.currentTrack ?? null;
   const currentAlbum = player?.currentAlbum ?? null;
   const drumProfile = useMemo(() => getTrackDrumProfile(currentTrack?.title || currentTrack?.id), [currentTrack?.title, currentTrack?.id]);
@@ -69,7 +65,6 @@ export default function MobilePlayerBar() {
   const toggleShuffle = player?.toggleShuffle ?? (() => {});
   const toggleRepeat = player?.toggleRepeat ?? (() => {});
 
-  // 3. Safe Telemetry
   let sendTelemetry = (_payload: any) => {};
   try {
     const tele = useTelemetry();
@@ -87,12 +82,12 @@ export default function MobilePlayerBar() {
     : 0;
 
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeView, setActiveView] = useState<'player' | 'lyrics' | 'queue'>('player');
+  const [activeView, setActiveView] = useState<'player' | 'queue'>('player');
   const [isLiked, setIsLiked] = useState(false);
 
   const rafIdRef = useRef<number | null>(null);
 
-  // Direct DOM Elements for 60FPS Hardware-Accelerated Stage Performance
+  // Direct DOM Elements
   const miniBarRef = useRef<HTMLDivElement | null>(null);
   const miniGlowBackdropRef = useRef<HTMLDivElement | null>(null);
   const miniCoverRef = useRef<HTMLDivElement | null>(null);
@@ -140,7 +135,7 @@ export default function MobilePlayerBar() {
   const snareStrobeRef = useRef<number>(0);
   const targetSnareStrobeRef = useRef<number>(0);
 
-  // 60FPS Multi-Band Audio Analyzer State
+  // Audio Analyzer State
   const fastBassRef = useRef<number>(0);
   const slowBassRef = useRef<number>(0);
   const lastKickHitTimeRef = useRef<number>(0);
@@ -165,7 +160,6 @@ export default function MobilePlayerBar() {
   const smoothEnergyRef = useRef<number>(0);
   const liveWaveformEngineRef = useRef<LiveWaveformBeatEngine>(new LiveWaveformBeatEngine(1024, 0.015, 55));
 
-  // 60FPS Live Stage Engine
   useEffect(() => {
     if (!isPlaying || activeZone !== 'audio') {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
@@ -192,7 +186,6 @@ export default function MobilePlayerBar() {
       const liveSec = currentTimeRef?.current ?? (audioRef?.current ? audioRef.current.currentTime : 0);
       const isDrumming = isDrumActiveAtTime(drumProfile, liveSec);
 
-      // Cập nhật Seeker Text 60 FPS
       if (expandedCurrentTimeTextRef.current && !isDraggingSeekerRef.current) {
         expandedCurrentTimeTextRef.current.textContent = formatTime(liveSec);
       }
@@ -237,7 +230,7 @@ export default function MobilePlayerBar() {
         }
       }
 
-      // 1. SUB-BASS / KICK (Bins 2-6: 43Hz-129Hz)
+      // 1. SUB-BASS / KICK
       let bassSum = 0;
       for (let i = 2; i <= 6; i++) bassSum += dataArray[i];
       const currentBass = bassSum / 5;
@@ -247,7 +240,7 @@ export default function MobilePlayerBar() {
       slowBassRef.current = sB;
       const bassFlux = Math.max(0, fB - sB);
 
-      // 2. BASSLINE / 808 (Bins 3-12: 64Hz-258Hz)
+      // 2. BASSLINE / 808
       let basslineSum = 0;
       for (let i = 3; i <= 12; i++) basslineSum += dataArray[i];
       const currentBassline = basslineSum / 10;
@@ -272,7 +265,7 @@ export default function MobilePlayerBar() {
       slowHighRef.current = sH;
       const highFlux = Math.max(0, fH - sH);
 
-      // 5. TREBLE / HI-HATS (Bins 232-743: ~5kHz-16kHz)
+      // 4. TREBLE / HI-HATS
       let trebleSum = 0;
       for (let i = 232; i <= 743; i++) trebleSum += dataArray[i];
       const currentTreble = trebleSum / 512;
@@ -282,16 +275,14 @@ export default function MobilePlayerBar() {
       slowTrebleRef.current = sT;
       const trebleFlux = Math.max(0, fT - sT);
 
-      // 6. TOTAL AMBIENT ENERGY (RMS)
+      // 5. TOTAL AMBIENT ENERGY
       let totalSum = 0;
       for (let i = 0; i < 1024; i++) totalSum += dataArray[i];
       const currentEnergy = totalSum / 1024;
       smoothEnergyRef.current += ((currentEnergy / 255) - smoothEnergyRef.current) * 0.15;
 
-      // 7. LIVE WAVEFORM STREAM BEAT DETECTION
       const liveWaveBeat = liveWaveformEngineRef.current.processLiveAnalyser(analyserRef?.current, now);
 
-      // TRIGGERS (MULTI-TIER DYNAMIC SENSITIVITY: REGULAR KICK vs 808/SUB PUNCH vs RAPID ROLLS)
       if (isDrumming) {
         const timeSinceLastKick = now - lastKickHitTimeRef.current;
         const isConsecutiveKick = timeSinceLastKick >= 55 && timeSinceLastKick < 240;
@@ -305,7 +296,6 @@ export default function MobilePlayerBar() {
 
         if (hasBassTransient || hasWaveformKick) {
           lastKickHitTimeRef.current = now;
-
           const isSub808HeavyKick = (currentBass > 135 || bassFlux > 7.0 || (drumProfile.hasKick && currentBass > 115));
 
           if (isSub808HeavyKick) {
@@ -333,7 +323,7 @@ export default function MobilePlayerBar() {
         }
       }
 
-      // PHYSICS ENGINE: HOOKE'S LAW
+      // Physics
       const tension = 0.30;
       const dampening = 0.65;
       const displacement = kickScaleRef.current - 1.0;
@@ -344,7 +334,6 @@ export default function MobilePlayerBar() {
       if (kickScaleRef.current < 0.985) kickScaleRef.current = 0.985;
       if (kickScaleRef.current > 1.15) kickScaleRef.current = 1.15;
 
-      // Decay Kick Red Intensity
       kickRedIntensityRef.current += (targetKickRedIntensityRef.current - kickRedIntensityRef.current) * 0.48;
       targetKickRedIntensityRef.current *= 0.70;
 
@@ -361,12 +350,11 @@ export default function MobilePlayerBar() {
       const redIntensity = Math.min(1.0, Math.max(0, kickRedIntensityRef.current));
       const kickDelta = Math.max(0, k - 1.0);
 
-      // KICK COLOR
       const g = Math.floor(255 - redIntensity * 230);
       const b = Math.floor(255 - redIntensity * 230);
       const kickColor = `255, ${g}, ${b}`;
 
-      // MINI PLAYER DIRECT DOM MANIPULATION
+      // Mini Player DOM
       if (miniBarRef.current) {
         miniBarRef.current.style.transform = `translateX(${swipeOffsetX}px) scale(${1 + kickDelta * 0.25})`;
         miniBarRef.current.style.borderColor = `rgba(${kickColor}, ${0.15 + kickDelta * 2.5})`;
@@ -391,7 +379,7 @@ export default function MobilePlayerBar() {
         miniPlayBtnRef.current.style.transform = `scale(${1 + kickDelta * 1.0})`;
       }
 
-      // EXPANDED PLAYER DIRECT DOM MANIPULATION
+      // Expanded Player DOM
       if (expandCoverRef.current) {
         expandCoverRef.current.style.transform = `scale(${k})`;
         expandCoverRef.current.style.borderColor = `rgba(${kickColor}, ${0.2 + kickDelta * 3.5 + s * 0.4})`;
@@ -471,7 +459,7 @@ export default function MobilePlayerBar() {
     }, 50);
   };
 
-  // Sheet swipe handlers — CÔ LẬP CHỈ BẮT ĐẦU KHI CHẠM VÀO VÙNG HEADER DRAG ZONE
+  // Sheet swipe handlers
   const handleSheetTouchStart = (e: React.TouchEvent) => {
     if (e.touches[0]) {
       sheetTouchStartXRef.current = e.touches[0].clientX;
@@ -521,14 +509,11 @@ export default function MobilePlayerBar() {
     [isLiked, currentTrack, sendTelemetry]
   );
 
-  // Tránh lỗi Hydration SSR
   if (!isMounted || !currentTrack) return null;
 
   return (
     <>
-      {/* ========================================================================= */}
-      {/* 1. MINI-PLAYER STAGE PERFORMANCE (CYBER FLOATING PILL)                    */}
-      {/* ========================================================================= */}
+      {/* 1. MINI-PLAYER */}
       <div
         className="fixed bottom-4 left-3 right-3 z-40 pointer-events-auto select-none"
         onTouchStart={handleMiniTouchStart}
@@ -647,24 +632,19 @@ export default function MobilePlayerBar() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 2. EXPANDED FULLSCREEN CYBER-DECK AUDIOPHILE PERFORMANCE                  */}
-      {/* ========================================================================= */}
+      {/* 2. EXPANDED FULLSCREEN CYBER-DECK */}
       {isExpanded && (
         <div
           ref={expandRootRef}
           style={{ transform: `translateY(${sheetOffsetY}px)` }}
           className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-4 sm:p-6 pb-8 select-none animate-fadeIn transition-transform duration-75 overflow-hidden"
         >
-          {/* Top Laser Border */}
           <div
             ref={expandLaserBorderRef}
             className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-20 transition-opacity pointer-events-none"
           />
 
-          {/* ===================================================================== */}
-          {/* HEADER DRAG ZONE: Chỉ vuốt xuống khi chạm vào vùng này                 */}
-          {/* ===================================================================== */}
+          {/* HEADER DRAG ZONE */}
           <div
             onTouchStart={handleSheetTouchStart}
             onTouchMove={handleSheetTouchMove}
@@ -683,7 +663,6 @@ export default function MobilePlayerBar() {
               onClick={() => setIsExpanded(false)}
               className="flex flex-col items-center text-center cursor-pointer flex-1 px-3 py-1"
             >
-              {/* Grab Bar Pill */}
               <div className="w-12 h-1.5 bg-white/30 hover:bg-white/60 active:bg-white/90 rounded-full mb-1.5 transition-all shadow-sm" />
               <span className="text-[9px] font-mono tracking-[0.22em] text-zinc-400 uppercase font-bold">
                 ĐANG PHÁT TỪ ALBUM
@@ -701,9 +680,7 @@ export default function MobilePlayerBar() {
             </div>
           </div>
 
-          {/* ===================================================================== */}
-          {/* CYBER SEGMENTED NAVIGATION DECK                                       */}
-          {/* ===================================================================== */}
+          {/* CYBER SEGMENTED NAVIGATION DECK */}
           <div className="w-full max-w-sm mx-auto px-2 py-2 relative z-20 flex-shrink-0">
             <div className="bg-zinc-950/80 border border-white/15 rounded-2xl p-1 flex items-center justify-between shadow-lg backdrop-blur-xl">
               <button
@@ -716,18 +693,6 @@ export default function MobilePlayerBar() {
               >
                 <Disc3 className={`w-3.5 h-3.5 ${activeView === 'player' && isPlaying ? 'animate-spin' : ''}`} />
                 <span>TRÌNH PHÁT</span>
-              </button>
-
-              <button
-                onClick={() => setActiveView('lyrics')}
-                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-                  activeView === 'lyrics'
-                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Mic2 className="w-3.5 h-3.5" />
-                <span>LỜI BÀI HÁT</span>
               </button>
 
               <button
@@ -744,9 +709,7 @@ export default function MobilePlayerBar() {
             </div>
           </div>
 
-          {/* ===================================================================== */}
-          {/* MAIN STAGE VIEWPORT                                                   */}
-          {/* ===================================================================== */}
+          {/* MAIN STAGE VIEWPORT */}
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-hidden">
             {/* VIEW 1: PLAYER VINYL STAGE */}
             {activeView === 'player' && (
@@ -796,7 +759,6 @@ export default function MobilePlayerBar() {
                   </button>
                 </div>
 
-                {/* Audiophile HUD Telemetry Badges */}
                 <div className="flex items-center justify-between w-full max-w-[280px] mt-4 pt-3 border-t border-white/10">
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
@@ -811,20 +773,7 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* VIEW 2: LYRICS STAGE — CĂN LỀ TRÁI, ZERO JITTER, CUỘN ĐỘC LẬP */}
-            {activeView === 'lyrics' && (
-              <div className="w-full h-full overflow-hidden animate-fadeIn relative">
-                <SyncedLyricsView
-                  rawLrc={currentTrack?.lyrics}
-                  trackTitle={currentTrack?.title}
-                  artistName={currentTrack?.artist || currentAlbum?.artist}
-                  duration={effectiveDuration}
-                  className="w-full h-full"
-                />
-              </div>
-            )}
-
-            {/* VIEW 3: QUEUE STAGE — CUỘN ĐỘC LẬP, AN TOÀN */}
+            {/* VIEW 2: QUEUE STAGE */}
             {activeView === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-3 animate-fadeIn"
@@ -940,11 +889,8 @@ export default function MobilePlayerBar() {
             )}
           </div>
 
-          {/* ===================================================================== */}
-          {/* BOTTOM AUDIOPHILE CONTROL DECK                                        */}
-          {/* ===================================================================== */}
+          {/* CONTROL DECK */}
           <div className="w-full flex flex-col gap-3.5 flex-shrink-0 pt-2 pb-2 relative z-20">
-            {/* Magnetic Seeker Scrubber */}
             <div className="flex flex-col gap-1.5 w-full px-4">
               <div className="relative w-full flex items-center group">
                 <input
@@ -986,7 +932,6 @@ export default function MobilePlayerBar() {
               </div>
             </div>
 
-            {/* Master Audiophile Controls Array */}
             <div className="flex items-center justify-between px-6 max-w-sm mx-auto w-full">
               <button
                 ref={expandShuffleBtnRef}
@@ -1010,7 +955,6 @@ export default function MobilePlayerBar() {
                 <SkipBack className="w-5 h-5 fill-current" />
               </button>
 
-              {/* Master Concentric Wheel */}
               <button
                 ref={expandPlayBtnRef}
                 onClick={togglePlay}
