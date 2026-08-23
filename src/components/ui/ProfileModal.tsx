@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
   LogOut,
@@ -21,7 +22,6 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/types/database';
-
 import {
   getStoredUserSession,
   setStoredUserSession,
@@ -29,6 +29,15 @@ import {
   performLogout,
   hasVideoSubscription,
 } from '@/lib/authSession';
+import {
+  modalBackdropVariants,
+  modalContentVariants,
+  buttonTapMotion,
+  subtleButtonTapMotion,
+  iconButtonMotion,
+  springSnappy,
+  fadeVariants,
+} from '@/lib/motionVariants';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -254,7 +263,7 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
       console.warn('Supabase feedback insert notice:', err);
     }
 
-    // 2. Persist to local storage fallback cache so feedback is NEVER lost and Admin can view immediately
+    // 2. Persist to local storage fallback cache
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('hidden_vault_local_feedbacks');
@@ -283,14 +292,20 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
   };
 
   return (
-    <div
+    <motion.div
+      variants={modalBackdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-start justify-center sm:justify-end p-3 sm:pt-16 sm:pr-8 md:pr-14 select-none font-mono text-white transition-opacity duration-300"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-start justify-center sm:justify-end p-3 sm:pt-16 sm:pr-8 md:pr-14 select-none font-mono text-white"
     >
-      <div className="bw-panel w-full max-w-[400px] rounded-3xl p-4 sm:p-5 border border-white/25 shadow-[0_25px_80px_rgba(0,0,0,0.95)] relative space-y-4 max-h-[90vh] overflow-y-auto no-scrollbar font-mono animate-vaultPopOut bg-[#0c0c10]/95 backdrop-blur-2xl">
-        
+      <motion.div
+        variants={modalContentVariants}
+        className="bw-panel w-full max-w-[400px] rounded-3xl p-4 sm:p-5 border border-white/25 shadow-[0_25px_80px_rgba(0,0,0,0.95)] relative space-y-4 max-h-[90vh] overflow-y-auto no-scrollbar font-mono bg-[#0c0c10]/95 backdrop-blur-2xl"
+      >
         {/* Header Bar */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
@@ -311,29 +326,35 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
             </div>
           </div>
 
-          <button
+          <motion.button
             onClick={onClose}
+            {...iconButtonMotion}
             title="Đóng"
-            className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors flex items-center justify-center text-xs"
+            className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors flex items-center justify-center text-xs cursor-pointer"
           >
             <X className="w-4 h-4" />
-          </button>
+          </motion.button>
         </div>
 
-        {/* Tab Switch Buttons */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-black/60 border border-white/15">
+        {/* Tab Switch Buttons with Layout Morphing Active Pill */}
+        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-black/60 border border-white/15 relative">
           <button
             type="button"
             onClick={() => {
               setActiveTab('profile');
               setMsg(null);
             }}
-            className={`py-1.5 px-2 rounded-xl text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === 'profile'
-                ? 'bg-white text-black shadow-md'
-                : 'text-slate-400 hover:text-white'
+            className={`relative py-1.5 px-2 rounded-xl text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer z-10 ${
+              activeTab === 'profile' ? 'text-black' : 'text-slate-400 hover:text-white'
             }`}
           >
+            {activeTab === 'profile' && (
+              <motion.div
+                layoutId="profileTabActivePill"
+                transition={springSnappy}
+                className="absolute inset-0 bg-white rounded-xl shadow-md z-[-1]"
+              />
+            )}
             <User className="w-3 h-3" />
             <span>HỒ SƠ</span>
           </button>
@@ -344,287 +365,327 @@ export default function ProfileModal({ isOpen, onClose, onLogout }: ProfileModal
               setActiveTab('feedback');
               setFeedbackMsg(null);
             }}
-            className={`py-1.5 px-2 rounded-xl text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === 'feedback'
-                ? 'bg-white text-black shadow-md'
-                : 'text-slate-400 hover:text-white'
+            className={`relative py-1.5 px-2 rounded-xl text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer z-10 ${
+              activeTab === 'feedback' ? 'text-black' : 'text-slate-400 hover:text-white'
             }`}
           >
+            {activeTab === 'feedback' && (
+              <motion.div
+                layoutId="profileTabActivePill"
+                transition={springSnappy}
+                className="absolute inset-0 bg-white rounded-xl shadow-md z-[-1]"
+              />
+            )}
             <MessageSquare className="w-3 h-3" />
             <span>GỬI GÓP Ý</span>
           </button>
         </div>
 
-        {/* TAB 1: PROFILE & SUBSCRIPTION TAB */}
-        {activeTab === 'profile' && (
-          <>
-            {/* Message Status */}
-            {msg && (
-              <div
-                className={`p-3 rounded-2xl text-[11px] flex items-center gap-2 ${
-                  msg.type === 'success'
-                    ? 'bg-white/15 border border-white/40 text-white'
-                    : 'bg-red-950/60 border border-red-500/40 text-red-300'
-                }`}
-              >
-                {msg.type === 'success' ? (
-                  <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-white" />
-                ) : (
-                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
-                )}
-                <span>{msg.text}</span>
-              </div>
-            )}
-
-            {loading ? (
-              <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
-                <Sparkles className="w-5 h-5 animate-spin" />
-                <span>ĐANG TẢI HỒ SƠ...</span>
-              </div>
-            ) : (
-              <form onSubmit={handleSave} className="space-y-3.5 text-xs">
-                {/* 1. User Identity Card */}
-                <div className="p-3 rounded-2xl bg-white/5 border border-white/15 space-y-3">
-                  <div className="flex items-center gap-3">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Avatar"
-                        className="w-11 h-11 rounded-2xl border-2 border-white/30 object-cover shadow-md"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-2xl bg-white/10 border-2 border-white/20 flex items-center justify-center text-white font-extrabold text-base">
-                        {(displayName.charAt(0) || 'V').toUpperCase()}
-                      </div>
-                    )}
-
-                    <div className="space-y-0.5 truncate min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-extrabold text-xs text-white truncate font-cyber">
-                          {displayName || 'Vault Listener'}
-                        </span>
-                        <span className="px-1.5 py-0.2 rounded-full text-[8px] font-extrabold bg-white text-black uppercase tracking-wider">
-                          {isUserAdmin ? 'ADMIN' : isVipPaid ? 'VIP' : 'MEMBER'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 truncate font-mono">{user?.email || 'member@hiddenvault.com'}</p>
-                    </div>
-                  </div>
-
-                  {/* Display Name Input */}
-                  <div>
-                    <label className="block text-[9px] uppercase text-slate-400 mb-1 font-bold">
-                      Tên hiển thị / Handle
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder="VD: LUCIINGO"
-                        className="w-full bg-black/60 border border-white/20 rounded-xl px-3 py-1.5 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors uppercase font-bold tracking-wider"
-                      />
-                      <User className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. DEDICATED SUBSCRIPTION STATUS CARD */}
-                <div className="p-3.5 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/20 space-y-2.5 relative overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <div className="flex items-center gap-1.5">
-                      {planCategory === 'admin' ? (
-                        <ShieldCheck className="w-4 h-4 text-white" />
-                      ) : planCategory === 'lifetime' ? (
-                        <Crown className="w-4 h-4 text-amber-300" />
-                      ) : planCategory === 'monthly' ? (
-                        <Zap className="w-4 h-4 text-yellow-300" />
-                      ) : (
-                        <Music2 className="w-4 h-4 text-slate-400" />
-                      )}
-                      <span className="text-[10px] font-extrabold uppercase font-cyber tracking-widest text-white">
-                        GÓI ĐĂNG KÝ HIỆN TẠI
-                      </span>
-                    </div>
-
-                    {/* Plan Badge */}
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider font-mono border ${
-                      planCategory === 'admin'
-                        ? 'bg-white text-black border-white shadow-md'
-                        : planCategory === 'lifetime'
-                        ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
-                        : planCategory === 'monthly'
-                        ? 'bg-yellow-400/20 text-yellow-300 border-yellow-400/40'
-                        : 'bg-white/10 text-slate-300 border-white/15'
-                    }`}>
-                      {planCategory === 'admin'
-                        ? '👑 QUẢN TRỊ VIÊN'
-                        : planCategory === 'lifetime'
-                        ? '✨ TRỌN ĐỜI VIP'
-                        : planCategory === 'monthly'
-                        ? '⚡ GÓI THÁNG VIP'
-                        : '🎵 MIỄN PHÍ'}
-                    </span>
-                  </div>
-
-                  {/* Plan Features & Access Details */}
-                  <div className="space-y-1.5 text-[10px] text-slate-300 font-mono">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Film className="w-3 h-3 text-slate-400" />
-                        Video Zone (MV Hiếm):
-                      </span>
-                      <span className={`font-bold flex items-center gap-1 ${isVipPaid ? 'text-white' : 'text-slate-500'}`}>
-                        {isVipPaid ? (
-                          <>
-                            <Unlock className="w-3 h-3 text-white" />
-                            ĐÃ MỞ KHÓA
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="w-3 h-3 text-slate-500" />
-                            CHƯA MỞ KHÓA
-                          </>
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Music2 className="w-3 h-3 text-slate-400" />
-                        Chất lượng Âm thanh:
-                      </span>
-                      <span className="font-bold text-white">Lossless FLAC Master</span>
-                    </div>
-
-                    {isVipPaid && (
-                      <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[9px] text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-slate-500" />
-                          Thời hạn:
-                        </span>
-                        <span className="font-bold text-white uppercase">
-                          {planCategory === 'admin' || planCategory === 'lifetime'
-                            ? 'Vĩnh viễn (Lifetime)'
-                            : '30 ngày'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* If Free User: Show Upgrade Call to Action */}
-                  {!isVipPaid && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        window.dispatchEvent(new CustomEvent('open_vault_paywall'));
-                      }}
-                      className="w-full mt-1.5 py-2 px-3 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-                    >
-                      <Crown className="w-3.5 h-3.5 fill-black" />
-                      <span>MỞ KHÓA VIDEO ZONE (VOUCHER / PAYOS)</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* 3. Action Buttons */}
-                <div className="pt-1 space-y-2">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{saving ? 'ĐANG LƯU HỒ SƠ...' : 'LƯU TÊN HIỂN THỊ'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="w-full py-2 rounded-xl bg-red-950/30 hover:bg-red-900/50 border border-red-500/25 text-red-300 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>ĐĂNG XUẤT KHỎI VAULT</span>
-                  </button>
-                </div>
-              </form>
-            )}
-          </>
-        )}
-
-        {/* TAB 2: FEEDBACK TAB */}
-        {activeTab === 'feedback' && (
-          <form onSubmit={handleSubmitFeedback} className="space-y-3.5 text-xs">
-            {/* Feedback Message Status */}
-            {feedbackMsg && (
-              <div
-                className={`p-3 rounded-2xl text-[11px] flex items-center gap-2 ${
-                  feedbackMsg.type === 'success'
-                    ? 'bg-white/15 border border-white/40 text-white'
-                    : 'bg-red-950/60 border border-red-500/40 text-red-300'
-                }`}
-              >
-                {feedbackMsg.type === 'success' ? (
-                  <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-white" />
-                ) : (
-                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
-                )}
-                <span>{feedbackMsg.text}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="block text-[10px] uppercase text-slate-400 font-bold">
-                Danh mục góp ý
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { id: 'feature', label: 'TÍNH NĂNG MỚI' },
-                  { id: 'bug', label: 'BÁO LỖI / BUG' },
-                  { id: 'music_request', label: 'YÊU CẦU NHẠC / MV' },
-                  { id: 'other', label: 'GÓP Ý KHÁC' },
-                ].map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setFeedbackCategory(cat.id as any)}
-                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
-                      feedbackCategory === cat.id
-                        ? 'bg-white text-black border-white shadow-md'
-                        : 'bg-black/50 border-white/15 text-slate-400 hover:text-white'
+        {/* TAB CONTENT WITH ANIMATEPRESENCE */}
+        <AnimatePresence mode="wait">
+          {/* TAB 1: PROFILE & SUBSCRIPTION TAB */}
+          {activeTab === 'profile' && (
+            <motion.div
+              key="profile-tab"
+              variants={fadeVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="space-y-3.5"
+            >
+              {/* Message Status */}
+              <AnimatePresence>
+                {msg && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={springSnappy}
+                    className={`p-3 rounded-2xl text-[11px] flex items-center gap-2 ${
+                      msg.type === 'success'
+                        ? 'bg-white/15 border border-white/40 text-white'
+                        : 'bg-red-950/60 border border-red-500/40 text-red-300'
                     }`}
                   >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {msg.type === 'success' ? (
+                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-white" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+                    )}
+                    <span>{msg.text}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase text-slate-400 font-bold">
-                Nội dung chi tiết
-              </label>
-              <textarea
-                value={feedbackContent}
-                onChange={(e) => setFeedbackContent(e.target.value)}
-                placeholder="Nhập chi tiết ý kiến, bài hát muốn bổ sung hoặc lỗi bạn gặp phải..."
-                rows={4}
-                className="w-full bg-black/60 border border-white/20 rounded-xl p-2.5 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
-              />
-            </div>
+              {loading ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
+                  <Sparkles className="w-5 h-5 animate-spin" />
+                  <span>ĐANG TẢI HỒ SƠ...</span>
+                </div>
+              ) : (
+                <form onSubmit={handleSave} className="space-y-3.5 text-xs">
+                  {/* 1. User Identity Card */}
+                  <div className="p-3 rounded-2xl bg-white/5 border border-white/15 space-y-3">
+                    <div className="flex items-center gap-3">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Avatar"
+                          className="w-11 h-11 rounded-2xl border-2 border-white/30 object-cover shadow-md"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-2xl bg-white/10 border-2 border-white/20 flex items-center justify-center text-white font-extrabold text-base">
+                          {(displayName.charAt(0) || 'V').toUpperCase()}
+                        </div>
+                      )}
 
-            <button
-              type="submit"
-              disabled={feedbackSending}
-              className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                      <div className="space-y-0.5 truncate min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-xs text-white truncate font-cyber">
+                            {displayName || 'Vault Listener'}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded-full text-[8px] font-extrabold bg-white text-black uppercase tracking-wider">
+                            {isUserAdmin ? 'ADMIN' : isVipPaid ? 'VIP' : 'MEMBER'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 truncate font-mono">{user?.email || 'member@hiddenvault.com'}</p>
+                      </div>
+                    </div>
+
+                    {/* Display Name Input */}
+                    <div>
+                      <label className="block text-[9px] uppercase text-slate-400 mb-1 font-bold">
+                        Tên hiển thị / Handle
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          placeholder="VD: LUCIINGO"
+                          className="w-full bg-black/60 border border-white/20 rounded-xl px-3 py-1.5 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors uppercase font-bold tracking-wider"
+                        />
+                        <User className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. DEDICATED SUBSCRIPTION STATUS CARD */}
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/20 space-y-2.5 relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        {planCategory === 'admin' ? (
+                          <ShieldCheck className="w-4 h-4 text-white" />
+                        ) : planCategory === 'lifetime' ? (
+                          <Crown className="w-4 h-4 text-amber-300" />
+                        ) : planCategory === 'monthly' ? (
+                          <Zap className="w-4 h-4 text-yellow-300" />
+                        ) : (
+                          <Music2 className="w-4 h-4 text-slate-400" />
+                        )}
+                        <span className="text-[10px] font-extrabold uppercase font-cyber tracking-widest text-white">
+                          GÓI ĐĂNG KÝ HIỆN TẠI
+                        </span>
+                      </div>
+
+                      {/* Plan Badge */}
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider font-mono border ${
+                        planCategory === 'admin'
+                          ? 'bg-white text-black border-white shadow-md'
+                          : planCategory === 'lifetime'
+                          ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                          : planCategory === 'monthly'
+                          ? 'bg-yellow-400/20 text-yellow-300 border-yellow-400/40'
+                          : 'bg-white/10 text-slate-300 border-white/15'
+                      }`}>
+                        {planCategory === 'admin'
+                          ? '👑 QUẢN TRỊ VIÊN'
+                          : planCategory === 'lifetime'
+                          ? '✨ TRỌN ĐỜI VIP'
+                          : planCategory === 'monthly'
+                          ? '⚡ GÓI THÁNG VIP'
+                          : '🎵 MIỄN PHÍ'}
+                      </span>
+                    </div>
+
+                    {/* Plan Features & Access Details */}
+                    <div className="space-y-1.5 text-[10px] text-slate-300 font-mono">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Film className="w-3 h-3 text-slate-400" />
+                          Video Zone (MV Hiếm):
+                        </span>
+                        <span className={`font-bold flex items-center gap-1 ${isVipPaid ? 'text-white' : 'text-slate-500'}`}>
+                          {isVipPaid ? (
+                            <>
+                              <Unlock className="w-3 h-3 text-white" />
+                              ĐÃ MỞ KHÓA
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-3 h-3 text-slate-500" />
+                              CHƯA MỞ KHÓA
+                            </>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Music2 className="w-3 h-3 text-slate-400" />
+                          Chất lượng Âm thanh:
+                        </span>
+                        <span className="font-bold text-white">Lossless FLAC Master</span>
+                      </div>
+
+                      {isVipPaid && (
+                        <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[9px] text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-slate-500" />
+                            Thời hạn:
+                          </span>
+                          <span className="font-bold text-white uppercase">
+                            {planCategory === 'admin' || planCategory === 'lifetime'
+                              ? 'Vĩnh viễn (Lifetime)'
+                              : '30 ngày'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* If Free User: Show Upgrade Call to Action */}
+                    {!isVipPaid && (
+                      <motion.button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          window.dispatchEvent(new CustomEvent('open_vault_paywall'));
+                        }}
+                        {...subtleButtonTapMotion}
+                        className="w-full mt-1.5 py-2 px-3 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-colors cursor-pointer"
+                      >
+                        <Crown className="w-3.5 h-3.5 fill-black" />
+                        <span>MỞ KHÓA VIDEO ZONE (VOUCHER / PAYOS)</span>
+                      </motion.button>
+                    )}
+                  </div>
+
+                  {/* 3. Action Buttons */}
+                  <div className="pt-1 space-y-2">
+                    <motion.button
+                      type="submit"
+                      disabled={saving}
+                      {...subtleButtonTapMotion}
+                      className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{saving ? 'ĐANG LƯU HỒ SƠ...' : 'LƯU TÊN HIỂN THỊ'}</span>
+                    </motion.button>
+
+                    <motion.button
+                      type="button"
+                      onClick={handleSignOut}
+                      {...subtleButtonTapMotion}
+                      className="w-full py-2 rounded-xl bg-red-950/30 hover:bg-red-900/50 border border-red-500/25 text-red-300 font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>ĐĂNG XUẤT KHỎI VAULT</span>
+                    </motion.button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          )}
+
+          {/* TAB 2: FEEDBACK TAB */}
+          {activeTab === 'feedback' && (
+            <motion.form
+              key="feedback-tab"
+              variants={fadeVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onSubmit={handleSubmitFeedback}
+              className="space-y-3.5 text-xs"
             >
-              <span>{feedbackSending ? 'ĐANG GỬI Ý KIẾN...' : 'GỬI GÓP Ý TỚI ADMIN'}</span>
-            </button>
-          </form>
-        )}
+              {/* Feedback Message Status */}
+              <AnimatePresence>
+                {feedbackMsg && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={springSnappy}
+                    className={`p-3 rounded-2xl text-[11px] flex items-center gap-2 ${
+                      feedbackMsg.type === 'success'
+                        ? 'bg-white/15 border border-white/40 text-white'
+                        : 'bg-red-950/60 border border-red-500/40 text-red-300'
+                    }`}
+                  >
+                    {feedbackMsg === null ? null : feedbackMsg.type === 'success' ? (
+                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-white" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+                    )}
+                    <span>{feedbackMsg.text}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-      </div>
-    </div>
+              <div className="space-y-2">
+                <label className="block text-[10px] uppercase text-slate-400 font-bold">
+                  Danh mục góp ý
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'feature', label: 'TÍNH NĂNG MỚI' },
+                    { id: 'bug', label: 'BÁO LỖI / BUG' },
+                    { id: 'music_request', label: 'YÊU CẦU NHẠC / MV' },
+                    { id: 'other', label: 'GÓP Ý KHÁC' },
+                  ].map((cat) => (
+                    <motion.button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setFeedbackCategory(cat.id as any)}
+                      {...subtleButtonTapMotion}
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-colors cursor-pointer ${
+                        feedbackCategory === cat.id
+                          ? 'bg-white text-black border-white shadow-md'
+                          : 'bg-black/50 border-white/15 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {cat.label}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] uppercase text-slate-400 font-bold">
+                  Nội dung chi tiết
+                </label>
+                <textarea
+                  value={feedbackContent}
+                  onChange={(e) => setFeedbackContent(e.target.value)}
+                  placeholder="Nhập chi tiết ý kiến, bài hát muốn bổ sung hoặc lỗi bạn gặp phải..."
+                  rows={4}
+                  className="w-full bg-black/60 border border-white/20 rounded-xl p-2.5 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
+                />
+              </div>
+
+              <motion.button
+                type="submit"
+                disabled={feedbackSending}
+                {...buttonTapMotion}
+                className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                <span>{feedbackSending ? 'ĐANG GỬI Ý KIẾN...' : 'GỬI GÓP Ý TỚI ADMIN'}</span>
+              </motion.button>
+            </motion.form>
+          )}
+        </AnimatePresence>
+
+      </motion.div>
+    </motion.div>
   );
 }

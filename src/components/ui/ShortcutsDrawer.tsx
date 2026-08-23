@@ -1,9 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Keyboard, X, Sparkles, Music, ShieldAlert } from 'lucide-react';
-
 import { hasActiveSession } from '@/lib/authSession';
+import {
+  springSnappy,
+  staggerContainerVariants,
+  staggerItemVariants,
+  subtleButtonTapMotion,
+  iconButtonMotion,
+} from '@/lib/motionVariants';
 
 export default function ShortcutsDrawer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -99,11 +106,12 @@ export default function ShortcutsDrawer() {
   return (
     <div ref={bubbleRef} className="hidden md:block fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-[85] select-none font-mono">
       {/* Mini Floating Trigger Button on Left Center */}
-      <button
+      <motion.button
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-200 backdrop-blur-xl text-[10px] font-bold shadow-2xl ${
+        {...subtleButtonTapMotion}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-colors backdrop-blur-xl text-[10px] font-bold shadow-2xl cursor-pointer ${
           isOpen
-            ? 'bg-white text-black border-white scale-105 shadow-[0_0_25px_rgba(255,255,255,0.5)]'
+            ? 'bg-white text-black border-white shadow-[0_0_25px_rgba(255,255,255,0.5)]'
             : 'bg-black/80 text-zinc-300 border-white/20 hover:border-white/60 hover:text-white hover:bg-black/95'
         }`}
         title="Bảng phím tắt (Nhấn 'A')"
@@ -111,78 +119,89 @@ export default function ShortcutsDrawer() {
         <kbd className="px-1.5 py-0.5 rounded bg-white/15 border border-white/25 text-white font-mono font-bold text-[9px]">A</kbd>
         <Keyboard className="w-3 h-3" />
         <span className="hidden xs:inline tracking-wider uppercase text-[9px]">HƯỚNG DẪN</span>
-      </button>
+      </motion.button>
 
-      {/* Floating Compact Rounded Bubble Card (Pops Out to the Right) */}
-      <div
-        className={`absolute left-0 top-full mt-3 sm:left-full sm:top-1/2 sm:-translate-y-1/2 sm:mt-0 sm:ml-3 w-[270px] sm:w-[290px] bg-black/90 border border-white/20 rounded-2xl p-3 shadow-[0_15px_40px_rgba(0,0,0,0.95)] backdrop-blur-2xl transition-all duration-200 origin-left transform ${
-          isOpen
-            ? 'scale-100 opacity-100 translate-x-0 pointer-events-auto'
-            : 'scale-90 opacity-0 -translate-x-2 pointer-events-none'
-        }`}
-        style={{
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(255, 255, 255, 0.05)',
-        }}
-      >
-        {/* Subtle Scanlines Overlay */}
-        <div className="crt-scanlines pointer-events-none opacity-10 rounded-[inherit]" />
-
-        {/* Bubble Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 relative z-10">
-          <div className="flex items-center gap-1.5">
-            <Keyboard className="w-3.5 h-3.5 text-white" />
-            <span className="font-cyber font-bold text-xs text-white tracking-wide">HƯỚNG DẪN PHÍM TẮT</span>
-          </div>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="p-1 rounded-md bg-white/10 hover:bg-white text-zinc-400 hover:text-black transition-colors"
-            title="Đóng (A hoặc Esc)"
+      {/* Floating Compact Rounded Bubble Card (Spring Pop Out to Right) */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88, x: -10 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.92, x: -6, transition: { duration: 0.15 } }}
+            transition={springSnappy}
+            className="absolute left-0 top-full mt-3 sm:left-full sm:top-1/2 sm:-translate-y-1/2 sm:mt-0 sm:ml-3 w-[270px] sm:w-[290px] bg-black/90 border border-white/20 rounded-2xl p-3 shadow-[0_15px_40px_rgba(0,0,0,0.95)] backdrop-blur-2xl origin-left"
+            style={{
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(255, 255, 255, 0.05)',
+            }}
           >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
+            {/* Subtle Scanlines Overlay */}
+            <div className="crt-scanlines pointer-events-none opacity-10 rounded-[inherit]" />
 
-        {/* Compact Shortcuts List */}
-        <div className="space-y-3 max-h-[380px] overflow-y-auto no-scrollbar relative z-10 pr-0.5">
-          {shortcutsList.map((group, gIdx) => (
-            <div key={gIdx} className="space-y-1.5">
-              <div className="flex items-center gap-1 text-[8px] font-bold text-zinc-400 uppercase tracking-wider">
-                {group.icon}
-                <span>{group.category}</span>
+            {/* Bubble Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 relative z-10">
+              <div className="flex items-center gap-1.5">
+                <Keyboard className="w-3.5 h-3.5 text-white" />
+                <span className="font-cyber font-bold text-xs text-white tracking-wide">HƯỚNG DẪN PHÍM TẮT</span>
               </div>
-
-              <div className="space-y-1">
-                {group.items.map((item, iIdx) => (
-                  <div
-                    key={iIdx}
-                    className="py-1 px-2 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-between gap-2"
-                  >
-                    <span className="text-[10px] text-zinc-300 font-sans leading-tight">
-                      {item.desc}
-                    </span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {item.keys.map((k, kIdx) => (
-                        <kbd
-                          key={kIdx}
-                          className="px-1.5 py-0.2 rounded bg-zinc-900 border border-white/25 text-white font-mono font-bold text-[8.5px] shadow-sm"
-                        >
-                          {k}
-                        </kbd>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <motion.button
+                onClick={() => setIsOpen(false)}
+                {...iconButtonMotion}
+                className="p-1 rounded-md bg-white/10 hover:bg-white text-zinc-400 hover:text-black transition-colors cursor-pointer"
+                title="Đóng (A hoặc Esc)"
+              >
+                <X className="w-3 h-3" />
+              </motion.button>
             </div>
-          ))}
-        </div>
 
-        {/* Bubble Footer */}
-        <div className="pt-2 mt-2 border-t border-white/10 text-center text-[8px] text-zinc-500 relative z-10 flex items-center justify-between font-mono">
-          <span>Nhấn <kbd className="px-1 py-0.2 rounded bg-zinc-900 border border-white/20 text-zinc-300">A</kbd> để đóng</span>
-          <span className="text-zinc-400 font-cyber font-bold">VAULT</span>
-        </div>
-      </div>
+            {/* Compact Shortcuts List with Staggered Entrance */}
+            <motion.div
+              variants={staggerContainerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-3 max-h-[380px] overflow-y-auto no-scrollbar relative z-10 pr-0.5"
+            >
+              {shortcutsList.map((group, gIdx) => (
+                <div key={gIdx} className="space-y-1.5">
+                  <div className="flex items-center gap-1 text-[8px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {group.icon}
+                    <span>{group.category}</span>
+                  </div>
+
+                  <div className="space-y-1">
+                    {group.items.map((item, iIdx) => (
+                      <motion.div
+                        key={iIdx}
+                        variants={staggerItemVariants}
+                        className="py-1 px-2 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-between gap-2"
+                      >
+                        <span className="text-[10px] text-zinc-300 font-sans leading-tight">
+                          {item.desc}
+                        </span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {item.keys.map((k, kIdx) => (
+                            <kbd
+                              key={kIdx}
+                              className="px-1.5 py-0.2 rounded bg-zinc-900 border border-white/25 text-white font-mono font-bold text-[8.5px] shadow-sm"
+                            >
+                              {k}
+                            </kbd>
+                          ))}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+
+            {/* Bubble Footer */}
+            <div className="pt-2 mt-2 border-t border-white/10 text-center text-[8px] text-zinc-500 relative z-10 flex items-center justify-between font-mono">
+              <span>Nhấn <kbd className="px-1 py-0.2 rounded bg-zinc-900 border border-white/20 text-zinc-300">A</kbd> để đóng</span>
+              <span className="text-zinc-400 font-cyber font-bold">VAULT</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

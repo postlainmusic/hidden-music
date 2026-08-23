@@ -32,6 +32,8 @@
 - [Giao dịch 036: Multi-tier Kick Detection, Universal Zero-Scrollbar Protocol & Audio Duration Sync](#giao-dịch-036-multi-tier-kick-detection-universal-zero-scrollbar-protocol--audio-duration-sync)
 - [Giao dịch 037: Visual Distinction for Regular Kicks vs 808/Sub Drops & Rapid Roll Response](#giao-dịch-037-visual-distinction-for-regular-kicks-vs-808sub-drops--rapid-roll-response)
 - [Giao dịch 038: Audio Waveform Beat & Drum Tagger Studio in Admin Portal with WAV Exporter](#giao-dịch-038-audio-waveform-beat--drum-tagger-studio-in-admin-portal-with-wav-exporter)
+- [Giao dịch 041: Multi-Tier High-Resilience Streaming Architecture & Comprehensive Edge Error Auditing](#giao-dịch-041-multi-tier-high-resilience-streaming-architecture--comprehensive-edge-error-auditing)
+- [Giao dịch 042: Comprehensive UI-UX Pro Max & Motion Animation Engine Overhaul](#giao-dịch-042-comprehensive-ui-ux-pro-max--motion-animation-engine-overhaul)
 
 ---
 
@@ -989,6 +991,38 @@
   4. **Verification**:
      - `tsc --noEmit`: 0 errors.
      - `npm test`: 27/27 tests PASSED 100%.
+
+---
+
+### Giao dịch 042: Comprehensive UI-UX Pro Max & Motion Animation Engine Overhaul
+* **Thời gian**: 23/08/2026 14:50 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Tích hợp chuẩn thiết kế **UI-UX Pro Max** và thư viện **Motion** (`framer-motion` & `motion`).
+  - Rà soát, nâng cấp toàn bộ giao diện, modal, vi tương tác (micro-interactions), spring physics, và hiệu ứng chuyển cảnh mượt mà 120 FPS.
+  - Bảo toàn 100% Core Invariants (Monochrome Cyber-Aesthetic, Audio/Video Zone Decoupling, 60FPS Direct DOM audio graph, Web API purity).
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **Motion Tokens & Spring Presets (`src/lib/motionVariants.ts`)**:
+     - Tạo `springSnappy` (stiffness 450, damping 35), `springBouncy`, `springSmooth`, `springGentle`.
+     - Chuẩn hóa Asymmetric Timing (Exit 150-180ms nhanh hơn Enter 250-350ms).
+     - Định nghĩa `modalBackdropVariants`, `modalContentVariants`, `staggerContainerVariants`, `buttonTapMotion`.
+  2. **Accessibility & Reduced Motion (`src/app/globals.css`)**:
+     - Thêm media query `@media (prefers-reduced-motion: reduce)` tôn trọng cài đặt người dùng.
+  3. **Nâng Cấp Toàn Bộ Modals & Overlays**:
+     - `VaultGate.tsx`: Modal pop-in, accordion Admin Passkey, tactile buttons.
+     - `Navbar.tsx`: Bọc các modal trong `<AnimatePresence mode="wait">` chống unmount đột ngột; micro-interactions cho vinyl logo và icons.
+     - `ProfileModal.tsx`: Backdrop blur fade, active tab pill sliding (`layoutId="profileTabActivePill"`), spring alerts.
+     - `SettingsModal.tsx`: Spring modal entrance, animated toggle switch knobs trượt mượt mà.
+     - `VideoPaywallModal.tsx`: Pricing plan cards micro-lift, smooth VietQR checkout view transition.
+     - `ShortcutsDrawer.tsx`: Floating shortcut palette spring pop-out, staggered shortcut items.
+     - `AuthModal.tsx`: Spring modal entrance & exit, accordion admin access.
+     - `AlbumComments.tsx`: Staggered comments reveal, optimistic new comment entrance, heart like button pop animation.
+  4. **Discovery Feed & 3D Stage Micro-Interactions**:
+     - `DiscoveryFeed.tsx`: Thẻ TrackRow, SquareCard, VideoCard, AlbumCard, MoodPlaylistCard tích hợp `motion.div` hover lift & click punch; Filter Pills sử dụng `layoutId="activeDiscoveryFilterPill"` trượt mượt mà; Cinema Video Modal bọc trong `AnimatePresence`.
+     - `VaultScene.tsx`: `TrackItemRow` tích hợp `motion.div` micro-interaction (`whileHover={{ x: 3 }}`).
+  5. **Verification**:
+     - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
+     - `npm test`: **27/27 test suites PASSED 100%**.
 
 
 

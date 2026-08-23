@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { motion } from 'framer-motion';
 import {
   Play,
   Pause,
@@ -24,6 +25,7 @@ import { Album, TrackItem, PlayerZone } from '@/types/database';
 import AlbumComments from '@/components/ui/AlbumComments';
 import { hasVideoSubscription, refreshUserProfile } from '@/lib/authSession';
 import { getMediaCdnUrl, getCoverCdnUrl } from '@/lib/r2Storage';
+import { springSnappy } from '@/lib/motionVariants';
 
 interface VaultSceneProps {
   albums: Album[];
@@ -71,9 +73,12 @@ const TrackItemRow = memo(function TrackItemRow({
   const trackIndex = String(index + 1).padStart(2, '0');
 
   return (
-    <div
+    <motion.div
       onClick={() => onTrackClick(track)}
-      className={`group relative h-12 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-all duration-150 flex items-center justify-between border ${
+      whileHover={{ x: 3 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springSnappy}
+      className={`group relative h-12 sm:h-14 px-3.5 sm:px-4 rounded-xl cursor-pointer transition-colors flex items-center justify-between border ${
         isCurrentPlaying
           ? 'bg-white/[0.10] border-white/25 shadow-[0_0_20px_rgba(255,255,255,0.06)]'
           : 'bg-transparent hover:bg-white/[0.04] border-transparent hover:border-white/[0.08]'
@@ -126,7 +131,7 @@ const TrackItemRow = memo(function TrackItemRow({
           {formatDuration(track.duration)}
         </span>
       </div>
-    </div>
+    </motion.div>
   );
 });
 

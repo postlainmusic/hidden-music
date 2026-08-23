@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
   Send,
@@ -13,6 +14,13 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { AlbumCommentItem } from '@/types/database';
 import { getStoredUserSession, getStoredAdminSession } from '@/lib/authSession';
+import {
+  springSnappy,
+  staggerContainerVariants,
+  staggerItemVariants,
+  subtleButtonTapMotion,
+  iconButtonMotion,
+} from '@/lib/motionVariants';
 
 interface AlbumCommentsProps {
   albumId: string;
@@ -312,7 +320,7 @@ export default function AlbumComments({
             maxLength={500}
             onChange={(e) => setContent(e.target.value)}
             placeholder={`Chia sẻ cảm nghĩ về Album "${albumTitle}"...`}
-            className="w-full bg-black/70 border border-white/15 focus:border-white/40 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-all resize-none leading-relaxed"
+            className="w-full bg-black/70 border border-white/15 focus:border-white/40 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors resize-none leading-relaxed"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -321,10 +329,11 @@ export default function AlbumComments({
             }}
           />
 
-          <button
+          <motion.button
             type="submit"
             disabled={posting || !content.trim()}
-            className="absolute right-2 bottom-2 px-3 py-1 rounded-lg bg-white text-black font-extrabold text-[11px] uppercase tracking-wider hover:bg-slate-200 transition-all flex items-center gap-1 shadow-md disabled:opacity-30 disabled:pointer-events-none"
+            {...subtleButtonTapMotion}
+            className="absolute right-2 bottom-2 px-3 py-1 rounded-lg bg-white text-black font-extrabold text-[11px] uppercase tracking-wider hover:bg-slate-200 transition-colors flex items-center gap-1 shadow-md disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
           >
             {posting ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -334,11 +343,11 @@ export default function AlbumComments({
                 <Send className="w-2.5 h-2.5" />
               </>
             )}
-          </button>
+          </motion.button>
         </div>
       </form>
 
-      {/* 2. Comments List */}
+      {/* 2. Comments List with Staggered Entrance */}
       <div
         className="flex-1 min-h-0 overflow-y-auto space-y-2 p-3 no-scrollbar"
         style={{ WebkitOverflowScrolling: 'touch' }}
@@ -363,92 +372,101 @@ export default function AlbumComments({
             </p>
           </div>
         ) : (
-          comments.map((comment) => {
-            const isLiked = likedCommentIds.has(comment.id);
-            const isAuthor =
-              (userSession?.id && comment.user_id && userSession.id === comment.user_id) ||
-              (userSession?.email && comment.user_email && userSession.email === comment.user_email);
-            const canDelete = isAuthor || isCurrentAdmin;
-            const isAdminComment = comment.role === 'admin' || comment.user_email === 'admin@hiddenvault.com';
+          <AnimatePresence initial={false}>
+            {comments.map((comment) => {
+              const isLiked = likedCommentIds.has(comment.id);
+              const isAuthor =
+                (userSession?.id && comment.user_id && userSession.id === comment.user_id) ||
+                (userSession?.email && comment.user_email && userSession.email === comment.user_email);
+              const canDelete = isAuthor || isCurrentAdmin;
+              const isAdminComment = comment.role === 'admin' || comment.user_email === 'admin@hiddenvault.com';
 
-            return (
-              <div
-                key={comment.id}
-                className={`p-3 rounded-2xl border transition-all text-xs space-y-2 ${
-                  isAdminComment
-                    ? 'bg-slate-900/90 border-white/30 shadow-[0_0_20px_rgba(255,255,255,0.05)]'
-                    : 'bg-black/60 border-white/10 hover:border-white/20'
-                }`}
-              >
-                {/* Comment Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-[10px] font-bold text-white uppercase flex-shrink-0">
-                      {comment.user_name ? comment.user_name.charAt(0) : 'U'}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-extrabold text-white truncate text-xs font-cyber">
-                          {comment.user_name}
-                        </span>
-                        {isAdminComment ? (
-                          <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold bg-white text-black uppercase">
-                            ADMIN
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-white/10 text-slate-400 uppercase">
-                            MEMBER
-                          </span>
-                        )}
-                        {comment.is_pinned && (
-                          <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 flex items-center gap-0.5">
-                            <Pin className="w-2.5 h-2.5" />
-                            <span>Ghim</span>
-                          </span>
-                        )}
+              return (
+                <motion.div
+                  key={comment.id}
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+                  transition={springSnappy}
+                  className={`p-3 rounded-2xl border transition-colors text-xs space-y-2 ${
+                    isAdminComment
+                      ? 'bg-slate-900/90 border-white/30 shadow-[0_0_20px_rgba(255,255,255,0.05)]'
+                      : 'bg-black/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  {/* Comment Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-[10px] font-bold text-white uppercase flex-shrink-0">
+                        {comment.user_name ? comment.user_name.charAt(0) : 'U'}
                       </div>
-                      <span className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
-                        <Clock className="w-2.5 h-2.5" />
-                        <span>{formatTimeAgo(comment.created_at)}</span>
-                      </span>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-white truncate text-xs font-cyber">
+                            {comment.user_name}
+                          </span>
+                          {isAdminComment ? (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold bg-white text-black uppercase">
+                              ADMIN
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-white/10 text-slate-400 uppercase">
+                              MEMBER
+                            </span>
+                          )}
+                          {comment.is_pinned && (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 flex items-center gap-0.5">
+                              <Pin className="w-2.5 h-2.5" />
+                              <span>Ghim</span>
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{formatTimeAgo(comment.created_at)}</span>
+                        </span>
+                      </div>
                     </div>
+
+                    {/* Actions: Delete button */}
+                    {canDelete && (
+                      <motion.button
+                        onClick={() => handleDeleteComment(comment.id)}
+                        {...iconButtonMotion}
+                        className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                        title="Xóa bình luận"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </motion.button>
+                    )}
                   </div>
 
-                  {/* Actions: Delete button */}
-                  {canDelete && (
-                    <button
-                      onClick={() => handleDeleteComment(comment.id)}
-                      className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40 transition-colors"
-                      title="Xóa bình luận"
+                  {/* Comment Content */}
+                  <p className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed pl-8">
+                    {comment.content}
+                  </p>
+
+                  {/* Comment Footer: Like button with Heart Pop micro-interaction */}
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/5 pl-8">
+                    <motion.button
+                      onClick={() => handleToggleLike(comment.id)}
+                      whileTap={{ scale: 1.35 }}
+                      transition={springSnappy}
+                      className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold transition-colors cursor-pointer ${
+                        isLiked
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                          : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'
+                      }`}
                     >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Comment Content */}
-                <p className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed pl-8">
-                  {comment.content}
-                </p>
-
-                {/* Comment Footer: Like button */}
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/5 pl-8">
-                  <button
-                    onClick={() => handleToggleLike(comment.id)}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold transition-all ${
-                      isLiked
-                        ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                        : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'
-                    }`}
-                  >
-                    <Heart className={`w-3 h-3 ${isLiked ? 'fill-red-400 text-red-400' : ''}`} />
-                    <span>{comment.likes_count || 0}</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })
+                      <Heart className={`w-3 h-3 ${isLiked ? 'fill-red-400 text-red-400' : ''}`} />
+                      <span>{comment.likes_count || 0}</span>
+                    </motion.button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         )}
       </div>
     </div>

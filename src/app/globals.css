@@ -456,3 +456,22 @@ html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
   will-change: transform, opacity;
 }
 
+/* ========================================================================= */
+/* UI-UX Pro Max: Accessibility & Reduced Motion Protocol                    */
+/* ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .tv-grain-overlay,
+  .crt-scanlines {
+    animation: none !important;
+  }
+}
+

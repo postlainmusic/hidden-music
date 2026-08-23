@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film,
   Sparkles,
@@ -27,6 +28,15 @@ import {
   hasVideoSubscription,
   refreshUserProfile,
 } from '@/lib/authSession';
+import {
+  modalBackdropVariants,
+  modalContentVariants,
+  buttonTapMotion,
+  subtleButtonTapMotion,
+  iconButtonMotion,
+  springSnappy,
+  fadeVariants,
+} from '@/lib/motionVariants';
 
 interface VideoPaywallModalProps {
   isOpen: boolean;
@@ -241,29 +251,45 @@ export default function VideoPaywallModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none font-mono">
+    <motion.div
+      variants={modalBackdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md select-none font-mono"
+    >
       <div className="tv-grain-overlay opacity-30 pointer-events-none" />
 
       {/* Modal Container */}
-      <div className="relative w-full max-w-lg rounded-3xl bg-gradient-to-b from-zinc-900 to-black border border-white/20 p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden text-white max-h-[92vh] overflow-y-auto no-scrollbar">
-        
+      <motion.div
+        variants={modalContentVariants}
+        className="relative w-full max-w-lg rounded-3xl bg-gradient-to-b from-zinc-900 to-black border border-white/20 p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden text-white max-h-[92vh] overflow-y-auto no-scrollbar"
+      >
         {/* Ambient Top Glow */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-32 bg-white/10 blur-3xl rounded-full pointer-events-none" />
 
         {/* Close Button */}
-        <button
+        <motion.button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-all z-20"
+          {...iconButtonMotion}
+          className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors z-20 cursor-pointer"
           title="Đóng cửa sổ"
         >
           <X className="w-4 h-4" />
-        </button>
+        </motion.button>
 
         {/* HEADER SECTION */}
         <div className="flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/25 flex items-center justify-center mb-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+          <motion.div
+            whileHover={{ rotate: 10, scale: 1.05 }}
+            transition={springSnappy}
+            className="w-14 h-14 rounded-2xl bg-white/10 border border-white/25 flex items-center justify-center mb-3 shadow-[0_0_30px_rgba(255,255,255,0.1)] cursor-pointer"
+          >
             <Film className="w-7 h-7 text-white" />
-          </div>
+          </motion.div>
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] uppercase font-bold tracking-widest text-slate-300 mb-2">
             <Crown className="w-3 h-3 text-white" />
@@ -280,264 +306,296 @@ export default function VideoPaywallModal({
         </div>
 
         {/* ACTIVE SUCCESS SCREEN */}
-        {activeSuccess ? (
-          <div className="my-8 flex flex-col items-center justify-center text-center space-y-3 animate-fadeIn">
-            <div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_35px_rgba(255,255,255,0.8)] animate-bounce">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-black font-cyber uppercase tracking-wider text-white">
-              THANH TOÁN THÀNH CÔNG!
-            </h3>
-            <p className="text-xs text-slate-300">
-              Đặc quyền Video Pass đã được kích hoạt. Đang chuyển hướng vào Video Zone...
-            </p>
-          </div>
-        ) : payOSPayment ? (
-          /* PAYOS VIETQR EMBEDDED CHECKOUT SCREEN */
-          <div className="mt-5 space-y-4 animate-fadeIn">
-            <div className="p-4 rounded-2xl bg-zinc-950 border border-white/20 flex flex-col items-center text-center">
-              <div className="flex items-center justify-between w-full pb-2 mb-3 border-b border-white/10 text-xs">
-                <span className="text-slate-400 font-bold uppercase">MÃ ĐƠN HÀNG:</span>
-                <span className="font-mono font-black text-white">#{payOSPayment.orderCode}</span>
+        <AnimatePresence mode="wait">
+          {activeSuccess ? (
+            <motion.div
+              key="success-screen"
+              variants={fadeVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="my-8 flex flex-col items-center justify-center text-center space-y-3"
+            >
+              <div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_35px_rgba(255,255,255,0.8)] animate-bounce">
+                <CheckCircle2 className="w-8 h-8" />
               </div>
-
-              {/* VietQR / QR Code Display */}
-              <div className="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-3">
-                {payOSPayment.qrCode ? (
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payOSPayment.qrCode)}`}
-                    alt="VietQR Code"
-                    className="w-44 h-44 object-contain rounded-lg"
-                  />
-                ) : (
-                  <div className="w-44 h-44 flex flex-col items-center justify-center text-black text-xs">
-                    <QrCode className="w-10 h-10 mb-2" />
-                    <span>Mở app ngân hàng quét mã</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Banking Transfer Details */}
-              <div className="w-full space-y-2 text-left text-xs bg-white/5 p-3 rounded-xl border border-white/10 font-mono">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Số tiền:</span>
-                  <span className="font-black text-white text-sm">{payOSPayment.amount.toLocaleString('vi-VN')} đ</span>
+              <h3 className="text-lg font-black font-cyber uppercase tracking-wider text-white">
+                THANH TOÁN THÀNH CÔNG!
+              </h3>
+              <p className="text-xs text-slate-300">
+                Đặc quyền Video Pass đã được kích hoạt. Đang chuyển hướng vào Video Zone...
+              </p>
+            </motion.div>
+          ) : payOSPayment ? (
+            /* PAYOS VIETQR EMBEDDED CHECKOUT SCREEN */
+            <motion.div
+              key="payos-checkout-screen"
+              variants={fadeVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="mt-5 space-y-4"
+            >
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-white/20 flex flex-col items-center text-center">
+                <div className="flex items-center justify-between w-full pb-2 mb-3 border-b border-white/10 text-xs">
+                  <span className="text-slate-400 font-bold uppercase">MÃ ĐƠN HÀNG:</span>
+                  <span className="font-mono font-black text-white">#{payOSPayment.orderCode}</span>
                 </div>
 
-                {payOSPayment.accountNumber && (
+                {/* VietQR / QR Code Display */}
+                <div className="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-3">
+                  {payOSPayment.qrCode ? (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payOSPayment.qrCode)}`}
+                      alt="VietQR Code"
+                      className="w-44 h-44 object-contain rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-44 h-44 flex flex-col items-center justify-center text-black text-xs">
+                      <QrCode className="w-10 h-10 mb-2" />
+                      <span>Mở app ngân hàng quét mã</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Banking Transfer Details */}
+                <div className="w-full space-y-2 text-left text-xs bg-white/5 p-3 rounded-xl border border-white/10 font-mono">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Số tài khoản:</span>
+                    <span className="text-slate-400">Số tiền:</span>
+                    <span className="font-black text-white text-sm">{payOSPayment.amount.toLocaleString('vi-VN')} đ</span>
+                  </div>
+
+                  {payOSPayment.accountNumber && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Số tài khoản:</span>
+                      <button
+                        onClick={() => copyToClipboard(payOSPayment.accountNumber || '', 'acc')}
+                        className="flex items-center gap-1 font-bold text-white hover:underline cursor-pointer"
+                      >
+                        <span>{payOSPayment.accountNumber}</span>
+                        {copiedField === 'acc' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Nội dung CK:</span>
                     <button
-                      onClick={() => copyToClipboard(payOSPayment.accountNumber || '', 'acc')}
-                      className="flex items-center gap-1 font-bold text-white hover:underline"
+                      onClick={() => copyToClipboard(payOSPayment.description, 'desc')}
+                      className="flex items-center gap-1 font-bold text-yellow-300 hover:underline cursor-pointer"
                     >
-                      <span>{payOSPayment.accountNumber}</span>
-                      {copiedField === 'acc' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                      <span>{payOSPayment.description}</span>
+                      {copiedField === 'desc' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
                     </button>
                   </div>
-                )}
+                </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Nội dung CK:</span>
-                  <button
-                    onClick={() => copyToClipboard(payOSPayment.description, 'desc')}
-                    className="flex items-center gap-1 font-bold text-yellow-300 hover:underline"
-                  >
-                    <span>{payOSPayment.description}</span>
-                    {copiedField === 'desc' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
-                  </button>
+                {/* Important Notes & Screenshot Reminder Box */}
+                <div className="w-full mt-3 p-3 rounded-xl bg-amber-950/25 border border-amber-500/30 text-left space-y-1.5 font-mono text-[11px] leading-relaxed">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-bold uppercase tracking-wider text-[10px]">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                    <span>HƯỚNG DẪN & LƯU Ý QUAN TRỌNG:</span>
+                  </div>
+                  <ul className="space-y-1 text-slate-300 text-[10px] pl-1 list-none">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-400 font-bold">1.</span>
+                      <span>Quét mã VietQR hoặc copy chính xác <strong>Số tài khoản</strong>, <strong>Số tiền</strong> và <strong>Nội dung chuyển khoản</strong>.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-400 font-bold">2.</span>
+                      <span className="text-amber-200 font-semibold">📸 <strong>Vui lòng chụp lại ảnh màn hình giao dịch / hóa đơn chuyển khoản</strong> để bảo đảm quyền lợi và đối soát nhanh khi cần.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-400 font-bold">3.</span>
+                      <span>Hệ thống tự động kích hoạt gói VIP ngay khi giao dịch thành công (thời gian xử lý 5-30 giây).</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Polling indicator */}
+                <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-300">
+                  <Disc3 className="w-3.5 h-3.5 animate-spin text-white" />
+                  <span>Hệ thống tự động kích hoạt ngay sau khi chuyển khoản...</span>
                 </div>
               </div>
 
-              {/* Important Notes & Screenshot Reminder Box */}
-              <div className="w-full mt-3 p-3 rounded-xl bg-amber-950/25 border border-amber-500/30 text-left space-y-1.5 font-mono text-[11px] leading-relaxed">
-                <div className="flex items-center gap-1.5 text-amber-300 font-bold uppercase tracking-wider text-[10px]">
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                  <span>HƯỚNG DẪN & LƯU Ý QUAN TRỌNG:</span>
-                </div>
-                <ul className="space-y-1 text-slate-300 text-[10px] pl-1 list-none">
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-amber-400 font-bold">1.</span>
-                    <span>Quét mã VietQR hoặc copy chính xác <strong>Số tài khoản</strong>, <strong>Số tiền</strong> và <strong>Nội dung chuyển khoản</strong>.</span>
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-amber-400 font-bold">2.</span>
-                    <span className="text-amber-200 font-semibold">📸 <strong>Vui lòng chụp lại ảnh màn hình giao dịch / hóa đơn chuyển khoản</strong> để bảo đảm quyền lợi và đối soát nhanh khi cần.</span>
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-amber-400 font-bold">3.</span>
-                    <span>Hệ thống tự động kích hoạt gói VIP ngay khi giao dịch thành công (thời gian xử lý 5-30 giây).</span>
-                  </li>
-                </ul>
-              </div>
+              {/* Direct PayOS Link Button */}
+              <div className="flex gap-2">
+                <motion.a
+                  href={payOSPayment.checkoutUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (payOSPayment.checkoutUrl) {
+                      window.open(payOSPayment.checkoutUrl, '_blank', 'noopener,noreferrer');
+                      e.preventDefault();
+                    }
+                  }}
+                  {...buttonTapMotion}
+                  className="flex-1 py-3 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-black font-cyber text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-colors cursor-pointer"
+                >
+                  <span>MỞ TRANG THANH TOÁN PAYOS</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </motion.a>
 
-              {/* Polling indicator */}
-              <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-300">
-                <Disc3 className="w-3.5 h-3.5 animate-spin text-white" />
-                <span>Hệ thống tự động kích hoạt ngay sau khi chuyển khoản...</span>
+                <motion.button
+                  onClick={() => checkPaymentStatus(payOSPayment.orderCode)}
+                  disabled={isCheckingPayment}
+                  {...subtleButtonTapMotion}
+                  className="p-3 rounded-xl bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 transition-colors flex items-center justify-center cursor-pointer"
+                  title="Kiểm tra trạng thái thanh toán ngay"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isCheckingPayment ? 'animate-spin' : ''}`} />
+                </motion.button>
               </div>
-            </div>
-
-            {/* Direct PayOS Link Button */}
-            <div className="flex gap-2">
-              <a
-                href={payOSPayment.checkoutUrl || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => {
-                  if (payOSPayment.checkoutUrl) {
-                    window.open(payOSPayment.checkoutUrl, '_blank', 'noopener,noreferrer');
-                    e.preventDefault();
-                  }
-                }}
-                className="flex-1 py-3 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-black font-cyber text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
-              >
-                <span>MỞ TRANG THANH TOÁN PAYOS</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
 
               <button
-                onClick={() => checkPaymentStatus(payOSPayment.orderCode)}
-                disabled={isCheckingPayment}
-                className="p-3 rounded-xl bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 transition-all flex items-center justify-center"
-                title="Kiểm tra trạng thái thanh toán ngay"
+                onClick={() => setPayOSPayment(null)}
+                className="w-full text-center text-xs text-slate-400 hover:text-white py-1 transition-colors cursor-pointer"
               >
-                <RefreshCw className={`w-4 h-4 ${isCheckingPayment ? 'animate-spin' : ''}`} />
+                ← Chọn gói khác hoặc hủy giao dịch
               </button>
-            </div>
-
-            <button
-              onClick={() => setPayOSPayment(null)}
-              className="w-full text-center text-xs text-slate-400 hover:text-white py-1 transition-colors"
+            </motion.div>
+          ) : (
+            /* STANDARD PLAN SELECTION SCREEN */
+            <motion.div
+              key="plan-selection-screen"
+              variants={fadeVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
             >
-              ← Chọn gói khác hoặc hủy giao dịch
-            </button>
-          </div>
-        ) : (
-          /* STANDARD PLAN SELECTION SCREEN */
-          <>
-            {/* Exclusive Features List */}
-            <div className="mt-5 space-y-2 bg-white/[0.03] border border-white/10 rounded-2xl p-3.5 sm:p-4">
-              <div className="flex items-center gap-2.5 text-xs text-slate-200">
-                <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
-                <span>Trọn bộ MV hiếm & Visualizer video bị ẩn/thu hồi</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs text-slate-200">
-                <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
-                <span>Giao diện phát Theater Mode 2/3 tỷ lệ chuẩn điện ảnh</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs text-slate-200">
-                <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
-                <span>Thanh toán tự động qua payOS VietQR / Chuyển khoản 24/7</span>
-              </div>
-            </div>
-
-            {/* Pricing Cards Selection */}
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {/* Option 1: Monthly */}
-              <div
-                onClick={() => setSelectedPlan('monthly')}
-                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
-                  selectedPlan === 'monthly'
-                    ? 'bg-white/15 border-white shadow-[0_0_20px_rgba(255,255,255,0.15)]'
-                    : 'bg-white/5 border-white/10 hover:border-white/20'
-                }`}
-              >
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">GÓI THÁNG</span>
-                  <div className="text-base font-black text-white font-cyber mt-0.5">49.000đ</div>
+              {/* Exclusive Features List */}
+              <div className="mt-5 space-y-2 bg-white/[0.03] border border-white/10 rounded-2xl p-3.5 sm:p-4">
+                <div className="flex items-center gap-2.5 text-xs text-slate-200">
+                  <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
+                  <span>Trọn bộ MV hiếm & Visualizer video bị ẩn/thu hồi</span>
                 </div>
-                <span className="text-[9px] text-slate-400 mt-2">Truy cập 30 ngày</span>
+                <div className="flex items-center gap-2.5 text-xs text-slate-200">
+                  <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
+                  <span>Giao diện phát Theater Mode 2/3 tỷ lệ chuẩn điện ảnh</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-xs text-slate-200">
+                  <CheckCircle2 className="w-4 h-4 text-white flex-shrink-0" />
+                  <span>Thanh toán tự động qua payOS VietQR / Chuyển khoản 24/7</span>
+                </div>
               </div>
 
-              {/* Option 2: Lifetime (VIP) */}
-              <div
-                onClick={() => setSelectedPlan('lifetime')}
-                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between relative overflow-hidden ${
-                  selectedPlan === 'lifetime'
-                    ? 'bg-white text-black border-white shadow-[0_0_25px_rgba(255,255,255,0.25)]'
-                    : 'bg-white/5 border-white/10 hover:border-white/20 text-white'
-                }`}
-              >
-                <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black text-white text-[8px] font-black uppercase tracking-wider">
-                  HOT
-                </div>
-                <div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${selectedPlan === 'lifetime' ? 'text-zinc-700' : 'text-slate-400'}`}>
-                    TRỌN ĐỜI (VIP)
+              {/* Pricing Cards Selection with Spring Micro-Interactions */}
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {/* Option 1: Monthly */}
+                <motion.div
+                  onClick={() => setSelectedPlan('monthly')}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={springSnappy}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-colors flex flex-col justify-between ${
+                    selectedPlan === 'monthly'
+                      ? 'bg-white/15 border-white shadow-[0_0_20px_rgba(255,255,255,0.15)]'
+                      : 'bg-white/5 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">GÓI THÁNG</span>
+                    <div className="text-base font-black text-white font-cyber mt-0.5">49.000đ</div>
+                  </div>
+                  <span className="text-[9px] text-slate-400 mt-2">Truy cập 30 ngày</span>
+                </motion.div>
+
+                {/* Option 2: Lifetime (VIP) */}
+                <motion.div
+                  onClick={() => setSelectedPlan('lifetime')}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={springSnappy}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-colors flex flex-col justify-between relative overflow-hidden ${
+                    selectedPlan === 'lifetime'
+                      ? 'bg-white text-black border-white shadow-[0_0_25px_rgba(255,255,255,0.25)]'
+                      : 'bg-white/5 border-white/10 hover:border-white/20 text-white'
+                  }`}
+                >
+                  <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black text-white text-[8px] font-black uppercase tracking-wider">
+                    HOT
+                  </div>
+                  <div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${selectedPlan === 'lifetime' ? 'text-zinc-700' : 'text-slate-400'}`}>
+                      TRỌN ĐỜI (VIP)
+                    </span>
+                    <div className="text-base font-black font-cyber mt-0.5">199.000đ</div>
+                  </div>
+                  <span className={`text-[9px] mt-2 ${selectedPlan === 'lifetime' ? 'text-zinc-800 font-bold' : 'text-slate-400'}`}>
+                    Mở khóa vĩnh viễn
                   </span>
-                  <div className="text-base font-black font-cyber mt-0.5">199.000đ</div>
-                </div>
-                <span className={`text-[9px] mt-2 ${selectedPlan === 'lifetime' ? 'text-zinc-800 font-bold' : 'text-slate-400'}`}>
-                  Mở khóa vĩnh viễn
-                </span>
+                </motion.div>
               </div>
-            </div>
 
-            {paymentError && (
-              <p className="mt-3 text-xs text-red-400 font-mono text-center">{paymentError}</p>
-            )}
+              {paymentError && (
+                <p className="mt-3 text-xs text-red-400 font-mono text-center">{paymentError}</p>
+              )}
 
-            {/* Primary Action: payOS VietQR Payment */}
-            <div className="mt-5 space-y-3">
-              <button
-                onClick={handleCreatePayOSPayment}
-                disabled={isCreatingPayment}
-                className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-zinc-200 text-black font-black font-cyber text-xs uppercase tracking-widest transition-all shadow-[0_10px_25px_rgba(255,255,255,0.25)] hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
-              >
-                {isCreatingPayment ? (
-                  <>
-                    <Disc3 className="w-4 h-4 animate-spin text-black" />
-                    <span>ĐANG TẠO MÃ THANH TOÁN PAYOS...</span>
-                  </>
-                ) : (
-                  <>
-                    <QrCode className="w-4 h-4" />
-                    <span>THANH TOÁN QUA PAYOS / VIETQR</span>
-                  </>
-                )}
-              </button>
+              {/* Primary Action: payOS VietQR Payment */}
+              <div className="mt-5 space-y-3">
+                <motion.button
+                  onClick={handleCreatePayOSPayment}
+                  disabled={isCreatingPayment}
+                  {...buttonTapMotion}
+                  className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-zinc-200 text-black font-black font-cyber text-xs uppercase tracking-widest transition-colors shadow-[0_10px_25px_rgba(255,255,255,0.25)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isCreatingPayment ? (
+                    <>
+                      <Disc3 className="w-4 h-4 animate-spin text-black" />
+                      <span>ĐANG TẠO MÃ THANH TOÁN PAYOS...</span>
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="w-4 h-4" />
+                      <span>THANH TOÁN QUA PAYOS / VIETQR</span>
+                    </>
+                  )}
+                </motion.button>
 
-              {/* Voucher / Passcode Activation Form (Quick Trial removed) */}
-              <div className="pt-3 border-t border-white/10 space-y-2">
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-bold">
-                  <Ticket className="w-3.5 h-3.5 text-white" />
-                  <span>Kích hoạt bằng mã Passcode / Voucher:</span>
+                {/* Voucher / Passcode Activation Form */}
+                <div className="pt-3 border-t border-white/10 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-bold">
+                    <Ticket className="w-3.5 h-3.5 text-white" />
+                    <span>Kích hoạt bằng mã Passcode / Voucher:</span>
+                  </div>
+
+                  <form onSubmit={handlePasscodeSubmit} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={passcodeInput}
+                      onChange={(e) => setPasscodeInput(e.target.value)}
+                      placeholder="Nhập mã voucher (vd: VIP2026)"
+                      className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white transition-colors font-mono uppercase"
+                    />
+                    <motion.button
+                      type="submit"
+                      disabled={isActivating}
+                      {...subtleButtonTapMotion}
+                      className="px-4 py-2 rounded-xl bg-white text-black hover:bg-zinc-200 text-xs font-black font-mono transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-md flex-shrink-0 cursor-pointer"
+                    >
+                      {isActivating ? (
+                        <>
+                          <Disc3 className="w-3.5 h-3.5 animate-spin text-black" />
+                          <span>XỬ LÝ...</span>
+                        </>
+                      ) : (
+                        <span>ÁP DỤNG</span>
+                      )}
+                    </motion.button>
+                  </form>
+
+                  {passcodeError && (
+                    <p className="text-[11px] text-rose-400 font-mono text-center">{passcodeError}</p>
+                  )}
                 </div>
-
-                <form onSubmit={handlePasscodeSubmit} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={passcodeInput}
-                    onChange={(e) => setPasscodeInput(e.target.value)}
-                    placeholder="Nhập mã voucher (vd: VIP2026)"
-                    className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white transition-all font-mono uppercase"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isActivating}
-                    className="px-4 py-2 rounded-xl bg-white text-black hover:bg-zinc-200 text-xs font-black font-mono transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md flex-shrink-0"
-                  >
-                    {isActivating ? (
-                      <>
-                        <Disc3 className="w-3.5 h-3.5 animate-spin text-black" />
-                        <span>XỬ LÝ...</span>
-                      </>
-                    ) : (
-                      <span>ÁP DỤNG</span>
-                    )}
-                  </button>
-                </form>
-
-                {passcodeError && (
-                  <p className="text-[11px] text-rose-400 font-mono text-center">{passcodeError}</p>
-                )}
               </div>
-            </div>
-          </>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -1,9 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Lock, Mail, AlertCircle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { setStoredAdminSession, setStoredUserSession } from '@/lib/authSession';
+import {
+  modalBackdropVariants,
+  modalContentVariants,
+  accordionVariants,
+  buttonTapMotion,
+  subtleButtonTapMotion,
+  iconButtonMotion,
+  springSnappy,
+} from '@/lib/motionVariants';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -108,8 +118,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none font-mono">
-      <div className="bw-panel w-full max-w-md rounded-3xl p-6 border border-white/30 shadow-2xl relative space-y-5">
+    <motion.div
+      variants={modalBackdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none font-mono"
+    >
+      <motion.div
+        variants={modalContentVariants}
+        className="bw-panel w-full max-w-md rounded-3xl p-6 border border-white/30 shadow-2xl relative space-y-5"
+      >
         {/* Header & Close Button */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
@@ -118,31 +140,39 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
               VAULT AUTHENTICATION
             </h3>
           </div>
-          <button
+          <motion.button
             onClick={onClose}
-            className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors"
+            {...iconButtonMotion}
+            className="p-1.5 rounded-xl bg-white/10 hover:bg-white text-slate-300 hover:text-black transition-colors cursor-pointer"
+            title="Đóng"
           >
             <X className="w-4 h-4" />
-          </button>
+          </motion.button>
         </div>
 
         {/* Status Message */}
-        {msg && (
-          <div
-            className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-              msg.type === 'success'
-                ? 'bg-white/15 border border-white/40 text-white'
-                : 'bg-red-950/60 border border-red-500/40 text-red-300'
-            }`}
-          >
-            {msg.type === 'success' ? (
-              <CheckCircle className="w-4 h-4 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            )}
-            <span>{msg.text}</span>
-          </div>
-        )}
+        <AnimatePresence>
+          {msg && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={springSnappy}
+              className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                msg.type === 'success'
+                  ? 'bg-white/15 border border-white/40 text-white'
+                  : 'bg-red-950/60 border border-red-500/40 text-red-300'
+              }`}
+            >
+              {msg.type === 'success' ? (
+                <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              )}
+              <span>{msg.text}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Main Action: Continue with Google */}
         <div className="space-y-3 py-2 text-center">
@@ -150,11 +180,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             Đăng nhập hoặc đăng ký tài khoản Hidden Music bằng Google Account của bạn.
           </p>
 
-          <button
+          <motion.button
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+            {...buttonTapMotion}
+            className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-xl transition-colors flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -175,7 +206,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
               />
             </svg>
             <span>{loading ? 'ĐANG KẾT NỐI GOOGLE...' : 'SIGN IN / REGISTER WITH GOOGLE'}</span>
-          </button>
+          </motion.button>
         </div>
 
         {/* Optional Collapsible Admin Master Passkey Access */}
@@ -183,53 +214,63 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <button
             type="button"
             onClick={() => setShowAdminPasskey(!showAdminPasskey)}
-            className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-white transition-colors"
+            className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-white transition-colors cursor-pointer py-1"
           >
             <span>Admin Master Passkey Access</span>
             {showAdminPasskey ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
 
-          {showAdminPasskey && (
-            <form onSubmit={handleAdminSubmit} className="space-y-3 mt-3 text-xs">
-              <div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Admin or Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white"
-                  />
-                  <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    placeholder="Password / Passkey"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white"
-                  />
-                  <Lock className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2 rounded-xl bg-white/20 hover:bg-white text-white hover:text-black font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+          <AnimatePresence>
+            {showAdminPasskey && (
+              <motion.form
+                variants={accordionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                onSubmit={handleAdminSubmit}
+                className="space-y-3 mt-3 text-xs overflow-hidden"
               >
-                ADMIN SIGN IN
-              </button>
-            </form>
-          )}
+                <div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Admin or Email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
+                    />
+                    <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      placeholder="Password / Passkey"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 pl-8 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
+                    />
+                    <Lock className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                  </div>
+                </div>
+
+                <motion.button
+                  type="submit"
+                  disabled={loading}
+                  {...subtleButtonTapMotion}
+                  className="w-full py-2 rounded-xl bg-white/20 hover:bg-white text-white hover:text-black font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  ADMIN SIGN IN
+                </motion.button>
+              </motion.form>
+            )}
+          </AnimatePresence>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

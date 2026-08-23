@@ -19,6 +19,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
   Pause,
@@ -46,6 +47,14 @@ import {
   Flame,
   Volume2,
 } from 'lucide-react';
+import {
+  springSnappy,
+  buttonTapMotion,
+  subtleButtonTapMotion,
+  iconButtonMotion,
+  modalBackdropVariants,
+  modalContentVariants,
+} from '@/lib/motionVariants';
 import { Album, TrackItem } from '@/types/database';
 import type {
   YtmFeedResponse,
@@ -189,10 +198,13 @@ interface TrackRowProps {
 
 function TrackRow({ track, rank, isPlaying, isCurrent, isQueued, onPlay, onAddToQueue, onWatchVideo }: TrackRowProps) {
   return (
-    <div
+    <motion.div
       id={`track-row-${track.ytmId}`}
       onClick={onPlay}
-      className={`group flex items-center gap-3 w-72 sm:w-80 flex-shrink-0 snap-start p-2.5 rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 text-left ${
+      whileHover={{ x: 3 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springSnappy}
+      className={`group flex items-center gap-3 w-72 sm:w-80 flex-shrink-0 snap-start p-2.5 rounded-xl border transition-colors cursor-pointer text-left ${
         isCurrent
           ? 'bg-white/10 border-white/30 shadow-[0_0_16px_rgba(255,255,255,0.08)]'
           : 'bg-zinc-950/80 border-white/10 hover:border-white/25 hover:bg-zinc-900/90'
@@ -236,38 +248,40 @@ function TrackRow({ track, rank, isPlaying, isCurrent, isQueued, onPlay, onAddTo
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {onAddToQueue && (
-          <button
+          <motion.button
             onClick={(e) => {
               e.stopPropagation();
               onAddToQueue();
             }}
+            {...subtleButtonTapMotion}
             title="Thêm vào hàng chờ"
-            className={`p-1.5 rounded-lg border transition-all ${
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
               isQueued
                 ? 'bg-white text-black border-white'
                 : 'bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white border-white/10'
             }`}
           >
             {isQueued ? <Check className="w-3 h-3 text-green-400" /> : <Plus className="w-3 h-3" />}
-          </button>
+          </motion.button>
         )}
         {onWatchVideo && track.mediaType === 'video' && (
-          <button
+          <motion.button
             onClick={(e) => {
               e.stopPropagation();
               onWatchVideo();
             }}
+            {...subtleButtonTapMotion}
             title="Xem Video MV"
-            className="p-1.5 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all"
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-colors cursor-pointer"
           >
             <Video className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
         )}
       </div>
       {isCurrent && isPlaying && (
         <Disc3 className="w-3.5 h-3.5 text-white animate-spin flex-shrink-0" />
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -284,13 +298,16 @@ interface SquareCardProps {
 
 function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueue, onWatchVideo }: SquareCardProps) {
   return (
-    <div
+    <motion.div
       id={`card-${track.ytmId}`}
       onClick={onPlay}
-      className={`group relative flex-shrink-0 snap-start w-44 sm:w-52 rounded-2xl overflow-hidden border transition-all duration-250 cursor-pointer active:scale-95 text-left ${
+      whileHover={{ y: -3, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springSnappy}
+      className={`group relative flex-shrink-0 snap-start w-44 sm:w-52 rounded-2xl overflow-hidden border transition-colors cursor-pointer text-left ${
         isCurrent
           ? 'border-white ring-1 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.10)]'
-          : 'border-white/10 hover:border-white/30 hover:scale-[1.03]'
+          : 'border-white/10 hover:border-white/30'
       }`}
     >
       <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden">
@@ -303,16 +320,18 @@ function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueu
         )}
         <div className={`absolute inset-0 bg-black/55 flex items-center justify-center gap-2 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           {onAddToQueue && (
-            <button
+            <motion.button
               onClick={(e) => {
                 e.stopPropagation();
                 onAddToQueue();
               }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               aria-label="Add to queue"
-              className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all shadow-lg hover:scale-110 active:scale-90"
+              className="p-2.5 rounded-full bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-colors shadow-lg cursor-pointer"
             >
               {isQueued ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Plus className="w-3.5 h-3.5" />}
-            </button>
+            </motion.button>
           )}
           <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.6)]">
             {isCurrent && isPlaying ? (
@@ -333,7 +352,7 @@ function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueu
               e.stopPropagation();
               onWatchVideo();
             }}
-            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-all flex items-center gap-1 text-[9px] font-mono font-bold"
+            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 transition-colors flex items-center gap-1 text-[9px] font-mono font-bold cursor-pointer"
           >
             <Video className="w-3 h-3" />
             MV
@@ -348,7 +367,7 @@ function SquareCard({ track, isCurrent, isPlaying, isQueued, onPlay, onAddToQueu
           {track.artist}
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -363,9 +382,12 @@ interface VideoCardProps {
 
 function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: VideoCardProps) {
   return (
-    <div
+    <motion.div
       id={`video-card-${track.ytmId}`}
-      className="group relative flex-shrink-0 snap-start w-64 sm:w-72 rounded-2xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-250 bg-zinc-950 shadow-lg hover:shadow-2xl text-left"
+      whileHover={{ y: -3, scale: 1.015 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springSnappy}
+      className="group relative flex-shrink-0 snap-start w-64 sm:w-72 rounded-2xl overflow-hidden border border-white/10 hover:border-white/30 transition-colors bg-zinc-950 shadow-lg text-left"
     >
       <div className="relative w-full aspect-video bg-zinc-900 overflow-hidden cursor-pointer" onClick={onWatchVideo}>
         {track.coverUrl ? (
@@ -395,24 +417,28 @@ function VideoCard({ track, isCurrent, isPlaying, onPlayAudio, onWatchVideo }: V
             {track.artist}
           </p>
         </div>
-        <button
+        <motion.button
           onClick={onPlayAudio}
+          {...subtleButtonTapMotion}
           title="Phát âm thanh"
-          className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-all flex-shrink-0"
+          className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 transition-colors flex-shrink-0 cursor-pointer"
         >
           {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Volume2 className="w-3.5 h-3.5" />}
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 // ── Album Card ────────────────────────────────────────────────────────────────
 function AlbumCard({ album }: { album: YtmAlbum }) {
   return (
-    <div
+    <motion.div
       id={`album-${album.ytmId}`}
-      className="group flex flex-col rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 hover:border-white/30 transition-all duration-250 hover:scale-[1.04] active:scale-95 shadow-md hover:shadow-xl text-left"
+      whileHover={{ y: -3, scale: 1.03 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springSnappy}
+      className="group flex flex-col rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 hover:border-white/30 transition-colors shadow-md text-left cursor-pointer"
     >
       <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden">
         {album.coverUrl ? (
@@ -434,16 +460,19 @@ function AlbumCard({ album }: { album: YtmAlbum }) {
           {album.artist}
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 // ── Mood Playlist Card ────────────────────────────────────────────────────────
 function MoodPlaylistCard({ playlist, gradient }: { playlist: YtmPlaylist; gradient: string }) {
   return (
-    <div
+    <motion.div
       id={`playlist-${playlist.ytmId}`}
-      className={`group relative flex-shrink-0 snap-start w-40 sm:w-48 rounded-2xl overflow-hidden bg-gradient-to-br ${gradient} border border-white/10 hover:border-white/30 transition-all duration-250 hover:scale-[1.04] active:scale-95 shadow-lg hover:shadow-2xl text-left p-4 pb-3`}
+      whileHover={{ y: -3, scale: 1.03 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springSnappy}
+      className={`group relative flex-shrink-0 snap-start w-40 sm:w-48 rounded-2xl overflow-hidden bg-gradient-to-br ${gradient} border border-white/10 hover:border-white/30 transition-colors shadow-lg text-left p-4 pb-3 cursor-pointer`}
     >
       <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
         <Radio className="w-5 h-5 text-white" />
@@ -452,7 +481,7 @@ function MoodPlaylistCard({ playlist, gradient }: { playlist: YtmPlaylist; gradi
         {playlist.title}
       </h4>
       <p className="text-[9px] font-mono text-zinc-400 mt-1">CURATED PLAYLIST</p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -470,8 +499,20 @@ function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProp
   const videoId = track.ytmId.replace('yt:', '');
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-zinc-950 border border-white/20 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+    <motion.div
+      variants={modalBackdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-6"
+    >
+      <motion.div
+        variants={modalContentVariants}
+        className="relative w-full max-w-4xl bg-zinc-950 border border-white/20 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+      >
         {/* Header bar */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 bg-zinc-900/80">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -489,20 +530,22 @@ function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProp
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {onAddToQueue && (
-              <button
+              <motion.button
                 onClick={() => onAddToQueue(track)}
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1.5"
+                {...subtleButtonTapMotion}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white text-zinc-300 hover:text-black border border-white/15 text-[10px] font-mono font-bold uppercase transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-3 h-3" />
                 <span>Hàng chờ</span>
-              </button>
+              </motion.button>
             )}
-            <button
+            <motion.button
               onClick={onClose}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-400 hover:text-black border border-white/15 transition-all"
+              {...iconButtonMotion}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white text-zinc-400 hover:text-black border border-white/15 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -516,8 +559,8 @@ function CinemaVideoModal({ track, onClose, onAddToQueue }: CinemaVideoModalProp
             className="w-full h-full border-0"
           />
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -882,12 +925,16 @@ export default function DiscoveryFeed({
   return (
     <div className={`w-full space-y-10 select-none pb-36 ${className}`}>
 
-      {/* In-App Cinema Video Modal */}
-      <CinemaVideoModal
-        track={activeVideoModalTrack}
-        onClose={() => setActiveVideoModalTrack(null)}
-        onAddToQueue={(t) => handleAddToQueueItem(t)}
-      />
+      {/* In-App Cinema Video Modal with AnimatePresence */}
+      <AnimatePresence>
+        {activeVideoModalTrack && (
+          <CinemaVideoModal
+            track={activeVideoModalTrack}
+            onClose={() => setActiveVideoModalTrack(null)}
+            onAddToQueue={(t) => handleAddToQueueItem(t)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ════════════════════════════════════════════════════════════════════
           SEARCH BAR & FILTER SELECTOR
@@ -911,14 +958,14 @@ export default function DiscoveryFeed({
             <button
               onClick={() => setSearchQuery('')}
               aria-label="Clear search"
-              className="p-0.5 rounded-full text-zinc-500 hover:text-white transition-colors active:scale-90 flex-shrink-0"
+              className="p-0.5 rounded-full text-zinc-500 hover:text-white transition-colors active:scale-90 flex-shrink-0 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Filter pills */}
+        {/* Filter pills with Layout Morphing Active Background */}
         {!isSearchMode && (
           <div className="flex items-center justify-between gap-1.5 px-1 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -933,20 +980,30 @@ export default function DiscoveryFeed({
                   'New Releases',
                   'Vault Lossless',
                 ] as FilterPill[]
-              ).map((pill) => (
-                <button
-                  key={pill}
-                  id={`filter-pill-${pill.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
-                  onClick={() => setActiveFilter(pill)}
-                  className={`px-3 py-1.5 rounded-xl text-[10px] font-mono font-bold tracking-wider whitespace-nowrap transition-all duration-200 active:scale-95 ${
-                    activeFilter === pill
-                      ? 'bg-white text-black shadow-[0_0_14px_rgba(255,255,255,0.3)]'
-                      : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/10'
-                  }`}
-                >
-                  {pill}
-                </button>
-              ))}
+              ).map((pill) => {
+                const isActive = activeFilter === pill;
+                return (
+                  <button
+                    key={pill}
+                    id={`filter-pill-${pill.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                    onClick={() => setActiveFilter(pill)}
+                    className={`relative px-3 py-1.5 rounded-xl text-[10px] font-mono font-bold tracking-wider whitespace-nowrap transition-colors cursor-pointer z-10 ${
+                      isActive
+                        ? 'text-black'
+                        : 'text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeDiscoveryFilterPill"
+                        transition={springSnappy}
+                        className="absolute inset-0 bg-white rounded-xl shadow-[0_0_14px_rgba(255,255,255,0.3)] z-[-1]"
+                      />
+                    )}
+                    {pill}
+                  </button>
+                );
+              })}
             </div>
             {ytmFeed && (
               <div className="hidden sm:flex items-center gap-1 text-[9px] font-mono text-zinc-600 flex-shrink-0">

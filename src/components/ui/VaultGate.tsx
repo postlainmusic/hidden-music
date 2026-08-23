@@ -1,10 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Mail, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Disc3, Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-
 import { setStoredAdminSession, setStoredUserSession } from '@/lib/authSession';
+import {
+  modalContentVariants,
+  accordionVariants,
+  buttonTapMotion,
+  subtleButtonTapMotion,
+  springSnappy,
+} from '@/lib/motionVariants';
 
 export default function VaultGate() {
   const [showAdminPasskey, setShowAdminPasskey] = useState(false);
@@ -106,14 +113,22 @@ export default function VaultGate() {
       <div className="tv-grain-overlay" />
       <div className="crt-scanlines" />
 
-      {/* Main Glassmorphic Gate Card */}
-      <div className="bw-panel w-full max-w-md rounded-3xl p-6 sm:p-8 border border-white/30 shadow-[0_0_50px_rgba(255,255,255,0.1)] relative z-10 space-y-6 text-center">
-        
+      {/* Main Glassmorphic Gate Card with Spring Physics Entrance */}
+      <motion.div
+        variants={modalContentVariants}
+        initial="hidden"
+        animate="visible"
+        className="bw-panel w-full max-w-md rounded-3xl p-6 sm:p-8 border border-white/30 shadow-[0_0_50px_rgba(255,255,255,0.1)] relative z-10 space-y-6 text-center"
+      >
         {/* Logo & Header */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shadow-xl">
+          <motion.div
+            whileHover={{ scale: 1.08, rotate: 15 }}
+            transition={springSnappy}
+            className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shadow-xl cursor-pointer"
+          >
             <Disc3 className="w-9 h-9 text-white animate-spin-slow" />
-          </div>
+          </motion.div>
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-widest font-cyber uppercase">
               HIDDEN MUSIC
@@ -129,30 +144,38 @@ export default function VaultGate() {
           Vui lòng đăng nhập bằng tài khoản Google để giải mã và truy cập toàn bộ kho âm nhạc bí mật.
         </p>
 
-        {/* Status Message */}
-        {msg && (
-          <div
-            className={`p-3.5 rounded-2xl text-xs flex items-center gap-2.5 text-left ${
-              msg.type === 'success'
-                ? 'bg-white/15 border border-white/40 text-white'
-                : 'bg-red-950/60 border border-red-500/40 text-red-300'
-            }`}
-          >
-            {msg.type === 'success' ? (
-              <CheckCircle className="w-4 h-4 flex-shrink-0 text-white" />
-            ) : (
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
-            )}
-            <span>{msg.text}</span>
-          </div>
-        )}
+        {/* Status Message with Smooth Alert Reveal */}
+        <AnimatePresence mode="wait">
+          {msg && (
+            <motion.div
+              key={msg.text}
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={springSnappy}
+              className={`p-3.5 rounded-2xl text-xs flex items-center gap-2.5 text-left ${
+                msg.type === 'success'
+                  ? 'bg-white/15 border border-white/40 text-white'
+                  : 'bg-red-950/60 border border-red-500/40 text-red-300'
+              }`}
+            >
+              {msg.type === 'success' ? (
+                <CheckCircle className="w-4 h-4 flex-shrink-0 text-white" />
+              ) : (
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+              )}
+              <span>{msg.text}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Google Sign In Button */}
-        <button
+        {/* Google Sign In Button with Tactile Tap Feedback */}
+        <motion.button
           type="button"
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full py-4 px-4 rounded-2xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-2xl transition-all flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+          {...buttonTapMotion}
+          className="w-full py-4 px-4 rounded-2xl bg-white hover:bg-slate-200 text-black font-extrabold text-xs uppercase tracking-wider shadow-2xl transition-colors flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -173,64 +196,74 @@ export default function VaultGate() {
             />
           </svg>
           <span>{loading ? 'ĐANG KẾT NỐI GOOGLE...' : 'ĐĂNG NHẬP BẰNG GOOGLE'}</span>
-        </button>
+        </motion.button>
 
-        {/* Admin Passkey Section */}
+        {/* Admin Passkey Section with Smooth Accordion Expansion */}
         <div className="border-t border-white/10 pt-3">
           <button
             type="button"
             onClick={() => setShowAdminPasskey(!showAdminPasskey)}
-            className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-white transition-colors"
+            className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-white transition-colors cursor-pointer py-1"
           >
-            <span className="flex items-center gap-1">
-              <Shield className="w-3 h-3" />
+            <span className="flex items-center gap-1.5 font-bold">
+              <Shield className="w-3.5 h-3.5" />
               <span>Admin Passkey Access</span>
             </span>
             {showAdminPasskey ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
 
-          {showAdminPasskey && (
-            <form onSubmit={handleAdminSubmit} className="space-y-3 mt-3 text-xs text-left">
-              <div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Admin or Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-black/60 border border-white/20 rounded-xl px-3.5 py-2.5 pl-9 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white"
-                  />
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    placeholder="Password / Passkey"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-black/60 border border-white/20 rounded-xl px-3.5 py-2.5 pl-9 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white"
-                  />
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-white/20 hover:bg-white text-white hover:text-black font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+          <AnimatePresence>
+            {showAdminPasskey && (
+              <motion.form
+                variants={accordionVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                onSubmit={handleAdminSubmit}
+                className="space-y-3 mt-3 text-xs text-left overflow-hidden"
               >
-                ADMIN LOGIN
-              </button>
-            </form>
-          )}
+                <div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Admin or Email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-black/60 border border-white/20 rounded-xl px-3.5 py-2.5 pl-9 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
+                    />
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      placeholder="Password / Passkey"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-black/60 border border-white/20 rounded-xl px-3.5 py-2.5 pl-9 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-white transition-colors"
+                    />
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  </div>
+                </div>
+
+                <motion.button
+                  type="submit"
+                  disabled={loading}
+                  {...subtleButtonTapMotion}
+                  className="w-full py-3 rounded-xl bg-white/20 hover:bg-white text-white hover:text-black font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  ADMIN LOGIN
+                </motion.button>
+              </motion.form>
+            )}
+          </AnimatePresence>
         </div>
 
-      </div>
+      </motion.div>
     </div>
   );
 }
