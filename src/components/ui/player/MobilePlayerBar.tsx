@@ -11,6 +11,7 @@ import {
   Repeat1,
   ListMusic,
   Disc3,
+  Mic2,
   Heart,
   Loader2,
   Trash2,
@@ -28,6 +29,15 @@ const formatTime = (secs: number) => {
   const mins = Math.floor(secs / 60);
   const rem = Math.floor(secs % 60);
   return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
+};
+
+const cleanLyrics = (raw?: string) => {
+  if (!raw) return '';
+  return raw
+    .split('\n')
+    .map((line) => line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim())
+    .filter((line) => line.length > 0)
+    .join('\n');
 };
 
 export default function MobilePlayerBar() {
@@ -82,7 +92,7 @@ export default function MobilePlayerBar() {
     : 0;
 
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeView, setActiveView] = useState<'player' | 'queue'>('player');
+  const [activeView, setActiveView] = useState<'player' | 'lyrics' | 'queue'>('player');
   const [isLiked, setIsLiked] = useState(false);
 
   const rafIdRef = useRef<number | null>(null);
@@ -511,9 +521,11 @@ export default function MobilePlayerBar() {
 
   if (!isMounted || !currentTrack) return null;
 
+  const displayLyrics = cleanLyrics(currentTrack?.lyrics);
+
   return (
     <>
-      {/* 1. MINI-PLAYER */}
+      {/* MINI-PLAYER */}
       <div
         className="fixed bottom-4 left-3 right-3 z-40 pointer-events-auto select-none"
         onTouchStart={handleMiniTouchStart}
@@ -632,7 +644,7 @@ export default function MobilePlayerBar() {
         </div>
       </div>
 
-      {/* 2. EXPANDED FULLSCREEN CYBER-DECK */}
+      {/* EXPANDED FULLSCREEN */}
       {isExpanded && (
         <div
           ref={expandRootRef}
@@ -680,7 +692,7 @@ export default function MobilePlayerBar() {
             </div>
           </div>
 
-          {/* CYBER SEGMENTED NAVIGATION DECK */}
+          {/* SEGMENTED NAVIGATION */}
           <div className="w-full max-w-sm mx-auto px-2 py-2 relative z-20 flex-shrink-0">
             <div className="bg-zinc-950/80 border border-white/15 rounded-2xl p-1 flex items-center justify-between shadow-lg backdrop-blur-xl">
               <button
@@ -693,6 +705,18 @@ export default function MobilePlayerBar() {
               >
                 <Disc3 className={`w-3.5 h-3.5 ${activeView === 'player' && isPlaying ? 'animate-spin' : ''}`} />
                 <span>TRÌNH PHÁT</span>
+              </button>
+
+              <button
+                onClick={() => setActiveView('lyrics')}
+                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  activeView === 'lyrics'
+                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+                <span>LỜI BÀI HÁT</span>
               </button>
 
               <button
@@ -709,9 +733,9 @@ export default function MobilePlayerBar() {
             </div>
           </div>
 
-          {/* MAIN STAGE VIEWPORT */}
+          {/* MAIN STAGE */}
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-hidden">
-            {/* VIEW 1: PLAYER VINYL STAGE */}
+            {/* VIEW 1: PLAYER */}
             {activeView === 'player' && (
               <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible px-4">
                 <div
@@ -773,16 +797,31 @@ export default function MobilePlayerBar() {
               </div>
             )}
 
-            {/* VIEW 2: QUEUE STAGE */}
+            {/* VIEW 2: LYRICS */}
+            {activeView === 'lyrics' && (
+              <div 
+                className="w-full h-full overflow-y-auto no-scrollbar py-6 px-4 text-center select-text font-cyber animate-fadeIn"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {displayLyrics ? (
+                  <p className="text-base sm:text-lg font-bold text-zinc-200 leading-relaxed whitespace-pre-line tracking-wide drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
+                    {displayLyrics}
+                  </p>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-500">
+                    <Mic2 className="w-8 h-8 text-zinc-600 mb-2 opacity-50" />
+                    <p className="text-xs uppercase tracking-widest font-mono">Chưa có lời bài hát cho ca khúc này</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIEW 3: QUEUE */}
             {activeView === 'queue' && (
               <div
                 className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-3 animate-fadeIn"
-                style={{
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                }}
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
-                {/* 1. USER QUEUE */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1 mb-1">
                     <div className="flex items-center gap-2">
@@ -845,7 +884,6 @@ export default function MobilePlayerBar() {
                   )}
                 </div>
 
-                {/* 2. UPCOMING / PLAYLIST */}
                 {playlist.length > 0 && (
                   <div className="space-y-1.5 pt-3 border-t border-white/5">
                     <div className="flex items-center justify-between px-1 mb-1">
