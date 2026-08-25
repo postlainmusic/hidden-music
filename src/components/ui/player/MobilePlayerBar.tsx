@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Play,
   Pause,
@@ -103,11 +104,6 @@ export default function MobilePlayerBar() {
   const expandLaserBorderRef = useRef<HTMLDivElement | null>(null);
   const expandTitleRef = useRef<HTMLHeadingElement | null>(null);
   const expandArtistRef = useRef<HTMLParagraphElement | null>(null);
-  const expandLikeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandShuffleBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandPrevBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandNextBtnRef = useRef<HTMLButtonElement | null>(null);
-  const expandRepeatBtnRef = useRef<HTMLButtonElement | null>(null);
   const miniPrevBtnRef = useRef<HTMLButtonElement | null>(null);
   const miniNextBtnRef = useRef<HTMLButtonElement | null>(null);
 
@@ -117,12 +113,6 @@ export default function MobilePlayerBar() {
   const touchDeltaXRef = useRef<number>(0);
   const [swipeOffsetX, setSwipeOffsetX] = useState<number>(0);
   const isSwipingHorizontalRef = useRef<boolean>(false);
-
-  const sheetTouchStartXRef = useRef<number>(0);
-  const sheetTouchStartYRef = useRef<number>(0);
-  const sheetTouchDeltaXRef = useRef<number>(0);
-  const sheetTouchDeltaYRef = useRef<number>(0);
-  const [sheetOffsetY, setSheetOffsetY] = useState<number>(0);
 
   // Seeker refs
   const expandedCurrentTimeTextRef = useRef<HTMLSpanElement | null>(null);
@@ -149,10 +139,6 @@ export default function MobilePlayerBar() {
   const lastSnareHitTimeRef = useRef<number>(0);
 
   const smoothBasslineRef = useRef<number>(0);
-  const fastVocalRef = useRef<number>(0);
-  const slowVocalRef = useRef<number>(0);
-  const smoothVocalRef = useRef<number>(0);
-
   const fastTrebleRef = useRef<number>(0);
   const slowTrebleRef = useRef<number>(0);
   const trebleStrobeRef = useRef<number>(0);
@@ -174,7 +160,6 @@ export default function MobilePlayerBar() {
       fastBassRef.current = 0; slowBassRef.current = 0;
       fastMidRef.current = 0; slowMidRef.current = 0;
       fastHighRef.current = 0; slowHighRef.current = 0;
-      fastVocalRef.current = 0; slowVocalRef.current = 0; smoothVocalRef.current = 0;
       fastTrebleRef.current = 0; slowTrebleRef.current = 0;
       trebleStrobeRef.current = 0; targetTrebleStrobeRef.current = 0;
       smoothBasslineRef.current = 0; smoothEnergyRef.current = 0;
@@ -423,7 +408,7 @@ export default function MobilePlayerBar() {
     };
   }, [isPlaying, activeZone, currentTimeRef, audioRef, analyserRef, swipeOffsetX, effectiveDuration, shuffleMode, repeatMode, activeView]);
 
-  // Mini bar swipe
+  // Mini bar swipe handlers
   const handleMiniTouchStart = (e: React.TouchEvent) => {
     if (e.touches[0]) {
       touchStartXRef.current = e.touches[0].clientX;
@@ -459,38 +444,6 @@ export default function MobilePlayerBar() {
     setTimeout(() => {
       isSwipingHorizontalRef.current = false;
     }, 50);
-  };
-
-  // Sheet swipe handlers
-  const handleSheetTouchStart = (e: React.TouchEvent) => {
-    if (e.touches[0]) {
-      sheetTouchStartXRef.current = e.touches[0].clientX;
-      sheetTouchStartYRef.current = e.touches[0].clientY;
-      sheetTouchDeltaXRef.current = 0;
-      sheetTouchDeltaYRef.current = 0;
-    }
-  };
-
-  const handleSheetTouchMove = (e: React.TouchEvent) => {
-    if (!e.touches[0]) return;
-    const diffX = e.touches[0].clientX - sheetTouchStartXRef.current;
-    const diffY = e.touches[0].clientY - sheetTouchStartYRef.current;
-    sheetTouchDeltaXRef.current = diffX;
-    sheetTouchDeltaYRef.current = diffY;
-
-    if (diffY > 0 && Math.abs(diffY) > Math.abs(diffX)) {
-      setSheetOffsetY(Math.min(180, diffY * 0.6));
-    }
-  };
-
-  const handleSheetTouchEnd = () => {
-    const deltaY = sheetTouchDeltaYRef.current;
-    if (deltaY > 50) {
-      setIsExpanded(false);
-    }
-    setSheetOffsetY(0);
-    sheetTouchDeltaXRef.current = 0;
-    sheetTouchDeltaYRef.current = 0;
   };
 
   const handleToggleLike = useCallback(
@@ -577,9 +530,10 @@ export default function MobilePlayerBar() {
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0 relative z-10" onClick={(e) => e.stopPropagation()}>
-            <button
+            <motion.button
+              whileTap={{ scale: 0.85 }}
               onClick={handleToggleLike}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white active:scale-90 transition-transform"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white"
               title={isLiked ? 'Đã yêu thích' : 'Yêu thích'}
             >
               <Heart
@@ -587,27 +541,29 @@ export default function MobilePlayerBar() {
                   isLiked ? 'text-white fill-white' : 'text-zinc-400'
                 }`}
               />
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.85 }}
               ref={miniPrevBtnRef}
               onClick={(e) => {
                 e.stopPropagation();
                 prevTrack();
               }}
-              className="p-2 rounded-xl text-zinc-300 hover:text-white active:scale-90 transition-transform will-change-transform"
+              className="p-2 rounded-xl text-zinc-300 hover:text-white"
               title="Bài trước"
             >
               <SkipBack className="w-4 h-4 fill-current" />
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.90 }}
               ref={miniPlayBtnRef}
               onClick={(e) => {
                 e.stopPropagation();
                 togglePlay();
               }}
-              className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 flex-shrink-0 mx-0.5 will-change-transform"
+              className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg flex-shrink-0 mx-0.5"
               title={isPlaying ? 'Tạm dừng' : 'Phát'}
             >
               {isBuffering ? (
@@ -617,414 +573,442 @@ export default function MobilePlayerBar() {
               ) : (
                 <Play className="w-4 h-4 fill-current ml-0.5" />
               )}
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.85 }}
               ref={miniNextBtnRef}
               onClick={(e) => {
                 e.stopPropagation();
                 nextTrack();
               }}
-              className="p-2 rounded-xl text-zinc-300 hover:text-white active:scale-90 transition-transform will-change-transform"
+              className="p-2 rounded-xl text-zinc-300 hover:text-white"
               title="Bài kế tiếp"
             >
               <SkipForward className="w-4 h-4 fill-current" />
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>
 
-      {/* EXPANDED FULLSCREEN */}
-      {isExpanded && (
-        <div
-          ref={expandRootRef}
-          style={{ transform: `translateY(${sheetOffsetY}px)` }}
-          className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-4 sm:p-6 pb-8 select-none animate-fadeIn transition-transform duration-75 overflow-hidden"
-        >
-          <div
-            ref={expandLaserBorderRef}
-            className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-20 transition-opacity pointer-events-none"
-          />
-
-          {/* HEADER DRAG ZONE */}
-          <div
-            onTouchStart={handleSheetTouchStart}
-            onTouchMove={handleSheetTouchMove}
-            onTouchEnd={handleSheetTouchEnd}
-            className="flex items-center justify-between w-full flex-shrink-0 pt-1 pb-2 px-2 relative z-30 touch-none select-none"
+      {/* EXPANDED FULLSCREEN SHEET WITH SPRING MOTION */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.5 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 100 || info.velocity.y > 400) {
+                setIsExpanded(false);
+              }
+            }}
+            ref={expandRootRef}
+            className="fixed inset-0 z-50 bg-[#050507] text-white flex flex-col justify-between p-4 sm:p-6 pb-8 select-none overflow-hidden touch-none"
           >
-            <button
-              onClick={() => setIsExpanded(false)}
-              className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-zinc-300 hover:text-white transition-all active:scale-95"
-              title="Thu nhỏ trình phát"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
+            <div
+              ref={expandLaserBorderRef}
+              className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-20 transition-opacity pointer-events-none"
+            />
 
-            <div 
-              onClick={() => setIsExpanded(false)}
-              className="flex flex-col items-center text-center cursor-pointer flex-1 px-3 py-1"
-            >
-              <div className="w-12 h-1.5 bg-white/30 hover:bg-white/60 active:bg-white/90 rounded-full mb-1.5 transition-all shadow-sm" />
-              <span className="text-[9px] font-mono tracking-[0.22em] text-zinc-400 uppercase font-bold">
-                ĐANG PHÁT TỪ ALBUM
-              </span>
-              <span className="text-xs font-cyber font-extrabold text-white truncate max-w-[220px] uppercase mt-0.5">
-                {currentAlbum?.title || 'HIDDEN DISC'}
-              </span>
+            {/* HEADER DRAG HANDLE */}
+            <div className="flex items-center justify-between w-full flex-shrink-0 pt-1 pb-2 px-2 relative z-30">
+              <motion.button
+                whileTap={{ scale: 0.90 }}
+                onClick={() => setIsExpanded(false)}
+                className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-zinc-300 hover:text-white"
+                title="Thu nhỏ trình phát"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </motion.button>
+
+              <div 
+                onClick={() => setIsExpanded(false)}
+                className="flex flex-col items-center text-center cursor-pointer flex-1 px-3 py-1"
+              >
+                <div className="w-12 h-1.5 bg-white/30 hover:bg-white/60 rounded-full mb-1.5 transition-all shadow-sm" />
+                <span className="text-[9px] font-mono tracking-[0.22em] text-zinc-400 uppercase font-bold">
+                  ĐANG PHÁT TỪ ALBUM
+                </span>
+                <span className="text-xs font-cyber font-extrabold text-white truncate max-w-[220px] uppercase mt-0.5">
+                  {currentAlbum?.title || 'HIDDEN DISC'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <TrackActionMenu track={currentTrack} album={currentAlbum} />
+                <span className="px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-white/10 text-white/90 border border-white/15">
+                  FLAC
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <TrackActionMenu track={currentTrack} album={currentAlbum} />
-              <span className="px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-white/10 text-white/90 border border-white/15">
-                FLAC
-              </span>
-            </div>
-          </div>
-
-          {/* SEGMENTED NAVIGATION */}
-          <div className="w-full max-w-sm mx-auto px-2 py-2 relative z-20 flex-shrink-0">
-            <div className="bg-zinc-950/80 border border-white/15 rounded-2xl p-1 flex items-center justify-between shadow-lg backdrop-blur-xl">
-              <button
-                onClick={() => setActiveView('player')}
-                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-                  activeView === 'player'
-                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Disc3 className={`w-3.5 h-3.5 ${activeView === 'player' && isPlaying ? 'animate-spin' : ''}`} />
-                <span>TRÌNH PHÁT</span>
-              </button>
-
-              <button
-                onClick={() => setActiveView('lyrics')}
-                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-                  activeView === 'lyrics'
-                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Mic2 className="w-3.5 h-3.5" />
-                <span>LỜI BÀI HÁT</span>
-              </button>
-
-              <button
-                onClick={() => setActiveView('queue')}
-                className={`flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-                  activeView === 'queue'
-                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)] font-extrabold'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <ListMusic className="w-3.5 h-3.5" />
-                <span>HÀNG CHỜ</span>
-              </button>
-            </div>
-          </div>
-
-          {/* MAIN STAGE */}
-          <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-hidden">
-            {/* VIEW 1: PLAYER */}
-            {activeView === 'player' && (
-              <div className="w-full flex flex-col items-center justify-center h-full animate-fadeIn relative overflow-visible px-4">
-                <div
-                  ref={expandCoverRef}
-                  className="relative w-[68vw] max-w-[270px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center mb-6 border border-white/20 will-change-transform z-10 flex-shrink-0 shadow-[0_20px_60px_rgba(0,0,0,0.95)]"
+            {/* SEGMENTED NAVIGATION WITH MORPHING INDICATOR */}
+            <div className="w-full max-w-sm mx-auto px-2 py-2 relative z-20 flex-shrink-0">
+              <div className="bg-zinc-950/80 border border-white/15 rounded-2xl p-1 flex items-center justify-between shadow-lg backdrop-blur-xl relative">
+                <button
+                  onClick={() => setActiveView('player')}
+                  className={`relative flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors z-10 ${
+                    activeView === 'player' ? 'text-black font-extrabold' : 'text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  {currentAlbum?.cover_url ? (
-                    <img
-                      src={currentAlbum.cover_url}
-                      alt={currentAlbum.title || 'Cover'}
-                      className="w-full h-full object-cover select-none pointer-events-none"
+                  {activeView === 'player' && (
+                    <motion.div
+                      layoutId="activeTabPill"
+                      className="absolute inset-0 bg-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.35)] -z-10"
+                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                     />
-                  ) : (
-                    <Disc3 className="w-20 h-20 text-zinc-700 animate-spin" />
                   )}
-                </div>
+                  <Disc3 className={`w-3.5 h-3.5 ${activeView === 'player' && isPlaying ? 'animate-spin' : ''}`} />
+                  <span>TRÌNH PHÁT</span>
+                </button>
 
-                <div className="flex items-center justify-between w-full max-w-[280px] relative z-10 px-1">
-                  <div className="flex flex-col min-w-0 flex-1 mr-3">
-                    <h2
-                      ref={expandTitleRef}
-                      className="text-lg sm:text-xl font-cyber font-black text-white truncate uppercase tracking-tight transition-all will-change-transform"
-                    >
-                      {currentTrack.title}
-                    </h2>
-                    <p 
-                      ref={expandArtistRef}
-                      className="text-xs font-mono text-zinc-400 truncate uppercase mt-1 transition-all tracking-wider font-bold"
-                    >
-                      {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
-                    </p>
-                  </div>
-
-                  <button
-                    ref={expandLikeBtnRef}
-                    onClick={handleToggleLike}
-                    className="p-2.5 rounded-2xl bg-white/5 border border-white/10 active:scale-90 transition-transform will-change-transform"
-                    title={isLiked ? 'Đã yêu thích' : 'Yêu thích'}
-                  >
-                    <Heart
-                      className={`w-5 h-5 transition-colors ${
-                        isLiked ? 'text-white fill-white' : 'text-zinc-400 hover:text-white'
-                      }`}
+                <button
+                  onClick={() => setActiveView('lyrics')}
+                  className={`relative flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors z-10 ${
+                    activeView === 'lyrics' ? 'text-black font-extrabold' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {activeView === 'lyrics' && (
+                    <motion.div
+                      layoutId="activeTabPill"
+                      className="absolute inset-0 bg-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.35)] -z-10"
+                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                     />
-                  </button>
-                </div>
+                  )}
+                  <Mic2 className="w-3.5 h-3.5" />
+                  <span>LỜI BÀI HÁT</span>
+                </button>
 
-                <div className="flex items-center justify-between w-full max-w-[280px] mt-4 pt-3 border-t border-white/10">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
-                    <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
-                      24-BIT / 96kHz LOSSLESS
-                    </span>
-                  </div>
-                  <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase tracking-wider">
-                    STEREO AUDIO
-                  </span>
-                </div>
+                <button
+                  onClick={() => setActiveView('queue')}
+                  className={`relative flex-1 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors z-10 ${
+                    activeView === 'queue' ? 'text-black font-extrabold' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {activeView === 'queue' && (
+                    <motion.div
+                      layoutId="activeTabPill"
+                      className="absolute inset-0 bg-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.35)] -z-10"
+                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                    />
+                  )}
+                  <ListMusic className="w-3.5 h-3.5" />
+                  <span>HÀNG CHỜ</span>
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* VIEW 2: LYRICS */}
-            {activeView === 'lyrics' && (
-              <div className="w-full h-full overflow-hidden animate-fadeIn relative">
-                <SyncedLyricsView
-                  rawLrc={currentTrack?.lyrics}
-                  trackTitle={currentTrack?.title}
-                  artistName={currentTrack?.artist || currentAlbum?.artist}
-                  duration={effectiveDuration}
-                  className="w-full h-full"
-                />
-              </div>
-            )}
-
-            {/* VIEW 3: QUEUE */}
-            {activeView === 'queue' && (
-              <div
-                className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-3 animate-fadeIn"
-                style={{
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                }}
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between px-1 mb-1">
-                    <div className="flex items-center gap-2">
-                      <ListMusic className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
-                        HÀNG CHỜ PHÁT ({userQueue.length})
-                      </span>
-                    </div>
-                    {userQueue.length > 0 && (
-                      <button
-                        onClick={clearQueue}
-                        className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase font-bold"
-                      >
-                        <Trash2 className="w-2.5 h-2.5" />
-                        Xóa tất cả
-                      </button>
+            {/* MAIN STAGE */}
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto relative w-full overflow-hidden">
+              {/* VIEW 1: PLAYER */}
+              {activeView === 'player' && (
+                <div className="w-full flex flex-col items-center justify-center h-full relative overflow-visible px-4">
+                  <div
+                    ref={expandCoverRef}
+                    className="relative w-[68vw] max-w-[270px] aspect-square rounded-3xl overflow-hidden bg-zinc-950 flex items-center justify-center mb-6 border border-white/20 will-change-transform z-10 flex-shrink-0 shadow-[0_20px_60px_rgba(0,0,0,0.95)]"
+                  >
+                    {currentAlbum?.cover_url ? (
+                      <img
+                        src={currentAlbum.cover_url}
+                        alt={currentAlbum.title || 'Cover'}
+                        className="w-full h-full object-cover select-none pointer-events-none"
+                      />
+                    ) : (
+                      <Disc3 className="w-20 h-20 text-zinc-700 animate-spin" />
                     )}
                   </div>
 
-                  {userQueue.length === 0 ? (
-                    <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 text-center">
-                      <p className="text-xs text-zinc-400 font-bold">Hàng chờ trống</p>
-                      <p className="text-[9px] text-zinc-600 mt-0.5">
-                        Tự động phát ngẫu nhiên từ thư viện khi hết bài.
+                  <div className="flex items-center justify-between w-full max-w-[280px] relative z-10 px-1">
+                    <div className="flex flex-col min-w-0 flex-1 mr-3">
+                      <h2
+                        ref={expandTitleRef}
+                        className="text-lg sm:text-xl font-cyber font-black text-white truncate uppercase tracking-tight transition-all will-change-transform"
+                      >
+                        {currentTrack.title}
+                      </h2>
+                      <p 
+                        ref={expandArtistRef}
+                        className="text-xs font-mono text-zinc-400 truncate uppercase mt-1 transition-all tracking-wider font-bold"
+                      >
+                        {currentTrack.artist || currentAlbum?.artist || 'POSTLAIN VAULT'}
                       </p>
                     </div>
-                  ) : (
-                    userQueue.map((track, idx) => (
-                      <div
-                        key={`mob_queue_${track?.id || idx}_${idx}`}
-                        className="flex items-center justify-between p-2.5 rounded-2xl bg-white/5 border border-white/10 active:bg-white/15 transition-all"
-                      >
-                        <div
-                          onClick={() => {
-                            if (track?.id) removeFromQueue(track.id);
-                            playTrack(track, currentAlbum, playlist);
-                          }}
-                          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                        >
-                          <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0 font-bold">
-                            {idx + 1}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-xs truncate font-bold text-white">{track?.title || 'Unknown Track'}</p>
-                            <p className="text-[9px] text-zinc-500 truncate uppercase mt-0.5">{track?.artist || 'Unknown Artist'}</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (track?.id) removeFromQueue(track.id);
-                          }}
-                          title="Xóa khỏi hàng chờ"
-                          className="p-1.5 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all ml-2 flex-shrink-0"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
 
-                {playlist.length > 0 && (
-                  <div className="space-y-1.5 pt-3 border-t border-white/5">
-                    <div className="flex items-center justify-between px-1 mb-1">
-                      <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
-                        ĐANG PHÁT TỪ THƯ VIỆN ({playlist.length})
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={handleToggleLike}
+                      className="p-2.5 rounded-2xl bg-white/5 border border-white/10"
+                      title={isLiked ? 'Đã yêu thích' : 'Yêu thích'}
+                    >
+                      <Heart
+                        className={`w-5 h-5 transition-colors ${
+                          isLiked ? 'text-white fill-white' : 'text-zinc-400 hover:text-white'
+                        }`}
+                      />
+                    </motion.button>
+                  </div>
+
+                  <div className="flex items-center justify-between w-full max-w-[280px] mt-4 pt-3 border-t border-white/10">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+                      <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
+                        24-BIT / 96kHz LOSSLESS
                       </span>
-                      {shuffleMode && (
-                        <span className="text-[8px] font-mono text-white font-bold bg-white/15 px-2 py-0.5 rounded border border-white/20">
-                          SHUFFLE ON
+                    </div>
+                    <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase tracking-wider">
+                      STEREO AUDIO
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 2: LYRICS */}
+              {activeView === 'lyrics' && (
+                <div className="w-full h-full overflow-hidden relative">
+                  <SyncedLyricsView
+                    rawLrc={currentTrack?.lyrics}
+                    trackTitle={currentTrack?.title}
+                    artistName={currentTrack?.artist || currentAlbum?.artist}
+                    duration={effectiveDuration}
+                    className="w-full h-full"
+                  />
+                </div>
+              )}
+
+              {/* VIEW 3: QUEUE */}
+              {activeView === 'queue' && (
+                <div
+                  className="w-full h-full overflow-y-auto no-scrollbar space-y-3 py-2 font-mono px-3"
+                  style={{
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                  }}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between px-1 mb-1">
+                      <div className="flex items-center gap-2">
+                        <ListMusic className="w-3.5 h-3.5 text-zinc-400" />
+                        <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-300 uppercase">
+                          HÀNG CHỜ PHÁT ({userQueue.length})
                         </span>
+                      </div>
+                      {userQueue.length > 0 && (
+                        <button
+                          onClick={clearQueue}
+                          className="text-[9px] font-mono text-zinc-500 hover:text-white transition-colors flex items-center gap-1 uppercase font-bold"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                          Xóa tất cả
+                        </button>
                       )}
                     </div>
-                    {playlist.map((track, idx) => {
-                      const isCur = track?.id === currentTrack?.id;
-                      return (
+
+                    {userQueue.length === 0 ? (
+                      <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 text-center">
+                        <p className="text-xs text-zinc-400 font-bold">Hàng chờ trống</p>
+                        <p className="text-[9px] text-zinc-600 mt-0.5">
+                          Tự động phát ngẫu nhiên từ thư viện khi hết bài.
+                        </p>
+                      </div>
+                    ) : (
+                      userQueue.map((track, idx) => (
                         <div
-                          key={track?.id || idx}
-                          onClick={() => playTrack(track, currentAlbum, playlist)}
-                          className={`flex items-center justify-between p-2.5 rounded-2xl border transition-all cursor-pointer ${
-                            isCur
-                              ? 'bg-white/15 border-white text-white font-bold shadow-md'
-                              : 'bg-white/[0.02] border-white/5 text-zinc-400 active:bg-white/5'
-                          }`}
+                          key={`mob_queue_${track?.id || idx}_${idx}`}
+                          className="flex items-center justify-between p-2.5 rounded-2xl bg-white/5 border border-white/10 active:bg-white/15 transition-all"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            onClick={() => {
+                              if (track?.id) removeFromQueue(track.id);
+                              playTrack(track, currentAlbum, playlist);
+                            }}
+                            className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                          >
                             <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0 font-bold">
                               {idx + 1}
                             </span>
                             <div className="min-w-0">
-                              <p className="text-xs truncate font-bold">{track?.title || 'Unknown Track'}</p>
-                              <p className="text-[9px] text-zinc-500 truncate mt-0.5">{track?.artist || currentAlbum?.artist || 'Unknown'}</p>
+                              <p className="text-xs truncate font-bold text-white">{track?.title || 'Unknown Track'}</p>
+                              <p className="text-[9px] text-zinc-500 truncate uppercase mt-0.5">{track?.artist || 'Unknown Artist'}</p>
                             </div>
                           </div>
-                          {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (track?.id) removeFromQueue(track.id);
+                            }}
+                            title="Xóa khỏi hàng chờ"
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all ml-2 flex-shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      );
-                    })}
+                      ))
+                    )}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* CONTROL DECK */}
-          <div className="w-full flex flex-col gap-3.5 flex-shrink-0 pt-2 pb-2 relative z-20">
-            <div className="flex flex-col gap-1.5 w-full px-4">
-              <div className="relative w-full flex items-center group">
-                <input
-                  ref={expandedSeekerInputRef}
-                  type="range"
-                  min={0}
-                  max={effectiveDuration || 100}
-                  defaultValue={currentTime}
-                  onMouseDown={() => {
-                    isDraggingSeekerRef.current = true;
-                  }}
-                  onTouchStart={() => {
-                    isDraggingSeekerRef.current = true;
-                  }}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (expandedCurrentTimeTextRef.current) {
-                      expandedCurrentTimeTextRef.current.textContent = formatTime(val);
-                    }
-                  }}
-                  onMouseUp={(e) => {
-                    isDraggingSeekerRef.current = false;
-                    seekTo(parseFloat((e.target as HTMLInputElement).value));
-                  }}
-                  onTouchEnd={(e) => {
-                    isDraggingSeekerRef.current = false;
-                    seekTo(parseFloat((e.target as HTMLInputElement).value));
-                  }}
-                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/25 bg-zinc-900 focus:outline-none transition-all shadow-inner"
-                  style={{
-                    accentColor: '#ffffff',
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 tabular-nums font-bold px-0.5">
-                <span ref={expandedCurrentTimeTextRef}>{formatTime(currentTime)}</span>
-                <span>{formatTime(effectiveDuration)}</span>
-              </div>
+                  {playlist.length > 0 && (
+                    <div className="space-y-1.5 pt-3 border-t border-white/5">
+                      <div className="flex items-center justify-between px-1 mb-1">
+                        <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
+                          ĐANG PHÁT TỪ THƯ VIỆN ({playlist.length})
+                        </span>
+                        {shuffleMode && (
+                          <span className="text-[8px] font-mono text-white font-bold bg-white/15 px-2 py-0.5 rounded border border-white/20">
+                            SHUFFLE ON
+                          </span>
+                        )}
+                      </div>
+                      {playlist.map((track, idx) => {
+                        const isCur = track?.id === currentTrack?.id;
+                        return (
+                          <div
+                            key={track?.id || idx}
+                            onClick={() => playTrack(track, currentAlbum, playlist)}
+                            className={`flex items-center justify-between p-2.5 rounded-2xl border transition-all cursor-pointer ${
+                              isCur
+                                ? 'bg-white/15 border-white text-white font-bold shadow-md'
+                                : 'bg-white/[0.02] border-white/5 text-zinc-400 active:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="text-[10px] font-mono text-zinc-500 w-4 text-center flex-shrink-0 font-bold">
+                                {idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs truncate font-bold">{track?.title || 'Unknown Track'}</p>
+                                <p className="text-[9px] text-zinc-500 truncate mt-0.5">{track?.artist || currentAlbum?.artist || 'Unknown'}</p>
+                              </div>
+                            </div>
+                            {isCur && <Disc3 className="w-4 h-4 text-white animate-spin flex-shrink-0" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-between px-6 max-w-sm mx-auto w-full">
-              <button
-                ref={expandShuffleBtnRef}
-                onClick={toggleShuffle}
-                className={`p-3 rounded-2xl border transition-all active:scale-95 will-change-transform ${
-                  shuffleMode
-                    ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] font-bold'
-                    : 'bg-zinc-900/80 text-zinc-400 border-white/10 hover:text-white'
-                }`}
-                title="Trộn bài"
-              >
-                <Shuffle className="w-4 h-4" />
-              </button>
+            {/* CONTROL DECK */}
+            <div className="w-full flex flex-col gap-3.5 flex-shrink-0 pt-2 pb-2 relative z-20">
+              <div className="flex flex-col gap-1.5 w-full px-4">
+                <div className="relative w-full flex items-center group">
+                  <input
+                    ref={expandedSeekerInputRef}
+                    type="range"
+                    min={0}
+                    max={effectiveDuration || 100}
+                    defaultValue={currentTime}
+                    onMouseDown={() => {
+                      isDraggingSeekerRef.current = true;
+                    }}
+                    onTouchStart={() => {
+                      isDraggingSeekerRef.current = true;
+                    }}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (expandedCurrentTimeTextRef.current) {
+                        expandedCurrentTimeTextRef.current.textContent = formatTime(val);
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      isDraggingSeekerRef.current = false;
+                      seekTo(parseFloat((e.target as HTMLInputElement).value));
+                    }}
+                    onTouchEnd={(e) => {
+                      isDraggingSeekerRef.current = false;
+                      seekTo(parseFloat((e.target as HTMLInputElement).value));
+                    }}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer border border-white/25 bg-zinc-900 focus:outline-none transition-all shadow-inner"
+                    style={{
+                      accentColor: '#ffffff',
+                    }}
+                  />
+                </div>
 
-              <button
-                ref={expandPrevBtnRef}
-                onClick={prevTrack}
-                className="p-3.5 rounded-2xl bg-zinc-900/80 text-white border border-white/15 active:scale-90 hover:bg-white/10 transition-all will-change-transform shadow-md"
-                title="Bài trước"
-              >
-                <SkipBack className="w-5 h-5 fill-current" />
-              </button>
+                <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 tabular-nums font-bold px-0.5">
+                  <span ref={expandedCurrentTimeTextRef}>{formatTime(currentTime)}</span>
+                  <span>{formatTime(effectiveDuration)}</span>
+                </div>
+              </div>
 
-              <button
-                ref={expandPlayBtnRef}
-                onClick={togglePlay}
-                className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_40px_rgba(255,255,255,0.5)] border-2 border-white/40 active:scale-95 will-change-transform transition-transform relative group"
-                title={isPlaying ? 'Tạm dừng' : 'Phát'}
-              >
-                <span className="absolute inset-1 rounded-full border border-black/10 pointer-events-none" />
-                {isBuffering ? (
-                  <Loader2 className="w-7 h-7 animate-spin" />
-                ) : isPlaying ? (
-                  <Pause className="w-7 h-7 fill-current" />
-                ) : (
-                  <Play className="w-7 h-7 fill-current ml-1" />
-                )}
-              </button>
+              <div className="flex items-center justify-between px-6 max-w-sm mx-auto w-full">
+                <motion.button
+                  whileTap={{ scale: 0.90 }}
+                  onClick={toggleShuffle}
+                  className={`p-3 rounded-2xl border transition-colors ${
+                    shuffleMode
+                      ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] font-bold'
+                      : 'bg-zinc-900/80 text-zinc-400 border-white/10 hover:text-white'
+                  }`}
+                  title="Trộn bài"
+                >
+                  <Shuffle className="w-4 h-4" />
+                </motion.button>
 
-              <button
-                ref={expandNextBtnRef}
-                onClick={nextTrack}
-                className="p-3.5 rounded-2xl bg-zinc-900/80 text-white border border-white/15 active:scale-90 hover:bg-white/10 transition-all will-change-transform shadow-md"
-                title="Bài kế tiếp"
-              >
-                <SkipForward className="w-5 h-5 fill-current" />
-              </button>
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  ref={expandPrevBtnRef}
+                  onClick={prevTrack}
+                  className="p-3.5 rounded-2xl bg-zinc-900/80 text-white border border-white/15 hover:bg-white/10 transition-colors shadow-md"
+                  title="Bài trước"
+                >
+                  <SkipBack className="w-5 h-5 fill-current" />
+                </motion.button>
 
-              <button
-                ref={expandRepeatBtnRef}
-                onClick={toggleRepeat}
-                className={`p-3 rounded-2xl border transition-all active:scale-95 will-change-transform ${
-                  repeatMode !== 'off'
-                    ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] font-bold'
-                    : 'bg-zinc-900/80 text-zinc-400 border-white/10 hover:text-white'
-                }`}
-                title={`Lặp: ${repeatMode}`}
-              >
-                {repeatMode === 'one' ? (
-                  <Repeat1 className="w-4 h-4" />
-                ) : (
-                  <Repeat className="w-4 h-4" />
-                )}
-              </button>
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  ref={expandPlayBtnRef}
+                  onClick={togglePlay}
+                  className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_40px_rgba(255,255,255,0.5)] border-2 border-white/40 relative group"
+                  title={isPlaying ? 'Tạm dừng' : 'Phát'}
+                >
+                  <span className="absolute inset-1 rounded-full border border-black/10 pointer-events-none" />
+                  {isBuffering ? (
+                    <Loader2 className="w-7 h-7 animate-spin" />
+                  ) : isPlaying ? (
+                    <Pause className="w-7 h-7 fill-current" />
+                  ) : (
+                    <Play className="w-7 h-7 fill-current ml-1" />
+                  )}
+                </motion.button>
+
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  ref={expandNextBtnRef}
+                  onClick={nextTrack}
+                  className="p-3.5 rounded-2xl bg-zinc-900/80 text-white border border-white/15 hover:bg-white/10 transition-colors shadow-md"
+                  title="Bài kế tiếp"
+                >
+                  <SkipForward className="w-5 h-5 fill-current" />
+                </motion.button>
+
+                <motion.button
+                  whileTap={{ scale: 0.90 }}
+                  onClick={toggleRepeat}
+                  className={`p-3 rounded-2xl border transition-colors ${
+                    repeatMode !== 'off'
+                      ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] font-bold'
+                      : 'bg-zinc-900/80 text-zinc-400 border-white/10 hover:text-white'
+                  }`}
+                  title={`Lặp: ${repeatMode}`}
+                >
+                  {repeatMode === 'one' ? (
+                    <Repeat1 className="w-4 h-4" />
+                  ) : (
+                    <Repeat className="w-4 h-4" />
+                  )}
+                </motion.button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
