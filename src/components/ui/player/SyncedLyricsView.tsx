@@ -1,208 +1,210 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { LyricLine, LrcParser } from '@/lib/lyrics/lrcParser';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { usePlayer } from '@/context/PlayerContext';
-import { Mic2, Loader2 } from 'lucide-react';
+import { Mic2, Music2 } from 'lucide-react';
+
+interface LyricLine {
+  time: number;
+  text: string;
+}
 
 interface SyncedLyricsViewProps {
-  rawLrc?: string;
+  rawLrc?: string | null;
   trackTitle?: string;
   artistName?: string;
   duration?: number;
   className?: string;
+  onSeek?: (time: number) => void;
 }
 
-export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
+function parseLrc(lrcText: string): LyricLine[] {
+  if (!lrcText) return [];
+  const lines = lrcText.split('\n');
+  const result: LyricLine[] = [];
+  const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g;
+
+  for (const line of lines) {
+    const cleanLine = line.trim();
+    if (!cleanLine) continue;
+
+    const matches = [...cleanLine.matchAll(timeRegex)];
+    const text = cleanLine.replace(timeRegex, '').trim();
+
+    if (matches.length > 0 && text) {
+      for (const match of matches) {
+        const mins = parseInt(match[1], 10);
+        const secs = parseInt(match[2], 10);
+        const msRaw = match[3];
+        const ms = msRaw ? (msRaw.length === 2 ? parseInt(msRaw, 10) * 10 : parseInt(msRaw, 10)) : 0;
+        const time = mins * 60 + secs + ms / 1000;
+        result.push({ time, text });
+      }
+    } else if (!matches.length && cleanLine && !cleanLine.startsWith('[')) {
+      result.push({ time: -1, text: cleanLine });
+    }
+  }
+
+  const hasTimestamps = result.some((r) => r.time >= 0);
+  if (hasTimestamps) {
+    return result.filter((r) => r.time >= 0).sort((a, b) => a.time - b.time);
+  }
+  return result;
+}
+
+export function SyncedLyricsView({
   rawLrc,
   trackTitle,
   artistName,
-  duration,
   className = '',
-}) => {
-  const { currentTime, seekTo } = usePlayer();
-  const [lyrics, setLyrics] = useState<LyricLine[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [plainLyrics, setPlainLyrics] = useState<string | null>(null);
-  const [sourceTag, setSourceTag] = useState<string | null>(null);
+  onSeek,
+}: SyncedLyricsViewProps) {
+  const player = usePlayer();
+  const currentTime = player?.currentTime ?? 0;
+  const seekTo = onSeek || player?.seekTo || (() => {});
+  const isPlaying = !!player?.isPlaying;
+  const currentTimeRef = player?.currentTimeRef;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const isUserScrollingRef = useRef<boolean>(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load and parse lyrics
-  const fetchLyrics = useCallback(() => {
-    if (rawLrc) {
-      const parsed = LrcParser.parse(rawLrc);
-      setLyrics(parsed);
-      setPlainLyrics(null);
-      setSourceTag('STUDIO MASTER LRC');
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
+
+  const parsedLyrics = useMemo(() => {
+    return parseLrc(rawLrc || '');
+  }, [rawLrc]);
+
+  const isSynced = useMemo(() => {
+    return parsedLyrics.some((line) => line.time >= 0);
+  }, [parsedLyrics]);
+
+  // Cập nhật dòng active theo thời gian thực (hỗ trợ cả ref và state)
+  useEffect(() => {
+    if (!isSynced || parsedLyrics.length === 0) {
+      setActiveIndex(-1);
       return;
     }
 
-    if (!trackTitle) {
-      setLyrics([]);
-      setPlainLyrics(null);
-      return;
-    }
+    let rafId: number;
 
-    setIsLoading(true);
-
-    const url = `/api/ytm/lyrics?title=${encodeURIComponent(trackTitle)}&artist=${encodeURIComponent(
-      artistName || ''
-    )}&duration=${encodeURIComponent(duration || 0)}`;
-
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.syncedLyrics) {
-          const parsed = LrcParser.parse(data.syncedLyrics);
-          setLyrics(parsed);
-          setPlainLyrics(null);
-          setSourceTag('REALTIME SYNCHRONIZED');
-        } else if (data?.plainLyrics) {
-          setLyrics([]);
-          setPlainLyrics(data.plainLyrics);
-          setSourceTag('PLAIN TEXT');
-        } else {
-          setLyrics([]);
-          setPlainLyrics(null);
-          setSourceTag(null);
+    const syncLoop = () => {
+      const liveTime = currentTimeRef?.current ?? currentTime;
+      
+      let foundIndex = -1;
+      for (let i = parsedLyrics.length - 1; i >= 0; i--) {
+        if (liveTime >= parsedLyrics[i].time - 0.2) {
+          foundIndex = i;
+          break;
         }
-      })
-      .catch(() => {
-        setLyrics([]);
-        setPlainLyrics(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [rawLrc, trackTitle, artistName, duration]);
-
-  useEffect(() => {
-    fetchLyrics();
-  }, [fetchLyrics]);
-
-  const activeIndex = LrcParser.findActiveIndex(lyrics, currentTime);
-
-  // Auto-scroll active line to vertical center
-  useEffect(() => {
-    if (activeIndex >= 0 && lineRefs.current[activeIndex] && containerRef.current) {
-      const activeEl = lineRefs.current[activeIndex];
-      const container = containerRef.current;
-      if (activeEl) {
-        const topPos =
-          activeEl.offsetTop - container.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
-        container.scrollTo({
-          top: Math.max(0, topPos),
-          behavior: 'smooth',
-        });
       }
+
+      setActiveIndex((prev) => (prev !== foundIndex ? foundIndex : prev));
+      if (isPlaying) {
+        rafId = requestAnimationFrame(syncLoop);
+      }
+    };
+
+    if (isPlaying) {
+      rafId = requestAnimationFrame(syncLoop);
+    } else {
+      syncLoop();
+    }
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [isSynced, parsedLyrics, isPlaying, currentTimeRef, currentTime]);
+
+  // Tự động cuộn mượt dòng đang hát vào giữa tầm mắt
+  useEffect(() => {
+    if (activeIndex < 0 || isUserScrollingRef.current || !containerRef.current) return;
+
+    const activeEl = lineRefs.current[activeIndex];
+    if (activeEl) {
+      const container = containerRef.current;
+      const targetScrollTop =
+        activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
+
+      container.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth',
+      });
     }
   }, [activeIndex]);
 
-  if (isLoading) {
-    return (
-      <div className={`flex flex-col items-center justify-center p-8 text-zinc-500 gap-3 min-h-[300px] ${className}`}>
-        <Loader2 className="w-7 h-7 animate-spin text-white" />
-        <p className="text-xs uppercase tracking-widest font-mono text-zinc-400 font-bold">
-          ĐANG TẢI LỜI BÀI HÁT...
-        </p>
-      </div>
-    );
-  }
+  // Nhận diện khi người dùng tự cuộn tay để không giật màn hình
+  const handleScroll = useCallback(() => {
+    isUserScrollingRef.current = true;
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      isUserScrollingRef.current = false;
+    }, 2500);
+  }, []);
 
-  if (lyrics.length === 0 && !plainLyrics) {
-    return (
-      <div className={`flex flex-col items-center justify-center px-6 py-16 text-center gap-3 min-h-[300px] ${className}`}>
-        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-          <Mic2 className="w-6 h-6 text-zinc-500 opacity-80" />
-        </div>
-        <h4 className="text-xs uppercase tracking-widest font-mono text-zinc-400 font-bold">
-          CHƯA CÓ LỜI BÀI HÁT
-        </h4>
-        <p className="text-[11px] font-mono text-zinc-600 max-w-xs">
-          Ca khúc này hiện chưa có file lời được cập nhật.
-        </p>
-      </div>
-    );
-  }
+  const handleLineClick = (time: number) => {
+    if (time >= 0) {
+      seekTo(time);
+      isUserScrollingRef.current = false;
+    }
+  };
 
-  if (plainLyrics && lyrics.length === 0) {
+  if (!rawLrc || parsedLyrics.length === 0) {
     return (
-      <div
-        ref={containerRef}
-        className={`overflow-y-auto overflow-x-hidden no-scrollbar px-6 sm:px-8 py-8 text-left select-text font-sans space-y-4 ${className}`}
-        style={{
-          overscrollBehaviorY: 'contain',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-        }}
-      >
-        <div className="pb-3 border-b border-white/10 mb-4">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold">
-            — LỜI BÀI HÁT —
-          </span>
+      <div className={`flex flex-col items-center justify-center h-full text-center px-6 ${className}`}>
+        <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3 text-zinc-600">
+          <Mic2 className="w-5 h-5" />
         </div>
-        {plainLyrics.split('\n').map((line, idx) => (
-          <p key={idx} className="text-base sm:text-lg text-zinc-300 font-medium leading-relaxed">
-            {line || '...'}
-          </p>
-        ))}
+        <p className="text-sm font-cyber font-bold text-zinc-400 uppercase tracking-wider">
+          Chưa có lời bài hát
+        </p>
+        <p className="text-xs font-mono text-zinc-600 mt-1">
+          {trackTitle ? `${trackTitle} - ${artistName || 'POSTLAIN'}` : 'Đang cập nhật...'}
+        </p>
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`overflow-y-auto overflow-x-hidden no-scrollbar px-6 sm:px-10 py-12 space-y-6 text-left select-none font-sans scroll-smooth relative ${className}`}
-      style={{
-        overscrollBehaviorY: 'contain',
-        contain: 'layout paint',
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
-      }}
-    >
-      {/* Top Source Badge */}
-      <div className="flex items-center pb-3 border-b border-white/10 mb-4 sticky top-0 bg-black/80 backdrop-blur-md z-10 -mt-6 pt-2">
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold">
-            {sourceTag || 'REALTIME SYNCHRONIZED'}
-          </span>
-        </div>
+    <div className={`relative w-full h-full overflow-hidden select-none ${className}`}>
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="w-full h-full overflow-y-auto px-6 py-[45vh] space-y-7 no-scrollbar scroll-smooth"
+        style={{
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.8) 12%, black 25%, black 75%, rgba(0,0,0,0.8) 88%, transparent 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.8) 12%, black 25%, black 75%, rgba(0,0,0,0.8) 88%, transparent 100%)',
+        }}
+      >
+        {parsedLyrics.map((line, idx) => {
+          const isActive = idx === activeIndex;
+          const isPassed = activeIndex !== -1 && idx < activeIndex;
+
+          return (
+            <p
+              key={`line_${idx}_${line.time}`}
+              ref={(el) => {
+                lineRefs.current[idx] = el;
+              }}
+              onClick={() => handleLineClick(line.time)}
+              className={`transition-all duration-500 ease-out origin-left cursor-pointer leading-relaxed tracking-tight ${
+                isActive
+                  ? 'text-white font-cyber font-black text-2xl sm:text-3xl scale-100 opacity-100 drop-shadow-[0_0_25px_rgba(255,255,255,0.45)]'
+                  : isPassed
+                  ? 'text-white/20 font-bold text-lg sm:text-xl scale-95 opacity-40 hover:opacity-75 hover:text-white/60'
+                  : 'text-white/30 font-bold text-lg sm:text-xl scale-95 opacity-50 hover:opacity-80 hover:text-white/70'
+              }`}
+            >
+              {line.text}
+            </p>
+          );
+        })}
       </div>
-
-      {lyrics.map((line, idx) => {
-        const isActive = idx === activeIndex;
-        const isPast = idx < activeIndex;
-
-        return (
-          <div
-            key={line.id || idx}
-            ref={(el) => {
-              lineRefs.current[idx] = el;
-            }}
-            onClick={() => seekTo(line.timeSec)}
-            className={`cursor-pointer transition-all duration-300 ease-out py-1.5 px-3 -mx-3 rounded-xl relative select-none ${
-              isActive
-                ? 'text-white font-extrabold text-lg sm:text-xl md:text-2xl leading-snug drop-shadow-[0_0_16px_rgba(255,255,255,0.45)] bg-white/[0.04]'
-                : isPast
-                ? 'text-zinc-500 hover:text-zinc-300 text-lg sm:text-xl md:text-2xl font-bold leading-snug opacity-60 hover:opacity-90'
-                : 'text-zinc-600 hover:text-zinc-400 text-lg sm:text-xl md:text-2xl font-bold leading-snug opacity-40 hover:opacity-80'
-            }`}
-            style={{
-              contain: 'layout style paint',
-            }}
-          >
-            {/* Active Left Indicator Bar */}
-            {isActive && (
-              <span className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
-            )}
-            <span className="pl-2">{line.text || '♪ ♪ ♪'}</span>
-          </div>
-        );
-      })}
     </div>
   );
-};
+}
