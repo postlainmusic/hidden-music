@@ -1104,18 +1104,34 @@
      - `npx tsc --noEmit`: **0 errors** (Type-check 100% sạch).
      - `npm test`: **27/27 test suites PASSED 100%**.
 
+---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+### Giao dịch 046: POSTLAIN MUSIC - PocketBase v0.40+ Backend & Cloudflare R2 Direct Streaming Audio Engine
+* **Thời gian**: 25/08/2026 13:20 (GMT+7)
+* **Tác nhân**: Antigravity AI Agent
+* **Mục tiêu & Nhu cầu**:
+  - Triển khai toàn diện hạ tầng Frontend/Client cho POSTLAIN MUSIC kết nối với PocketBase v0.40+ (https://database.postlain.com) và Cloudflare R2 (hidden-music-vault / https://media.postlain.com).
+  - Thiết lập Data Model TypeScript, Service API (getTracks, getArtists, getPlaylists, toggleLike, getUserLikes, incrementPlaysCount) và Bidirectional Adapters.
+  - Nâng cấp Core Audio Engine: preload="metadata", tua bài HTTP 206 Byte-Range tức thì, quản lý Play Queue, MediaSession API, phím tắt bàn phím toàn cục, và component TrackList chuẩn Monochrome Cyber-Aesthetic.
+* **Hạng mục Thực Hiện (Changes Delivered)**:
+  1. **PocketBase Singleton Client & Schema Layer (src/lib/pocketbase.ts & src/types/pocketbase.ts)**:
+     - Cài đặt SDK pocketbase (^0.28.0), cấu hình singleton pb = new PocketBase(...) với autoCancellation(false).
+     - Định nghĩa models: TrackRecord, ArtistRecord, PlaylistRecord, LikeRecord, UserRecord.
+     - Cung cấp converters: trackRecordToTrackItem() và playlistRecordToAlbum().
+  2. **PocketBase API Service Layer (src/lib/pocketbaseService.ts)**:
+     - Viết đầy đủ các hàm truy vấn phân trang, tìm kiếm bài hát theo từ khóa, nghệ sĩ, playlist và chức năng like/favorite.
+     - Tự động đếm lượt nghe qua incrementPlaysCount(trackId).
+  3. **Global Audio Player Engine Upgrades (src/context/PlayerContext.tsx)**:
+     - Chuyển sang preload="metadata" phục vụ tua bài HTTP 206 tức thì.
+     - Thêm playNextInQueue, reorderQueue, toggleMute, isMuted.
+     - Đồng bộ MediaSession API toàn diện với metadata ảnh bìa chất lượng cao, các action handlers seekto, seekbackward, seekforward, stop, và setPositionState.
+     - Phím tắt bàn phím: Space (Play/Pause), ArrowLeft/ArrowRight (Tua +/- 5s), ArrowUp/ArrowDown (Âm lượng +/- 5%), KeyM (Mute/Unmute).
+  4. **Core UI Components (src/components/ui/TrackList.tsx & DesktopPlayerBar.tsx)**:
+     - TrackList: Giao diện danh sách bài hát Cyber-Deck, badge chất lượng FLAC 24-bit/320kbps, hiển thị lượt nghe, nút like đồng bộ PocketBase, menu ngữ cảnh '...'.
+     - DesktopPlayerBar: Thêm tooltip hiển thị timestamp preview khi hover chuột trên thanh tua bài.
+     - HomePage (src/app/page.tsx): Tự động nạp song song PocketBase tracks/playlists cùng Supabase albums.
+  5. **Automated Testing & Verification (tests/unit/pocketbase-service.test.mjs)**:
+     - Tạo bộ test case kiểm thử data adapters, URL streaming resolution, và fallback icons.
+     - npx tsc --noEmit: 0 errors (Type-check 100% sạch).
+     - npm test: 32/32 test suites PASSED 100%.
 

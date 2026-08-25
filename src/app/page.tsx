@@ -21,6 +21,8 @@ import type { YtmFeedResponse } from '@/types/ytm';
 import { usePlayer } from '@/context/PlayerContext';
 import { getStoredUserSession } from '@/lib/authSession';
 import VaultGate from '@/components/ui/VaultGate';
+import { getTrackItems, getPlaylists } from '@/lib/pocketbaseService';
+import { playlistRecordToAlbum } from '@/types/pocketbase';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -43,21 +45,56 @@ export default function HomePage() {
     const session = getStoredUserSession();
     setUserSession(session);
 
-    // Parallel fetch Supabase albums + YTM stream feed
+    // Parallel fetch Supabase + PocketBase albums + YTM stream feed
     const loadAlbums = async () => {
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('albums')
-          .select('*, tracks(*)')
-          .eq('is_published', true)
-          .order('created_at', { ascending: false });
+        let loadedAlbums: Album[] = [];
 
-        if (!error && data) {
-          setAlbums(data);
+        // 1. Fetch Supabase albums
+        try {
+          const supabase = createClient();
+          const { data, error } = await supabase
+            .from('albums')
+            .select('*, tracks(*)')
+            .eq('is_published', true)
+            .order('created_at', { ascending: false });
+
+          if (!error && data) {
+            loadedAlbums = [...data];
+          }
+        } catch (sbErr) {
+          console.debug('[HomePage] Supabase fetch notice:', sbErr);
         }
+
+        // 2. Fetch PocketBase tracks and playlists
+        try {
+          const pbTracks = await getTrackItems({ perPage: 50 });
+          if (pbTracks && pbTracks.length > 0) {
+            const pbVaultAlbum: Album = {
+              id: 'pb-vault-master',
+              title: 'POSTLAIN MASTER VAULT',
+              artist: 'POSTLAIN AUDIOPHILE',
+              original_year: new Date().getFullYear(),
+              cover_url: pbTracks[0]?.cover_url || '/icon.svg',
+              is_published: true,
+              created_at: new Date().toISOString(),
+              tracks: pbTracks,
+            };
+            loadedAlbums.unshift(pbVaultAlbum);
+          }
+
+          const pbPlaylists = await getPlaylists({ isPublic: true, perPage: 10 });
+          if (pbPlaylists.items && pbPlaylists.items.length > 0) {
+            const playlistAlbums = pbPlaylists.items.map((p) => playlistRecordToAlbum(p));
+            loadedAlbums.push(...playlistAlbums);
+          }
+        } catch (pbErr) {
+          console.debug('[HomePage] PocketBase fetch notice:', pbErr);
+        }
+
+        setAlbums(loadedAlbums);
       } catch (e) {
-        console.error('[HomePage] Supabase fetch error:', e);
+        console.error('[HomePage] fetch albums error:', e);
       } finally {
         setAlbumsLoading(false);
       }

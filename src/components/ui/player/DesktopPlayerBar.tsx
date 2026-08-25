@@ -68,6 +68,8 @@ export default function DesktopPlayerBar() {
 
   const [expandedMode, setExpandedMode] = useState<'none' | 'lyrics' | 'queue'>('none');
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [hoverSeekTime, setHoverSeekTime] = useState<number | null>(null);
+  const [hoverSeekPos, setHoverSeekPos] = useState<number>(0);
 
   const playerRootRef = useRef<HTMLDivElement | null>(null);
   const playerCardRef = useRef<HTMLDivElement | null>(null);
@@ -840,7 +842,24 @@ export default function DesktopPlayerBar() {
                 {formatTime(currentTime)}
               </span>
 
-              <div className="relative flex-1 flex items-center min-w-[80px] group/seek">
+              <div 
+                className="relative flex-1 flex items-center min-w-[80px] group/seek py-1"
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  setHoverSeekPos(ratio * 100);
+                  setHoverSeekTime(ratio * (effectiveDuration || 1));
+                }}
+                onMouseLeave={() => setHoverSeekTime(null)}
+              >
+                {hoverSeekTime !== null && (
+                  <div
+                    className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded-md bg-zinc-900 border border-white/20 text-[10px] font-mono text-white pointer-events-none shadow-xl z-20 tabular-nums font-bold animate-fadeIn"
+                    style={{ left: `${hoverSeekPos}%` }}
+                  >
+                    {formatTime(hoverSeekTime)}
+                  </div>
+                )}
                 <input
                   ref={seekerInputRef}
                   type="range"

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { hasActiveSession, hasVideoSubscription, activateVideoSubscription } from '@/lib/authSession';
 import { getMediaCdnUrl } from '@/lib/r2Storage';
 import { getTrackDrumProfile, isDrumActiveAtTime } from '@/lib/dsp/trackDrumProfiles';
+import { incrementPlaysCount } from '@/lib/pocketbaseService';
 
 declare global {
   interface Window {
@@ -27,6 +28,7 @@ export interface PlayerContextType {
   currentTime: number;
   duration: number;
   volume: number;
+  isMuted: boolean;
   shuffleMode: boolean;
   repeatMode: RepeatMode;
   isCinematicFxEnabled: boolean;
@@ -54,6 +56,8 @@ export interface PlayerContextType {
   playTrack: (track: TrackItem, album?: Album | Partial<Album> | null, playlist?: TrackItem[]) => void;
   addToQueue: (track: TrackItem) => void;
   addToUserQueue: (track: TrackItem) => void;
+  playNextInQueue: (track: TrackItem) => void;
+  reorderQueue: (startIndex: number, endIndex: number) => void;
   removeFromUserQueue: (trackId: string) => void;
   removeFromQueue: (trackId: string) => void;
   clearUserQueue: () => void;
@@ -68,6 +72,7 @@ export interface PlayerContextType {
   setDuration: React.Dispatch<React.SetStateAction<number>>;
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   setVolume: (vol: number) => void;
+  toggleMute: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   toggleCinematicFx: () => void;
@@ -665,6 +670,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsBuffering(false);
     setCurrentTime(0);
     currentTimeRef.current = 0;
+
+    // Increment plays count asynchronously in PocketBase
+    if (track.id) {
+      incrementPlaysCount(track.id).catch(() => {});
+    }
   }, [initAudioGraph]);
 
   const seekTo = useCallback(
@@ -956,15 +966,61 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [isCurrentTrackYouTube, isPlaying, activeZone, waveformBuckets, duration, currentTrack?.id]);
 
+  // Mute and Volume Management
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const previousVolumeRef = useRef<number>(0.8);
+
+  const setVolume = useCallback((vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol));
+    setVolumeState(clamped);
+    if (clamped > 0) {
+      setIsMuted(false);
+    }
+    if (audioRef.current) audioRef.current.volume = clamped;
+    if (videoRef.current) videoRef.current.volume = clamped;
+    if (ytPlayerRef.current?.setVolume) {
+      try {
+        ytPlayerRef.current.setVolume(Math.round(clamped * 100));
+      } catch {}
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prevMuted) => {
+      if (prevMuted) {
+        const restored = previousVolumeRef.current > 0 ? previousVolumeRef.current : 0.8;
+        setVolumeState(restored);
+        if (audioRef.current) audioRef.current.volume = restored;
+        if (videoRef.current) videoRef.current.volume = restored;
+        if (ytPlayerRef.current?.setVolume) {
+          try { ytPlayerRef.current.setVolume(Math.round(restored * 100)); } catch {}
+        }
+        return false;
+      } else {
+        previousVolumeRef.current = volume > 0 ? volume : 0.8;
+        setVolumeState(0);
+        if (audioRef.current) audioRef.current.volume = 0;
+        if (videoRef.current) videoRef.current.volume = 0;
+        if (ytPlayerRef.current?.setVolume) {
+          try { ytPlayerRef.current.setVolume(0); } catch {}
+        }
+        return true;
+      }
+    });
+  }, [volume]);
+
   // MediaSession Metadata & Actions Synchronizer
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
-        artist: currentTrack.artist || currentAlbum?.artist || 'Hidden Vault',
+        artist: currentTrack.artist || currentAlbum?.artist || 'POSTLAIN MUSIC',
         album: currentAlbum?.title || 'Hidden Music Vault',
         artwork: currentTrack.cover_url || currentAlbum?.cover_url
-          ? [{ src: currentTrack.cover_url || currentAlbum?.cover_url || '', sizes: '512x512', type: 'image/jpeg' }]
+          ? [
+              { src: currentTrack.cover_url || currentAlbum?.cover_url || '', sizes: '512x512', type: 'image/jpeg' },
+              { src: currentTrack.cover_url || currentAlbum?.cover_url || '', sizes: '256x256', type: 'image/jpeg' },
+            ]
           : [],
       });
 
@@ -986,20 +1042,80 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       navigator.mediaSession.setActionHandler('nexttrack', () => {
         nextTrack();
       });
-    }
-  }, [currentTrack, currentAlbum, isCurrentTrackYouTube, prevTrack, nextTrack]);
 
-  const setVolume = useCallback((vol: number) => {
-    const clamped = Math.max(0, Math.min(1, vol));
-    setVolumeState(clamped);
-    if (audioRef.current) audioRef.current.volume = clamped;
-    if (videoRef.current) videoRef.current.volume = clamped;
-    if (ytPlayerRef.current?.setVolume) {
       try {
-        ytPlayerRef.current.setVolume(Math.round(clamped * 100));
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (typeof details.seekTime === 'number') {
+            seekTo(details.seekTime);
+          }
+        });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skip = details.seekOffset || 5;
+          seekTo(Math.max(0, currentTimeRef.current - skip));
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skip = details.seekOffset || 5;
+          seekTo(Math.min(duration || 9999, currentTimeRef.current + skip));
+        });
+        navigator.mediaSession.setActionHandler('stop', () => {
+          pause();
+          seekTo(0);
+        });
       } catch {}
+
+      // Update position state for Lockscreen / Media Bar progress
+      if ('setPositionState' in navigator.mediaSession && duration > 0) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(0, duration),
+            playbackRate: 1,
+            position: Math.max(0, Math.min(currentTime, duration)),
+          });
+        } catch {}
+      }
     }
-  }, []);
+  }, [currentTrack, currentAlbum, isCurrentTrackYouTube, prevTrack, nextTrack, seekTo, pause, duration, currentTime]);
+
+  // Global Keyboard Shortcuts (Space, Arrows, Mute)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable);
+      if (isInput) return;
+      if (activeZone === 'video') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        const cur = currentTimeRef.current;
+        seekTo(Math.max(0, cur - 5));
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        const cur = currentTimeRef.current;
+        seekTo(Math.min(duration || 9999, cur + 5));
+      } else if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        setVolume(Math.min(1, volume + 0.05));
+      } else if (e.code === 'ArrowDown') {
+        e.preventDefault();
+        setVolume(Math.max(0, volume - 0.05));
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMute();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, [togglePlay, seekTo, duration, volume, setVolume, toggleMute, activeZone]);
 
   const toggleShuffle = useCallback(() => {
     setShuffleMode((prev) => !prev);
@@ -1019,6 +1135,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const addToUserQueue = useCallback((track: TrackItem) => {
     setUserQueue((prev) => [...prev, track]);
+  }, []);
+
+  const playNextInQueue = useCallback((track: TrackItem) => {
+    setUserQueue((prev) => [track, ...prev.filter((t) => t.id !== track.id)]);
+  }, []);
+
+  const reorderQueue = useCallback((startIndex: number, endIndex: number) => {
+    setUserQueue((prev) => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      return result;
+    });
   }, []);
 
   const removeFromUserQueue = useCallback((trackId: string) => {
@@ -1048,6 +1177,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentTime,
       duration,
       volume,
+      isMuted,
       shuffleMode,
       repeatMode,
       isCinematicFxEnabled,
@@ -1067,6 +1197,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       playTrack,
       addToQueue,
       addToUserQueue,
+      playNextInQueue,
+      reorderQueue,
       removeFromUserQueue,
       removeFromQueue,
       clearUserQueue,
@@ -1081,6 +1213,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setDuration,
       setIsPlaying,
       setVolume,
+      toggleMute,
       toggleShuffle,
       toggleRepeat,
       toggleCinematicFx,
@@ -1112,6 +1245,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentTime,
       duration,
       volume,
+      isMuted,
       shuffleMode,
       repeatMode,
       isCinematicFxEnabled,
@@ -1128,6 +1262,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       playTrack,
       addToQueue,
       addToUserQueue,
+      playNextInQueue,
+      reorderQueue,
       removeFromUserQueue,
       removeFromQueue,
       clearUserQueue,
@@ -1139,6 +1275,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       prevTrack,
       seekTo,
       setVolume,
+      toggleMute,
       toggleShuffle,
       toggleRepeat,
       toggleCinematicFx,
@@ -1180,11 +1317,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         <div id="vault-yt-audio-bridge-target" />
       </div>
 
-      {/* Primary HTML5 Audio Element for Vault Lossless Tracks */}
+      {/* Primary HTML5 Audio Element for Vault Lossless Tracks with Byte-Range Seeking */}
       <audio
         ref={audioRef}
         src={trackUrl || undefined}
-        preload="auto"
+        preload="metadata"
         playsInline
         crossOrigin="anonymous"
         onPlay={() => setIsPlaying(true)}
