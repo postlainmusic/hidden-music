@@ -1,11 +1,6 @@
 /**
  * POSTLAIN MUSIC - One-Click Database Sync Tool
  * Syncs all Albums and 30 Lossless Tracks from Supabase to PocketBase
- * 
- * Usage:
- *   node scripts/sync-supabase-to-pb.mjs <PB_ADMIN_EMAIL> <PB_ADMIN_PASSWORD>
- * or with default email postlain.music@gmail.com:
- *   node scripts/sync-supabase-to-pb.mjs <PB_ADMIN_PASSWORD>
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -17,19 +12,11 @@ const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://databa
 
 const args = process.argv.slice(2);
 let adminEmail = 'postlain.music@gmail.com';
-let adminPassword = '';
+let adminPassword = args[0] || 'Phuc2002';
 
-if (args.length === 1) {
-  adminPassword = args[0];
-} else if (args.length >= 2) {
+if (args.length >= 2) {
   adminEmail = args[0];
   adminPassword = args[1];
-}
-
-if (!adminPassword) {
-  console.error('\n❌ Thiếu mật khẩu Admin PocketBase!');
-  console.error('👉 Cú pháp: node scripts/sync-supabase-to-pb.mjs <MẬT_KHẨU_POCKETBASE>\n');
-  process.exit(1);
 }
 
 async function runSync() {
@@ -59,7 +46,7 @@ async function runSync() {
   // 2. Lấy dữ liệu từ Supabase
   console.log('📦 Đang tải dữ liệu Albums & Tracks từ Supabase...');
   const { data: albums, error: albumErr } = await supabase.from('albums').select('*');
-  const { data: tracks, error: trackErr } = await supabase.from('tracks').select('*');
+  const { data: tracks, error: trackErr } = await supabase.from('tracks').select('*').order('created_at', { ascending: true });
 
   if (albumErr || trackErr) {
     console.error('❌ Lỗi tải dữ liệu Supabase:', albumErr || trackErr);
@@ -73,7 +60,6 @@ async function runSync() {
   for (const album of albums || []) {
     console.log(`📀 Đang đồng bộ Album: "${album.title}" (${album.artist})...`);
     try {
-      // Tìm xem đã tồn tại chưa
       const existing = await pb.collection('playlists').getList(1, 1, {
         filter: `title = "${album.title.replace(/"/g, '\\"')}"`,
       }).catch(() => ({ items: [] }));
@@ -81,7 +67,7 @@ async function runSync() {
       let pbAlbum;
       const albumData = {
         title: album.title,
-        description: `Original Year: ${album.original_year || 2026} • Artist: ${album.artist || 'POSTLAIN'}`,
+        description: `Original Year: ${album.original_year || 2026} • Artist: ${album.artist || 'MCK'}`,
         is_public: album.is_published !== false,
       };
 
@@ -109,6 +95,11 @@ async function runSync() {
       title: track.title,
       artist: track.artist || 'MCK',
       album: track.album_id ? (albumIdMap.get(track.album_id) || 'HVL') : 'HVL',
+      audio_url: track.audio_url || '',
+      video_url: track.video_url || '',
+      cover_url: track.cover_url || 'https://media.postlain.com/covers/1786876522318_1000058353.jpg',
+      lyrics: track.lyrics || '',
+      bpm: track.bpm || 0,
       duration: Math.round(track.duration || 0),
       genre: 'Hip-Hop / R&B',
       bitrate: 'FLAC 24-bit // LOSSLESS',
@@ -116,7 +107,6 @@ async function runSync() {
     };
 
     try {
-      // Tìm xem bài hát đã có chưa
       const existing = await pb.collection('tracks').getList(1, 1, {
         filter: `title = "${track.title.replace(/"/g, '\\"')}"`,
       }).catch(() => ({ items: [] }));
