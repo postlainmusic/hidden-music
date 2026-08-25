@@ -42,8 +42,55 @@ export default function HomePage() {
 
   useEffect(() => {
     setMounted(true);
-    const session = getStoredUserSession();
-    setUserSession(session);
+
+    const initAuth = async () => {
+      // 1. Check local session
+      let session = getStoredUserSession();
+      if (session) {
+        setUserSession(session);
+      }
+
+      // 2. Check PocketBase auth
+      try {
+        const { pb } = await import('@/lib/pocketbase');
+        if (pb.authStore.isValid && pb.authStore.record) {
+          session = pb.authStore.record;
+          setStoredUserSession(session);
+          setUserSession(session);
+        }
+      } catch (pbErr) {
+        console.debug('[HomePage] PB auth check:', pbErr);
+      }
+
+      // 3. Check Supabase OAuth redirect & session
+      try {
+        const supabase = createClient();
+        const { data: { session: sbSession } } = await supabase.auth.getSession();
+        if (sbSession?.user) {
+          setStoredUserSession(sbSession.user);
+          setUserSession(sbSession.user);
+
+          // Clear access token from URL hash if present
+          if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+
+        // Listen to Supabase auth state change
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+          if (newSession?.user) {
+            setStoredUserSession(newSession.user);
+            setUserSession(newSession.user);
+          }
+        });
+
+        return () => subscription.unsubscribe();
+      } catch (sbAuthErr) {
+        console.debug('[HomePage] Supabase auth check:', sbAuthErr);
+      }
+    };
+
+    initAuth();
 
     // Parallel fetch Supabase + PocketBase albums + YTM stream feed
     const loadAlbums = async () => {

@@ -39,6 +39,23 @@ export default function VaultGate() {
     setLoading(true);
     setMsg(null);
     try {
+      // 1. Try PocketBase OAuth2 (instant popup or redirect)
+      try {
+        const { pb } = await import('@/lib/pocketbase');
+        const authData = await pb.collection('users').authWithOAuth2({ provider: 'google' });
+        if (authData?.record) {
+          setStoredUserSession(authData.record);
+          setMsg({ type: 'success', text: 'Đăng nhập Google thành công! Đang vào Vault...' });
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+          return;
+        }
+      } catch (pbOAuthErr: any) {
+        console.debug('[VaultGate] PocketBase OAuth2 fallback note:', pbOAuthErr);
+      }
+
+      // 2. Fallback to Supabase OAuth
       const supabase = createClient();
       const redirectUrl = window.location.origin;
       const { error } = await supabase.auth.signInWithOAuth({
@@ -76,6 +93,35 @@ export default function VaultGate() {
         window.location.href = '/admin';
       }, 600);
       return;
+    }
+
+    // Try PocketBase user/admin login first
+    try {
+      const { pb } = await import('@/lib/pocketbase');
+      try {
+        const pbAuth = await pb.collection('users').authWithPassword(loginEmail, password);
+        if (pbAuth?.record) {
+          setStoredUserSession(pbAuth.record);
+          setMsg({ type: 'success', text: 'Đăng nhập thành công! Đang mở Vault...' });
+          setTimeout(() => {
+            window.location.reload();
+          }, 600);
+          return;
+        }
+      } catch {
+        // Fallback to superuser check
+        const superAuth = await pb.collection('_superusers').authWithPassword(loginEmail, password);
+        if (superAuth?.record) {
+          setStoredAdminSession(true);
+          setMsg({ type: 'success', text: 'Xác thực Superuser Admin thành công!' });
+          setTimeout(() => {
+            window.location.href = '/admin';
+          }, 600);
+          return;
+        }
+      }
+    } catch (pbErr) {
+      console.debug('[VaultGate] PB auth notice:', pbErr);
     }
 
     try {
