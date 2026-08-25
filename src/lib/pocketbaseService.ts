@@ -364,3 +364,145 @@ export function getCoverImageUrl(item: TrackRecord | TrackItem | Album | null | 
 
   return '/icon.svg';
 }
+
+// ── 6. Album Comments Service ─────────────────────────────────────────────────
+
+export interface AlbumCommentRecord {
+  id: string;
+  album_id: string;
+  user_id?: string;
+  user_email?: string;
+  user_name?: string;
+  user_avatar?: string;
+  content: string;
+  likes_count?: number;
+  created: string;
+  updated: string;
+}
+
+export async function getAlbumComments(albumId: string): Promise<AlbumCommentRecord[]> {
+  try {
+    const res = await pb.collection('album_comments').getList<AlbumCommentRecord>(1, 100, {
+      filter: `album_id = "${albumId.replace(/"/g, '\\"')}"`,
+      sort: '-created',
+      requestKey: null,
+    });
+    return res.items;
+  } catch (err) {
+    console.debug('[pocketbaseService] getAlbumComments notice:', err);
+    return [];
+  }
+}
+
+export async function createAlbumComment(data: {
+  album_id: string;
+  user_id?: string;
+  user_email?: string;
+  user_name?: string;
+  user_avatar?: string;
+  content: string;
+}): Promise<AlbumCommentRecord | null> {
+  try {
+    return await pb.collection('album_comments').create<AlbumCommentRecord>(data);
+  } catch (err) {
+    console.error('[pocketbaseService] createAlbumComment error:', err);
+    return null;
+  }
+}
+
+export async function deleteAlbumComment(commentId: string): Promise<boolean> {
+  try {
+    await pb.collection('album_comments').delete(commentId);
+    return true;
+  } catch (err) {
+    console.error('[pocketbaseService] deleteAlbumComment error:', err);
+    return false;
+  }
+}
+
+// ── 7. Feedbacks Service ──────────────────────────────────────────────────────
+
+export interface FeedbackRecord {
+  id: string;
+  user_id?: string;
+  user_email?: string;
+  user_name?: string;
+  message: string;
+  rating?: number;
+  created: string;
+}
+
+export async function submitFeedback(data: {
+  user_id?: string;
+  user_email?: string;
+  user_name?: string;
+  message: string;
+  rating?: number;
+}): Promise<FeedbackRecord | null> {
+  try {
+    return await pb.collection('feedbacks').create<FeedbackRecord>(data);
+  } catch (err) {
+    console.error('[pocketbaseService] submitFeedback error:', err);
+    return null;
+  }
+}
+
+// ── 8. Vouchers Service ───────────────────────────────────────────────────────
+
+export interface VoucherRecord {
+  id: string;
+  code: string;
+  plan_type: string;
+  max_uses: number;
+  used_count: number;
+  is_active: boolean;
+  duration_days: number;
+  created: string;
+}
+
+export async function redeemVoucher(code: string): Promise<{ success: boolean; message: string; voucher?: VoucherRecord }> {
+  try {
+    const trimmed = code.trim().toUpperCase();
+    const res = await pb.collection('vouchers').getList<VoucherRecord>(1, 1, {
+      filter: `code = "${trimmed.replace(/"/g, '\\"')}" && is_active = true`,
+      requestKey: null,
+    });
+
+    if (!res.items || res.items.length === 0) {
+      return { success: false, message: 'Mã voucher không tồn tại hoặc đã hết hạn.' };
+    }
+
+    const voucher = res.items[0];
+    if (voucher.max_uses > 0 && voucher.used_count >= voucher.max_uses) {
+      return { success: false, message: 'Mã voucher đã hết lượt sử dụng.' };
+    }
+
+    // Increment used count
+    const updated = await pb.collection('vouchers').update<VoucherRecord>(voucher.id, {
+      used_count: (voucher.used_count || 0) + 1,
+    });
+
+    return { success: true, message: 'Kích hoạt voucher thành công!', voucher: updated };
+  } catch (err: any) {
+    console.error('[pocketbaseService] redeemVoucher error:', err);
+    return { success: false, message: err?.message || 'Lỗi khi kích hoạt voucher.' };
+  }
+}
+
+// ── 9. Google OAuth2 Auth Helper ──────────────────────────────────────────────
+
+/**
+ * Initiates Google OAuth2 popup / redirect sign in with PocketBase
+ */
+export async function authWithGoogleOAuth(): Promise<any> {
+  try {
+    const authData = await pb.collection('users').authWithOAuth2({
+      provider: 'google',
+    });
+    return authData;
+  } catch (err) {
+    console.error('[pocketbaseService] Google OAuth2 error:', err);
+    throw err;
+  }
+}
+
